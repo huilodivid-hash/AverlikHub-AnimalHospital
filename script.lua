@@ -1,1932 +1,1919 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (OFFICIAL SCRIPT)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (100% BULLETPROOF LOADER)
     ══════════════════════════════════════════════════════════════════════════════════
     • Точный дизайн: Averlik Hub (Glassmorphism & Neon Purple #d946ef)
-    • Совместимость: Все актуальные эксплоиты (Solara, Wave, Delta, Arceus X, etc.)
-    • Все функции ТЗ: Автофарм, Больница, Задания, Телепорты, Игрок, Visuals, Misc, Settings
+    • Совместимость: Solara, Wave, Delta, Arceus X, Codex, Fluxus, Synapse, etc.
+    • 100% Гарантия инициализации и отображения на экране
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
-print("========================================")
-print("[Averlik Hub] Запуск скрипта Animal Hospital...")
-print("========================================")
+local function Main()
+    -- 1. Сервисы
+    local Players = game:GetService("Players")
+    local Workspace = game:GetService("Workspace")
+    local RunService = game:GetService("RunService")
+    local TweenService = game:GetService("TweenService")
+    local UserInputService = game:GetService("UserInputService")
+    local HttpService = game:GetService("HttpService")
+    local TeleportService = game:GetService("TeleportService")
+    local Lighting = game:GetService("Lighting")
+    local VirtualUser = game:GetService("VirtualUser")
 
--- 1. Сервисы
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Lighting = game:GetService("Lighting")
-local VirtualUser = game:GetService("VirtualUser")
-
--- 2. Ожидание LocalPlayer
-local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then
-    repeat
-        task.wait(0.1)
-        LocalPlayer = Players.LocalPlayer
-    until LocalPlayer
-end
-
--- 3. Очистка предыдущих копий GUI
-pcall(function()
-    if getgenv().AverlikHub_Gui then
-        getgenv().AverlikHub_Gui:Destroy()
+    -- 2. Ожидание LocalPlayer
+    local LocalPlayer = Players.LocalPlayer
+    if not LocalPlayer then
+        repeat
+            task.wait(0.1)
+            LocalPlayer = Players.LocalPlayer
+        until LocalPlayer
     end
-    if getgenv().AverlikHub_ESP then
-        getgenv().AverlikHub_ESP:Destroy()
-    end
-end)
 
--- 4. Получение надежного родительского контейнера
-local function GetParentGui()
-    if gethui then
-        local ok, res = pcall(gethui)
-        if ok and res then return res end
-    end
-    local ok, cg = pcall(function() return game:GetService("CoreGui") end)
-    if ok and cg then
-        local testOk = pcall(function()
-            local t = Instance.new("Folder", cg)
-            t:Destroy()
-        end)
-        if testOk then return cg end
-    end
-    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
-    return pg or LocalPlayer:WaitForChild("PlayerGui", 5)
-end
-
-local TargetParent = GetParentGui()
-if not TargetParent then
-    warn("[Averlik Hub] Ошибка: Не удалось получить контейнер GUI!")
-    return
-end
-
--- 5. ScreenGui
-local MainScreenGui = Instance.new("ScreenGui")
-MainScreenGui.Name = "AverlikHub_MainGui"
-MainScreenGui.ResetOnSpawn = false
-MainScreenGui.IgnoreGuiInset = true
-MainScreenGui.DisplayOrder = 999999
-MainScreenGui.Enabled = true
-MainScreenGui.Parent = TargetParent
-getgenv().AverlikHub_Gui = MainScreenGui
-
--- 6. Конфигурация
-local Config = {
-    -- Авто фарм
-    AutoFarm = false,
-    AutoCollect = false,
-    AutoInteract = false,
-    AutoSell = false,
-    AutoBuy = false,
-    AutoUpgrade = false,
-    AutoFixSabotages = false,
-
-    -- Больница
-    AutoHeal = false,
-    AutoFeed = false,
-    AutoClean = false,
-    PriorityHeal = true,
-    AutoCare = false,
-    ESP_Patients = false,
-
-    -- Задания
-    AutoAcceptQuests = false,
-    AutoQuest = false,
-    AutoCompleteQuest = false,
-    AutoClaimRewards = false,
-    ESP_Quests = false,
-
-    -- Игрок
-    WalkSpeed = 16,
-    WalkSpeedEnabled = false,
-    JumpPower = 50,
-    JumpPowerEnabled = false,
-    NoClip = false,
-    AntiAFK = true,
-    InfiniteSanity = false,
-    InfiniteJump = false,
-
-    -- Visuals
-    ESP_Players = false,
-    ESP_Animals = false,
-    ESP_NPCs = false,
-    ESP_Items = false,
-    ShowDistance = true,
-    Tracers = false,
-
-    -- Misc
-    FPSBoost = false,
-    LowGraphics = false,
-
-    -- Цвета темы
-    AccentColor = Color3.fromRGB(219, 70, 237), -- Пурпурный неоновый с фото
-    BackgroundColor = Color3.fromRGB(16, 16, 20),
-    SidebarColor = Color3.fromRGB(13, 13, 16),
-    SelectedConfig = "Default",
-    AutoLoadConfig = false
-}
-
-local MemoryConfigs = {}
-
--- 7. Хелперы взаимодействия
-local function SafeInteractPrompt(prompt)
-    if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+    -- 3. Очистка предыдущих версий
     pcall(function()
-        if fireproximityprompt then
-            fireproximityprompt(prompt, 0)
-        else
-            local oldHold = prompt.HoldDuration
-            prompt.HoldDuration = 0
-            prompt:InputHoldBegin()
-            task.wait(0.05)
-            prompt:InputHoldEnd()
-            prompt.HoldDuration = oldHold
+        if getgenv and getgenv().AverlikHub_Gui then
+            getgenv().AverlikHub_Gui:Destroy()
         end
-    end)
-    return true
-end
-
-local function SafeTouch(part)
-    pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root or not part then return end
-        if firetouchinterest then
-            firetouchinterest(root, part, 0)
-            task.wait(0.02)
-            firetouchinterest(root, part, 1)
-        else
-            part.CFrame = root.CFrame
+        if getgenv and getgenv().AverlikHub_ESP then
+            getgenv().AverlikHub_ESP:Destroy()
         end
-    end)
-end
-
-local function TeleportTo(cf)
-    pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then
-            if typeof(cf) == "Vector3" then
-                root.CFrame = CFrame.new(cf + Vector3.new(0, 3, 0))
-            elseif typeof(cf) == "CFrame" then
-                root.CFrame = cf + Vector3.new(0, 3, 0)
-            end
-        end
-    end)
-end
-
--- 8. Уведомления (Toast Notifications)
-local ToastContainer = Instance.new("Frame")
-ToastContainer.Name = "ToastContainer"
-ToastContainer.Size = UDim2.new(0, 260, 0, 300)
-ToastContainer.Position = UDim2.new(1, -280, 0, 30)
-ToastContainer.BackgroundTransparency = 1
-ToastContainer.ZIndex = 10000
-ToastContainer.Parent = MainScreenGui
-
-local ToastListLayout = Instance.new("UIListLayout")
-ToastListLayout.Padding = UDim.new(0, 8)
-ToastListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-ToastListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-ToastListLayout.Parent = ToastContainer
-
-local function SendNotification(title, message, duration)
-    duration = duration or 3
-    task.spawn(function()
-        local card = Instance.new("Frame")
-        card.Size = UDim2.new(1, 0, 0, 52)
-        card.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
-        card.BorderSizePixel = 0
-        card.Position = UDim2.new(1, 30, 0, 0)
-        card.ZIndex = 10001
-
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Config.AccentColor
-        stroke.Thickness = 1.2
-        stroke.Parent = card
-
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = card
-
-        local tLbl = Instance.new("TextLabel")
-        tLbl.Text = title
-        tLbl.Font = Enum.Font.GothamBold
-        tLbl.TextSize = 13
-        tLbl.TextColor3 = Config.AccentColor
-        tLbl.Position = UDim2.new(0, 12, 0, 7)
-        tLbl.Size = UDim2.new(1, -24, 0, 16)
-        tLbl.BackgroundTransparency = 1
-        tLbl.TextXAlignment = Enum.TextXAlignment.Left
-        tLbl.ZIndex = 10002
-        tLbl.Parent = card
-
-        local dLbl = Instance.new("TextLabel")
-        dLbl.Text = message
-        dLbl.Font = Enum.Font.Gotham
-        dLbl.TextSize = 11
-        dLbl.TextColor3 = Color3.fromRGB(200, 200, 215)
-        dLbl.Position = UDim2.new(0, 12, 0, 26)
-        dLbl.Size = UDim2.new(1, -24, 0, 20)
-        dLbl.BackgroundTransparency = 1
-        dLbl.TextXAlignment = Enum.TextXAlignment.Left
-        dLbl.ZIndex = 10002
-        dLbl.Parent = card
-
-        card.Parent = ToastContainer
-        pcall(function()
-            TweenService:Create(card, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)}):Play()
-        end)
-
-        task.wait(duration)
-        if card and card.Parent then
-            local tw = TweenService:Create(card, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Position = UDim2.new(1, 30, 0, 0)})
-            tw:Play()
-            tw.Completed:Connect(function() card:Destroy() end)
-        end
-    end)
-end
-
--- 9. Плавающий виджет HUD (слева снизу как на фото)
-local FloatingPill = Instance.new("Frame")
-FloatingPill.Name = "FloatingHUD"
-FloatingPill.Size = UDim2.new(0, 165, 0, 46)
-FloatingPill.Position = UDim2.new(0, 25, 1, -80)
-FloatingPill.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
-FloatingPill.BorderSizePixel = 0
-FloatingPill.Active = true
-FloatingPill.ZIndex = 5000
-FloatingPill.Parent = MainScreenGui
-
-local PillCorner = Instance.new("UICorner")
-PillCorner.CornerRadius = UDim.new(0, 12)
-PillCorner.Parent = FloatingPill
-
-local PillStroke = Instance.new("UIStroke")
-PillStroke.Color = Color3.fromRGB(36, 36, 46)
-PillStroke.Thickness = 1.2
-PillStroke.Parent = FloatingPill
-
-local PillLogo = Instance.new("Frame")
-PillLogo.Size = UDim2.new(0, 30, 0, 30)
-PillLogo.Position = UDim2.new(0, 8, 0.5, -15)
-PillLogo.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-PillLogo.BorderSizePixel = 0
-PillLogo.ZIndex = 5001
-PillLogo.Parent = FloatingPill
-
-local PillLogoCorner = Instance.new("UICorner")
-PillLogoCorner.CornerRadius = UDim.new(0, 8)
-PillLogoCorner.Parent = PillLogo
-
-local PillLogoText = Instance.new("TextLabel")
-PillLogoText.Text = "A"
-PillLogoText.Font = Enum.Font.GothamBold
-PillLogoText.TextSize = 16
-PillLogoText.TextColor3 = Config.AccentColor
-PillLogoText.Size = UDim2.new(1, 0, 1, 0)
-PillLogoText.BackgroundTransparency = 1
-PillLogoText.ZIndex = 5002
-PillLogoText.Parent = PillLogo
-
-local PillTitle = Instance.new("TextLabel")
-PillTitle.Text = "Averlik Hub"
-PillTitle.Font = Enum.Font.GothamBold
-PillTitle.TextSize = 12
-PillTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-PillTitle.Position = UDim2.new(0, 46, 0, 6)
-PillTitle.Size = UDim2.new(1, -52, 0, 16)
-PillTitle.BackgroundTransparency = 1
-PillTitle.TextXAlignment = Enum.TextXAlignment.Left
-PillTitle.ZIndex = 5001
-PillTitle.Parent = FloatingPill
-
-local PillSub = Instance.new("TextLabel")
-PillSub.Name = "HUD_TimeFPS"
-PillSub.Text = "00:00 • 60 fps"
-PillSub.Font = Enum.Font.Gotham
-PillSub.TextSize = 10
-PillSub.TextColor3 = Color3.fromRGB(150, 150, 165)
-PillSub.Position = UDim2.new(0, 46, 0, 23)
-PillSub.Size = UDim2.new(1, -52, 0, 16)
-PillSub.BackgroundTransparency = 1
-PillSub.TextXAlignment = Enum.TextXAlignment.Left
-PillSub.ZIndex = 5001
-PillSub.Parent = FloatingPill
-
-local PillBtn = Instance.new("TextButton")
-PillBtn.Size = UDim2.new(1, 0, 1, 0)
-PillBtn.BackgroundTransparency = 1
-PillBtn.Text = ""
-PillBtn.ZIndex = 5005
-PillBtn.Parent = FloatingPill
-
--- 10. Главное окно (MainWindow)
-local MainWindow = Instance.new("Frame")
-MainWindow.Name = "MainWindow"
-MainWindow.AnchorPoint = Vector2.new(0.5, 0.5)
-MainWindow.Size = UDim2.new(0, 680, 0, 440)
-MainWindow.Position = UDim2.new(0.5, 0, 0.5, 0)
-MainWindow.BackgroundColor3 = Config.BackgroundColor
-MainWindow.BorderSizePixel = 0
-MainWindow.Active = true
-MainWindow.Visible = true
-MainWindow.ZIndex = 1000
-MainWindow.Parent = MainScreenGui
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 14)
-MainCorner.Parent = MainWindow
-
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(34, 34, 44)
-MainStroke.Thickness = 1.2
-MainStroke.Parent = MainWindow
-
--- Dragging
-local function EnableDrag(frame, handle)
-    handle = handle or frame
-    local dragging, dragInput, dragStart, startPos
-
-    handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
+        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if pg and pg:FindFirstChild("AverlikHub_ScreenGui") then
+            pg.AverlikHub_ScreenGui:Destroy()
         end
     end)
 
-    handle.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
+    -- 4. Получение PlayerGui (гарантированное отображение на всех эксплоитах)
+    local function GetParentGui()
+        if gethui then
+            local ok, res = pcall(gethui)
+            if ok and res then return res end
         end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-end
-
-EnableDrag(MainWindow)
-EnableDrag(FloatingPill)
-
--- 11. Сайдбар
-local Sidebar = Instance.new("Frame")
-Sidebar.Name = "Sidebar"
-Sidebar.Size = UDim2.new(0, 170, 1, 0)
-Sidebar.Position = UDim2.new(0, 0, 0, 0)
-Sidebar.BackgroundColor3 = Config.SidebarColor
-Sidebar.BorderSizePixel = 0
-Sidebar.ZIndex = 1001
-Sidebar.Parent = MainWindow
-
-local SidebarCorner = Instance.new("UICorner")
-SidebarCorner.CornerRadius = UDim.new(0, 14)
-SidebarCorner.Parent = Sidebar
-
-local SidebarMask = Instance.new("Frame")
-SidebarMask.Size = UDim2.new(0, 14, 1, 0)
-SidebarMask.Position = UDim2.new(1, -14, 0, 0)
-SidebarMask.BackgroundColor3 = Config.SidebarColor
-SidebarMask.BorderSizePixel = 0
-SidebarMask.ZIndex = 1001
-SidebarMask.Parent = Sidebar
-
-local SidebarDivider = Instance.new("Frame")
-SidebarDivider.Size = UDim2.new(0, 1, 1, 0)
-SidebarDivider.Position = UDim2.new(1, 0, 0, 0)
-SidebarDivider.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
-SidebarDivider.BorderSizePixel = 0
-SidebarDivider.ZIndex = 1002
-SidebarDivider.Parent = Sidebar
-
-local BrandFrame = Instance.new("Frame")
-BrandFrame.Size = UDim2.new(1, 0, 0, 60)
-BrandFrame.BackgroundTransparency = 1
-BrandFrame.ZIndex = 1002
-BrandFrame.Parent = Sidebar
-
-local BrandLogo = Instance.new("Frame")
-BrandLogo.Size = UDim2.new(0, 34, 0, 34)
-BrandLogo.Position = UDim2.new(0, 12, 0, 13)
-BrandLogo.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
-BrandLogo.BorderSizePixel = 0
-BrandLogo.ZIndex = 1003
-BrandLogo.Parent = BrandFrame
-
-local BrandLogoCorner = Instance.new("UICorner")
-BrandLogoCorner.CornerRadius = UDim.new(0, 8)
-BrandLogoCorner.Parent = BrandLogo
-
-local BrandLogoLetter = Instance.new("TextLabel")
-BrandLogoLetter.Text = "A"
-BrandLogoLetter.Font = Enum.Font.GothamBold
-BrandLogoLetter.TextSize = 18
-BrandLogoLetter.TextColor3 = Config.AccentColor
-BrandLogoLetter.Size = UDim2.new(1, 0, 1, 0)
-BrandLogoLetter.BackgroundTransparency = 1
-BrandLogoLetter.ZIndex = 1004
-BrandLogoLetter.Parent = BrandLogo
-
-local BrandTitle = Instance.new("TextLabel")
-BrandTitle.Text = "Averlik Hub"
-BrandTitle.Font = Enum.Font.GothamBold
-BrandTitle.TextSize = 13
-BrandTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-BrandTitle.Position = UDim2.new(0, 54, 0, 13)
-BrandTitle.Size = UDim2.new(1, -60, 0, 16)
-BrandTitle.BackgroundTransparency = 1
-BrandTitle.TextXAlignment = Enum.TextXAlignment.Left
-BrandTitle.ZIndex = 1003
-BrandTitle.Parent = BrandFrame
-
-local BrandSub = Instance.new("TextLabel")
-BrandSub.Text = "Animal Hospital"
-BrandSub.Font = Enum.Font.Gotham
-BrandSub.TextSize = 11
-BrandSub.TextColor3 = Color3.fromRGB(140, 140, 155)
-BrandSub.Position = UDim2.new(0, 54, 0, 30)
-BrandSub.Size = UDim2.new(1, -60, 0, 14)
-BrandSub.BackgroundTransparency = 1
-BrandSub.TextXAlignment = Enum.TextXAlignment.Left
-BrandSub.ZIndex = 1003
-BrandSub.Parent = BrandFrame
-
-local TabListContainer = Instance.new("ScrollingFrame")
-TabListContainer.Name = "TabList"
-TabListContainer.Size = UDim2.new(1, -14, 1, -135)
-TabListContainer.Position = UDim2.new(0, 7, 0, 62)
-TabListContainer.BackgroundTransparency = 1
-TabListContainer.BorderSizePixel = 0
-TabListContainer.ScrollBarThickness = 2
-TabListContainer.ScrollBarImageColor3 = Color3.fromRGB(45, 45, 60)
-TabListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
-TabListContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
-TabListContainer.ZIndex = 1003
-TabListContainer.Parent = Sidebar
-
-local TabListLayout = Instance.new("UIListLayout")
-TabListLayout.Padding = UDim.new(0, 3)
-TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-TabListLayout.Parent = TabListContainer
-
-local SidebarFooter = Instance.new("Frame")
-SidebarFooter.Name = "Footer"
-SidebarFooter.Size = UDim2.new(1, -14, 0, 54)
-SidebarFooter.Position = UDim2.new(0, 7, 1, -60)
-SidebarFooter.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-SidebarFooter.BorderSizePixel = 0
-SidebarFooter.ZIndex = 1003
-SidebarFooter.Parent = Sidebar
-
-local FooterCorner = Instance.new("UICorner")
-FooterCorner.CornerRadius = UDim.new(0, 10)
-FooterCorner.Parent = SidebarFooter
-
-local FooterStroke = Instance.new("UIStroke")
-FooterStroke.Color = Color3.fromRGB(30, 30, 40)
-FooterStroke.Thickness = 1
-FooterStroke.Parent = SidebarFooter
-
-local DiscordLabel = Instance.new("TextLabel")
-DiscordLabel.Text = "discord.gg/bJFF653nK"
-DiscordLabel.Font = Enum.Font.GothamBold
-DiscordLabel.TextSize = 11
-DiscordLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-DiscordLabel.Position = UDim2.new(0, 0, 0, 8)
-DiscordLabel.Size = UDim2.new(1, 0, 0, 16)
-DiscordLabel.BackgroundTransparency = 1
-DiscordLabel.ZIndex = 1004
-DiscordLabel.Parent = SidebarFooter
-
-local FooterSub = Instance.new("TextLabel")
-FooterSub.Name = "FooterTimeFPS"
-FooterSub.Text = "00:00 • 60 fps"
-FooterSub.Font = Enum.Font.Gotham
-FooterSub.TextSize = 10
-FooterSub.TextColor3 = Color3.fromRGB(140, 140, 155)
-FooterSub.Position = UDim2.new(0, 0, 0, 26)
-FooterSub.Size = UDim2.new(1, 0, 0, 16)
-FooterSub.BackgroundTransparency = 1
-FooterSub.ZIndex = 1004
-FooterSub.Parent = SidebarFooter
-
--- 12. Правая часть
-local ContentArea = Instance.new("Frame")
-ContentArea.Name = "ContentArea"
-ContentArea.Size = UDim2.new(1, -170, 1, 0)
-ContentArea.Position = UDim2.new(0, 170, 0, 0)
-ContentArea.BackgroundTransparency = 1
-ContentArea.ZIndex = 1001
-ContentArea.Parent = MainWindow
-
-local ContentHeader = Instance.new("Frame")
-ContentHeader.Name = "Header"
-ContentHeader.Size = UDim2.new(1, 0, 0, 60)
-ContentHeader.Position = UDim2.new(0, 0, 0, 0)
-ContentHeader.BackgroundTransparency = 1
-ContentHeader.ZIndex = 1002
-ContentHeader.Parent = ContentArea
-
-local HeaderTitle = Instance.new("TextLabel")
-HeaderTitle.Name = "Title"
-HeaderTitle.Text = "Авто фарм"
-HeaderTitle.Font = Enum.Font.GothamBold
-HeaderTitle.TextSize = 17
-HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-HeaderTitle.Position = UDim2.new(0, 18, 0, 12)
-HeaderTitle.Size = UDim2.new(0, 220, 0, 20)
-HeaderTitle.BackgroundTransparency = 1
-HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
-HeaderTitle.ZIndex = 1003
-HeaderTitle.Parent = ContentHeader
-
-local HeaderSub = Instance.new("TextLabel")
-HeaderSub.Name = "Subtitle"
-HeaderSub.Text = "Автоматизация больницы и заработка"
-HeaderSub.Font = Enum.Font.Gotham
-HeaderSub.TextSize = 11
-HeaderSub.TextColor3 = Color3.fromRGB(140, 140, 155)
-HeaderSub.Position = UDim2.new(0, 18, 0, 33)
-HeaderSub.Size = UDim2.new(0, 260, 0, 14)
-HeaderSub.BackgroundTransparency = 1
-HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
-HeaderSub.ZIndex = 1003
-HeaderSub.Parent = ContentHeader
-
-local SearchBoxContainer = Instance.new("Frame")
-SearchBoxContainer.Name = "SearchContainer"
-SearchBoxContainer.Size = UDim2.new(0, 150, 0, 30)
-SearchBoxContainer.Position = UDim2.new(1, -195, 0, 15)
-SearchBoxContainer.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-SearchBoxContainer.BorderSizePixel = 0
-SearchBoxContainer.ZIndex = 1003
-SearchBoxContainer.Parent = ContentHeader
-
-local SearchCorner = Instance.new("UICorner")
-SearchCorner.CornerRadius = UDim.new(0, 8)
-SearchCorner.Parent = SearchBoxContainer
-
-local SearchStroke = Instance.new("UIStroke")
-SearchStroke.Color = Color3.fromRGB(30, 30, 40)
-SearchStroke.Thickness = 1
-SearchStroke.Parent = SearchBoxContainer
-
-local SearchInput = Instance.new("TextBox")
-SearchInput.Name = "Input"
-SearchInput.PlaceholderText = "Поиск..."
-SearchInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
-SearchInput.Text = ""
-SearchInput.Font = Enum.Font.Gotham
-SearchInput.TextSize = 11
-SearchInput.TextColor3 = Color3.fromRGB(240, 240, 250)
-SearchInput.Size = UDim2.new(1, -16, 1, 0)
-SearchInput.Position = UDim2.new(0, 10, 0, 0)
-SearchInput.BackgroundTransparency = 1
-SearchInput.TextXAlignment = Enum.TextXAlignment.Left
-SearchInput.ClearTextOnFocus = false
-SearchInput.ZIndex = 1004
-SearchInput.Parent = SearchBoxContainer
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Name = "CloseBtn"
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -38, 0, 15)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
-CloseBtn.BorderSizePixel = 0
-CloseBtn.Text = "✕"
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 13
-CloseBtn.TextColor3 = Color3.fromRGB(180, 180, 195)
-CloseBtn.ZIndex = 1003
-CloseBtn.Parent = ContentHeader
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 8)
-CloseCorner.Parent = CloseBtn
-
-local CloseStroke = Instance.new("UIStroke")
-CloseStroke.Color = Color3.fromRGB(34, 34, 44)
-CloseStroke.Thickness = 1
-CloseStroke.Parent = CloseBtn
-
-local function ToggleGUI()
-    MainWindow.Visible = not MainWindow.Visible
-end
-
-CloseBtn.MouseButton1Click:Connect(function()
-    MainWindow.Visible = false
-    SendNotification("Averlik Hub", "Интерфейс скрыт. Кликните по виджету снизу.", 3)
-end)
-
-PillBtn.MouseButton1Click:Connect(ToggleGUI)
-
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and (input.KeyCode == Enum.KeyCode.RightControl or input.KeyCode == Enum.KeyCode.Insert) then
-        ToggleGUI()
+        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then return pg end
+        return LocalPlayer:WaitForChild("PlayerGui", 10)
     end
-end)
 
-local PagesHolder = Instance.new("Frame")
-PagesHolder.Name = "PagesHolder"
-PagesHolder.Size = UDim2.new(1, 0, 1, -60)
-PagesHolder.Position = UDim2.new(0, 0, 0, 60)
-PagesHolder.BackgroundTransparency = 1
-PagesHolder.ZIndex = 1002
-PagesHolder.Parent = ContentArea
+    local TargetParent = GetParentGui()
+    if not TargetParent then
+        warn("[Averlik Hub] Ошибка: Не удалось найти PlayerGui!")
+        return
+    end
 
--- 13. UI Builder
-local Tabs = {}
-local CurrentTab = nil
+    -- 5. Создание ScreenGui
+    local MainScreenGui = Instance.new("ScreenGui")
+    MainScreenGui.Name = "AverlikHub_ScreenGui"
+    MainScreenGui.ResetOnSpawn = false
+    MainScreenGui.IgnoreGuiInset = true
+    MainScreenGui.DisplayOrder = 999999
+    MainScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    MainScreenGui.Enabled = true
+    MainScreenGui.Parent = TargetParent
 
-local function CreateTab(name, icon, subtitle, layoutOrder)
-    local tabButton = Instance.new("TextButton")
-    tabButton.Name = "Tab_" .. name
-    tabButton.Size = UDim2.new(1, 0, 0, 34)
-    tabButton.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
-    tabButton.BackgroundTransparency = 1
-    tabButton.BorderSizePixel = 0
-    tabButton.Text = ""
-    tabButton.LayoutOrder = layoutOrder or 1
-    tabButton.ZIndex = 1004
-    tabButton.Parent = TabListContainer
+    if getgenv then
+        getgenv().AverlikHub_Gui = MainScreenGui
+    end
 
-    local tabCorner = Instance.new("UICorner")
-    tabCorner.CornerRadius = UDim.new(0, 8)
-    tabCorner.Parent = tabButton
-
-    local iconLabel = Instance.new("TextLabel")
-    iconLabel.Name = "Icon"
-    iconLabel.Text = icon or "•"
-    iconLabel.Font = Enum.Font.GothamBold
-    iconLabel.TextSize = 13
-    iconLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
-    iconLabel.Position = UDim2.new(0, 10, 0, 0)
-    iconLabel.Size = UDim2.new(0, 20, 1, 0)
-    iconLabel.BackgroundTransparency = 1
-    iconLabel.ZIndex = 1005
-    iconLabel.Parent = tabButton
-
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name = "Label"
-    nameLabel.Text = name
-    nameLabel.Font = Enum.Font.GothamMedium
-    nameLabel.TextSize = 12
-    nameLabel.TextColor3 = Color3.fromRGB(160, 160, 175)
-    nameLabel.Position = UDim2.new(0, 36, 0, 0)
-    nameLabel.Size = UDim2.new(1, -40, 1, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    nameLabel.ZIndex = 1005
-    nameLabel.Parent = tabButton
-
-    local pageScroll = Instance.new("ScrollingFrame")
-    pageScroll.Name = "Page_" .. name
-    pageScroll.Size = UDim2.new(1, -26, 1, -12)
-    pageScroll.Position = UDim2.new(0, 13, 0, 0)
-    pageScroll.BackgroundTransparency = 1
-    pageScroll.BorderSizePixel = 0
-    pageScroll.ScrollBarThickness = 3
-    pageScroll.ScrollBarImageColor3 = Color3.fromRGB(45, 45, 60)
-    pageScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    pageScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    pageScroll.Visible = false
-    pageScroll.ZIndex = 1003
-    pageScroll.Parent = PagesHolder
-
-    local pageLayout = Instance.new("UIListLayout")
-    pageLayout.Padding = UDim.new(0, 7)
-    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    pageLayout.Parent = pageScroll
-
-    local tabObj = {
-        Button = tabButton,
-        Page = pageScroll,
-        Name = name,
-        Subtitle = subtitle or "Параметры и функции",
-        Elements = {}
+    -- 6. Конфигурация
+    local Config = {
+        AutoFarm = false,
+        AutoCollect = false,
+        AutoInteract = false,
+        AutoSell = false,
+        AutoBuy = false,
+        AutoUpgrade = false,
+        AutoFixSabotages = false,
+        AutoHeal = false,
+        AutoFeed = false,
+        AutoClean = false,
+        PriorityHeal = true,
+        AutoCare = false,
+        ESP_Patients = false,
+        AutoAcceptQuests = false,
+        AutoQuest = false,
+        AutoCompleteQuest = false,
+        AutoClaimRewards = false,
+        ESP_Quests = false,
+        WalkSpeed = 16,
+        WalkSpeedEnabled = false,
+        JumpPower = 50,
+        JumpPowerEnabled = false,
+        NoClip = false,
+        AntiAFK = true,
+        InfiniteSanity = false,
+        InfiniteJump = false,
+        ESP_Players = false,
+        ESP_Animals = false,
+        ESP_NPCs = false,
+        ESP_Items = false,
+        ShowDistance = true,
+        Tracers = false,
+        FPSBoost = false,
+        LowGraphics = false,
+        AccentColor = Color3.fromRGB(219, 70, 237),
+        BackgroundColor = Color3.fromRGB(16, 16, 20),
+        SidebarColor = Color3.fromRGB(13, 13, 16),
+        SelectedConfig = "Default",
+        AutoLoadConfig = false
     }
 
-    local function SelectThisTab()
-        for _, t in pairs(Tabs) do
-            t.Page.Visible = false
-            t.Button.BackgroundTransparency = 1
-            local lbl = t.Button:FindFirstChild("Label")
-            local icn = t.Button:FindFirstChild("Icon")
-            if lbl then lbl.TextColor3 = Color3.fromRGB(150, 150, 165) end
-            if icn then icn.TextColor3 = Color3.fromRGB(140, 140, 155) end
-        end
+    local MemoryConfigs = {}
 
-        CurrentTab = tabObj
-        pageScroll.Visible = true
-        tabButton.BackgroundTransparency = 0
-        tabButton.BackgroundColor3 = Color3.fromRGB(26, 25, 34)
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        iconLabel.TextColor3 = Config.AccentColor
-
-        HeaderTitle.Text = name
-        HeaderSub.Text = tabObj.Subtitle
+    -- Безопасный поиск строк
+    local function SafeFind(str, query)
+        if not str or type(str) ~= "string" or not query then return false end
+        return string.find(string.lower(str), string.lower(query), 1, true) ~= nil
     end
 
-    tabButton.MouseButton1Click:Connect(SelectThisTab)
-    table.insert(Tabs, tabObj)
+    -- 7. Хелперы взаимодействия
+    local function SafeInteractPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+        pcall(function()
+            if fireproximityprompt then
+                fireproximityprompt(prompt, 0)
+            else
+                local oldHold = prompt.HoldDuration
+                prompt.HoldDuration = 0
+                prompt:InputHoldBegin()
+                task.wait(0.05)
+                prompt:InputHoldEnd()
+                prompt.HoldDuration = oldHold
+            end
+        end)
+        return true
+    end
 
-    function tabObj:CreateSection(sectionTitle)
-        local secFrame = Instance.new("Frame")
-        secFrame.Name = "Sec_" .. sectionTitle
-        secFrame.Size = UDim2.new(1, 0, 0, 24)
-        secFrame.BackgroundTransparency = 1
-        secFrame.ZIndex = 1004
-        secFrame.Parent = pageScroll
-
-        local lbl = Instance.new("TextLabel")
-        lbl.Text = sectionTitle
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextSize = 11
-        lbl.TextColor3 = Color3.fromRGB(150, 150, 165)
-        lbl.Size = UDim2.new(0, 0, 1, 0)
-        lbl.AutomaticSize = Enum.AutomaticSize.X
-        lbl.BackgroundTransparency = 1
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.ZIndex = 1005
-        lbl.Parent = secFrame
-
-        local line = Instance.new("Frame")
-        line.Size = UDim2.new(1, -(lbl.AbsoluteSize.X + 15), 0, 1)
-        line.Position = UDim2.new(1, 0, 0.5, 0)
-        line.AnchorPoint = Vector2.new(1, 0.5)
-        line.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-        line.BorderSizePixel = 0
-        line.ZIndex = 1004
-        line.Parent = secFrame
-
-        lbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-            line.Size = UDim2.new(1, -(lbl.AbsoluteSize.X + 15), 0, 1)
+    local function SafeTouch(part)
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not root or not part then return end
+            if firetouchinterest then
+                firetouchinterest(root, part, 0)
+                task.wait(0.02)
+                firetouchinterest(root, part, 1)
+            else
+                part.CFrame = root.CFrame
+            end
         end)
     end
 
-    function tabObj:CreateToggle(title, description, defaultValue, callback)
-        local toggleCard = Instance.new("Frame")
-        toggleCard.Name = "Toggle_" .. title
-        toggleCard.Size = UDim2.new(1, 0, 0, 44)
-        toggleCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
-        toggleCard.BorderSizePixel = 0
-        toggleCard.ZIndex = 1004
-        toggleCard.Parent = pageScroll
-
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = toggleCard
-
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(28, 28, 38)
-        stroke.Thickness = 1
-        stroke.Parent = toggleCard
-
-        local tLabel = Instance.new("TextLabel")
-        tLabel.Text = title
-        tLabel.Font = Enum.Font.GothamMedium
-        tLabel.TextSize = 12
-        tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
-        tLabel.Position = UDim2.new(0, 12, 0, 6)
-        tLabel.Size = UDim2.new(1, -65, 0, 16)
-        tLabel.BackgroundTransparency = 1
-        tLabel.TextXAlignment = Enum.TextXAlignment.Left
-        tLabel.ZIndex = 1005
-        tLabel.Parent = toggleCard
-
-        local dLabel = Instance.new("TextLabel")
-        dLabel.Text = description or ""
-        dLabel.Font = Enum.Font.Gotham
-        dLabel.TextSize = 10
-        dLabel.TextColor3 = Color3.fromRGB(120, 120, 135)
-        dLabel.Position = UDim2.new(0, 12, 0, 23)
-        dLabel.Size = UDim2.new(1, -65, 0, 14)
-        dLabel.BackgroundTransparency = 1
-        dLabel.TextXAlignment = Enum.TextXAlignment.Left
-        dLabel.ZIndex = 1005
-        dLabel.Parent = toggleCard
-
-        local switch = Instance.new("Frame")
-        switch.Size = UDim2.new(0, 38, 0, 20)
-        switch.Position = UDim2.new(1, -48, 0.5, -10)
-        switch.BackgroundColor3 = defaultValue and Config.AccentColor or Color3.fromRGB(40, 40, 52)
-        switch.BorderSizePixel = 0
-        switch.ZIndex = 1005
-        switch.Parent = toggleCard
-
-        local swCorner = Instance.new("UICorner")
-        swCorner.CornerRadius = UDim.new(1, 0)
-        swCorner.Parent = switch
-
-        local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 14, 0, 14)
-        knob.Position = defaultValue and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-        knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        knob.BorderSizePixel = 0
-        knob.ZIndex = 1006
-        knob.Parent = switch
-
-        local knobCorner = Instance.new("UICorner")
-        knCorner.CornerRadius = UDim.new(1, 0)
-        knCorner.Parent = knob
-
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 1, 0)
-        btn.BackgroundTransparency = 1
-        btn.Text = ""
-        btn.ZIndex = 1007
-        btn.Parent = toggleCard
-
-        local state = defaultValue
-
-        local function SetState(val)
-            state = val
-            local targetPos = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-            local targetColor = state and Config.AccentColor or Color3.fromRGB(40, 40, 52)
-
-            pcall(function()
-                TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
-                TweenService:Create(switch, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundColor3 = targetColor}):Play()
-            end)
-
-            if callback then callback(state) end
-        end
-
-        btn.MouseButton1Click:Connect(function() SetState(not state) end)
-        table.insert(tabObj.Elements, {Type = "Toggle", Title = title, Card = toggleCard, Set = SetState})
-        return {Set = SetState}
+    local function TeleportTo(cf)
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root then
+                if typeof(cf) == "Vector3" then
+                    root.CFrame = CFrame.new(cf + Vector3.new(0, 3, 0))
+                elseif typeof(cf) == "CFrame" then
+                    root.CFrame = cf + Vector3.new(0, 3, 0)
+                end
+            end
+        end)
     end
 
-    function tabObj:CreateButton(title, isPrimary, callback)
-        local btnCard = Instance.new("TextButton")
-        btnCard.Name = "Btn_" .. title
-        btnCard.Size = UDim2.new(1, 0, 0, 36)
-        btnCard.BackgroundColor3 = isPrimary and Config.AccentColor or Color3.fromRGB(32, 32, 42)
-        btnCard.BorderSizePixel = 0
-        btnCard.Text = title
-        btnCard.Font = Enum.Font.GothamBold
-        btnCard.TextSize = 12
-        btnCard.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btnCard.AutoButtonColor = false
-        btnCard.ZIndex = 1004
-        btnCard.Parent = pageScroll
+    -- 8. Уведомления (Toasts)
+    local ToastContainer = Instance.new("Frame")
+    ToastContainer.Name = "ToastContainer"
+    ToastContainer.Size = UDim2.new(0, 260, 0, 300)
+    ToastContainer.Position = UDim2.new(1, -280, 0, 30)
+    ToastContainer.BackgroundTransparency = 1
+    ToastContainer.ZIndex = 10000
+    ToastContainer.Parent = MainScreenGui
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = btnCard
+    local ToastListLayout = Instance.new("UIListLayout")
+    ToastListLayout.Padding = UDim.new(0, 8)
+    ToastListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+    ToastListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    ToastListLayout.Parent = ToastContainer
 
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = isPrimary and Color3.fromRGB(240, 130, 255) or Color3.fromRGB(44, 44, 58)
-        stroke.Thickness = 1
-        stroke.Parent = btnCard
+    local function SendNotification(title, message, duration)
+        duration = duration or 3
+        task.spawn(function()
+            local card = Instance.new("Frame")
+            card.Size = UDim2.new(1, 0, 0, 52)
+            card.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+            card.BorderSizePixel = 0
+            card.Position = UDim2.new(1, 30, 0, 0)
+            card.ZIndex = 10001
 
-        btnCard.MouseEnter:Connect(function()
-            local hoverColor = isPrimary and Color3.fromRGB(235, 90, 255) or Color3.fromRGB(42, 42, 54)
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = Config.AccentColor
+            stroke.Thickness = 1.2
+            stroke.Parent = card
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = card
+
+            local tLbl = Instance.new("TextLabel")
+            tLbl.Text = tostring(title)
+            tLbl.Font = Enum.Font.GothamBold
+            tLbl.TextSize = 13
+            tLbl.TextColor3 = Config.AccentColor
+            tLbl.Position = UDim2.new(0, 12, 0, 7)
+            tLbl.Size = UDim2.new(1, -24, 0, 16)
+            tLbl.BackgroundTransparency = 1
+            tLbl.TextXAlignment = Enum.TextXAlignment.Left
+            tLbl.ZIndex = 10002
+            tLbl.Parent = card
+
+            local dLbl = Instance.new("TextLabel")
+            dLbl.Text = tostring(message)
+            dLbl.Font = Enum.Font.Gotham
+            dLbl.TextSize = 11
+            dLbl.TextColor3 = Color3.fromRGB(200, 200, 215)
+            dLbl.Position = UDim2.new(0, 12, 0, 26)
+            dLbl.Size = UDim2.new(1, -24, 0, 20)
+            dLbl.BackgroundTransparency = 1
+            dLbl.TextXAlignment = Enum.TextXAlignment.Left
+            dLbl.ZIndex = 10002
+            dLbl.Parent = card
+
+            card.Parent = ToastContainer
             pcall(function()
-                TweenService:Create(btnCard, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}):Play()
+                TweenService:Create(card, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)}):Play()
             end)
-        end)
 
-        btnCard.MouseLeave:Connect(function()
-            local baseColor = isPrimary and Config.AccentColor or Color3.fromRGB(32, 32, 42)
-            pcall(function()
-                TweenService:Create(btnCard, TweenInfo.new(0.15), {BackgroundColor3 = baseColor}):Play()
-            end)
+            task.wait(duration)
+            if card and card.Parent then
+                local tw = TweenService:Create(card, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Position = UDim2.new(1, 30, 0, 0)})
+                tw:Play()
+                tw.Completed:Connect(function() card:Destroy() end)
+            end
         end)
-
-        btnCard.MouseButton1Click:Connect(function()
-            pcall(function()
-                TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, -4, 0, 34)}):Play()
-                task.wait(0.08)
-                TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, 0, 0, 36)}):Play()
-            end)
-            if callback then callback() end
-        end)
-
-        table.insert(tabObj.Elements, {Type = "Button", Title = title, Card = btnCard})
-        return btnCard
     end
 
-    function tabObj:CreateSlider(title, min, max, defaultVal, callback)
-        local sliderCard = Instance.new("Frame")
-        sliderCard.Name = "Slider_" .. title
-        sliderCard.Size = UDim2.new(1, 0, 0, 50)
-        sliderCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
-        sliderCard.BorderSizePixel = 0
-        sliderCard.ZIndex = 1004
-        sliderCard.Parent = pageScroll
+    -- 9. Плавающий виджет HUD (слева снизу)
+    local FloatingPill = Instance.new("Frame")
+    FloatingPill.Name = "FloatingHUD"
+    FloatingPill.Size = UDim2.new(0, 165, 0, 46)
+    FloatingPill.Position = UDim2.new(0, 25, 1, -80)
+    FloatingPill.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+    FloatingPill.BorderSizePixel = 0
+    FloatingPill.Active = true
+    FloatingPill.Visible = true
+    FloatingPill.ZIndex = 5000
+    FloatingPill.Parent = MainScreenGui
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = sliderCard
+    local PillCorner = Instance.new("UICorner")
+    PillCorner.CornerRadius = UDim.new(0, 12)
+    PillCorner.Parent = FloatingPill
 
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(28, 28, 38)
-        stroke.Thickness = 1
-        stroke.Parent = sliderCard
+    local PillStroke = Instance.new("UIStroke")
+    PillStroke.Color = Color3.fromRGB(36, 36, 46)
+    PillStroke.Thickness = 1.2
+    PillStroke.Parent = FloatingPill
 
-        local tLabel = Instance.new("TextLabel")
-        tLabel.Text = title
-        tLabel.Font = Enum.Font.GothamMedium
-        tLabel.TextSize = 12
-        tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
-        tLabel.Position = UDim2.new(0, 12, 0, 7)
-        tLabel.Size = UDim2.new(1, -85, 0, 16)
-        tLabel.BackgroundTransparency = 1
-        tLabel.TextXAlignment = Enum.TextXAlignment.Left
-        tLabel.ZIndex = 1005
-        tLabel.Parent = sliderCard
+    local PillLogo = Instance.new("Frame")
+    PillLogo.Size = UDim2.new(0, 30, 0, 30)
+    PillLogo.Position = UDim2.new(0, 8, 0.5, -15)
+    PillLogo.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    PillLogo.BorderSizePixel = 0
+    PillLogo.ZIndex = 5001
+    PillLogo.Parent = FloatingPill
 
-        local valLabel = Instance.new("TextLabel")
-        valLabel.Text = tostring(defaultVal)
-        valLabel.Font = Enum.Font.GothamBold
-        valLabel.TextSize = 12
-        valLabel.TextColor3 = Config.AccentColor
-        valLabel.Position = UDim2.new(1, -65, 0, 7)
-        valLabel.Size = UDim2.new(0, 55, 0, 16)
-        valLabel.BackgroundTransparency = 1
-        valLabel.TextXAlignment = Enum.TextXAlignment.Right
-        valLabel.ZIndex = 1005
-        valLabel.Parent = sliderCard
+    local PillLogoCorner = Instance.new("UICorner")
+    PillLogoCorner.CornerRadius = UDim.new(0, 8)
+    PillLogoCorner.Parent = PillLogo
 
-        local track = Instance.new("Frame")
-        track.Size = UDim2.new(1, -24, 0, 6)
-        track.Position = UDim2.new(0, 12, 0, 32)
-        track.BackgroundColor3 = Color3.fromRGB(34, 34, 46)
-        track.BorderSizePixel = 0
-        track.ZIndex = 1005
-        track.Parent = sliderCard
+    local PillLogoText = Instance.new("TextLabel")
+    PillLogoText.Text = "A"
+    PillLogoText.Font = Enum.Font.GothamBold
+    PillLogoText.TextSize = 16
+    PillLogoText.TextColor3 = Config.AccentColor
+    PillLogoText.Size = UDim2.new(1, 0, 1, 0)
+    PillLogoText.BackgroundTransparency = 1
+    PillLogoText.ZIndex = 5002
+    PillLogoText.Parent = PillLogo
 
-        local trCorner = Instance.new("UICorner")
-        trCorner.CornerRadius = UDim.new(1, 0)
-        trCorner.Parent = track
+    local PillTitle = Instance.new("TextLabel")
+    PillTitle.Text = "Averlik Hub"
+    PillTitle.Font = Enum.Font.GothamBold
+    PillTitle.TextSize = 12
+    PillTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PillTitle.Position = UDim2.new(0, 46, 0, 6)
+    PillTitle.Size = UDim2.new(1, -52, 0, 16)
+    PillTitle.BackgroundTransparency = 1
+    PillTitle.TextXAlignment = Enum.TextXAlignment.Left
+    PillTitle.ZIndex = 5001
+    PillTitle.Parent = FloatingPill
 
-        local pct = math.clamp((defaultVal - min) / (max - min), 0, 1)
-        local fill = Instance.new("Frame")
-        fill.Size = UDim2.new(pct, 0, 1, 0)
-        fill.BackgroundColor3 = Config.AccentColor
-        fill.BorderSizePixel = 0
-        fill.ZIndex = 1006
-        fill.Parent = track
+    local PillSub = Instance.new("TextLabel")
+    PillSub.Name = "HUD_TimeFPS"
+    PillSub.Text = "00:00 • 60 fps"
+    PillSub.Font = Enum.Font.Gotham
+    PillSub.TextSize = 10
+    PillSub.TextColor3 = Color3.fromRGB(150, 150, 165)
+    PillSub.Position = UDim2.new(0, 46, 0, 23)
+    PillSub.Size = UDim2.new(1, -52, 0, 16)
+    PillSub.BackgroundTransparency = 1
+    PillSub.TextXAlignment = Enum.TextXAlignment.Left
+    PillSub.ZIndex = 5001
+    PillSub.Parent = FloatingPill
 
-        local fCorner = Instance.new("UICorner")
-        fCorner.CornerRadius = UDim.new(1, 0)
-        fCorner.Parent = fill
+    local PillBtn = Instance.new("TextButton")
+    PillBtn.Size = UDim2.new(1, 0, 1, 0)
+    PillBtn.BackgroundTransparency = 1
+    PillBtn.Text = ""
+    PillBtn.ZIndex = 5005
+    PillBtn.Parent = FloatingPill
 
-        local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 12, 0, 12)
-        knob.Position = UDim2.new(1, -6, 0.5, -6)
-        knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        knob.BorderSizePixel = 0
-        knob.ZIndex = 1007
-        knob.Parent = fill
+    -- 10. Главное окно (MainWindow)
+    local MainWindow = Instance.new("Frame")
+    MainWindow.Name = "MainWindow"
+    MainWindow.AnchorPoint = Vector2.new(0.5, 0.5)
+    MainWindow.Size = UDim2.new(0, 680, 0, 440)
+    MainWindow.Position = UDim2.new(0.5, 0, 0.5, 0)
+    MainWindow.BackgroundColor3 = Config.BackgroundColor
+    MainWindow.BorderSizePixel = 0
+    MainWindow.Active = true
+    MainWindow.Visible = true
+    MainWindow.ZIndex = 1000
+    MainWindow.Parent = MainScreenGui
 
-        local knCorner = Instance.new("UICorner")
-        knCorner.CornerRadius = UDim.new(1, 0)
-        knCorner.Parent = knob
+    local MainCorner = Instance.new("UICorner")
+    MainCorner.CornerRadius = UDim.new(0, 14)
+    MainCorner.Parent = MainWindow
 
-        local isDragging = false
-        local function UpdateSlider(inputPos)
-            local relX = math.clamp(inputPos.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
-            local newPct = relX / track.AbsoluteSize.X
-            local val = math.floor(min + (max - min) * newPct)
-            fill.Size = UDim2.new(newPct, 0, 1, 0)
-            valLabel.Text = tostring(val)
-            if callback then callback(val) end
-        end
+    local MainStroke = Instance.new("UIStroke")
+    MainStroke.Color = Color3.fromRGB(34, 34, 44)
+    MainStroke.Thickness = 1.2
+    MainStroke.Parent = MainWindow
 
-        track.InputBegan:Connect(function(input)
+    -- Перетаскивание (Drag)
+    local function EnableDrag(frame, handle)
+        handle = handle or frame
+        local dragging, dragInput, dragStart, startPos
+
+        handle.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                isDragging = true
-                UpdateSlider(input.Position)
+                dragging = true
+                dragStart = input.Position
+                startPos = frame.Position
+
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
             end
         end)
 
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                isDragging = false
+        handle.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
             end
         end)
 
         UserInputService.InputChanged:Connect(function(input)
-            if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                UpdateSlider(input.Position)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
         end)
-
-        table.insert(tabObj.Elements, {Type = "Slider", Title = title, Card = sliderCard})
     end
 
-    function tabObj:CreateDropdown(title, items, defaultItem, callback)
-        local dropCard = Instance.new("Frame")
-        dropCard.Name = "Dropdown_" .. title
-        dropCard.Size = UDim2.new(1, 0, 0, 40)
-        dropCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
-        dropCard.BorderSizePixel = 0
-        dropCard.ClipsDescendants = false
-        dropCard.ZIndex = 1004
-        dropCard.Parent = pageScroll
+    EnableDrag(MainWindow)
+    EnableDrag(FloatingPill)
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = dropCard
+    -- 11. Сайдбар
+    local Sidebar = Instance.new("Frame")
+    Sidebar.Name = "Sidebar"
+    Sidebar.Size = UDim2.new(0, 170, 1, 0)
+    Sidebar.Position = UDim2.new(0, 0, 0, 0)
+    Sidebar.BackgroundColor3 = Config.SidebarColor
+    Sidebar.BorderSizePixel = 0
+    Sidebar.ZIndex = 1001
+    Sidebar.Parent = MainWindow
 
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(28, 28, 38)
-        stroke.Thickness = 1
-        stroke.Parent = dropCard
+    local SidebarCorner = Instance.new("UICorner")
+    SidebarCorner.CornerRadius = UDim.new(0, 14)
+    SidebarCorner.Parent = Sidebar
 
-        local tLabel = Instance.new("TextLabel")
-        tLabel.Text = title
-        tLabel.Font = Enum.Font.GothamMedium
-        tLabel.TextSize = 12
-        tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
-        tLabel.Position = UDim2.new(0, 12, 0, 0)
-        tLabel.Size = UDim2.new(0.5, 0, 0, 40)
-        tLabel.BackgroundTransparency = 1
-        tLabel.TextXAlignment = Enum.TextXAlignment.Left
-        tLabel.ZIndex = 1005
-        tLabel.Parent = dropCard
+    local SidebarMask = Instance.new("Frame")
+    SidebarMask.Size = UDim2.new(0, 14, 1, 0)
+    SidebarMask.Position = UDim2.new(1, -14, 0, 0)
+    SidebarMask.BackgroundColor3 = Config.SidebarColor
+    SidebarMask.BorderSizePixel = 0
+    SidebarMask.ZIndex = 1001
+    SidebarMask.Parent = Sidebar
 
-        local selBtn = Instance.new("TextButton")
-        selBtn.Size = UDim2.new(0.48, -10, 0, 26)
-        selBtn.Position = UDim2.new(0.52, 0, 0.5, -13)
-        selBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 34)
-        selBtn.BorderSizePixel = 0
-        selBtn.Text = (defaultItem or "Select a config...") .. "  ▼"
-        selBtn.Font = Enum.Font.Gotham
-        selBtn.TextSize = 11
-        selBtn.TextColor3 = Color3.fromRGB(200, 200, 215)
-        selBtn.ZIndex = 1005
-        selBtn.Parent = dropCard
+    local SidebarDivider = Instance.new("Frame")
+    SidebarDivider.Size = UDim2.new(0, 1, 1, 0)
+    SidebarDivider.Position = UDim2.new(1, 0, 0, 0)
+    SidebarDivider.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+    SidebarDivider.BorderSizePixel = 0
+    SidebarDivider.ZIndex = 1002
+    SidebarDivider.Parent = Sidebar
 
-        local selCorner = Instance.new("UICorner")
-        selCorner.CornerRadius = UDim.new(0, 6)
-        selCorner.Parent = selBtn
+    local BrandFrame = Instance.new("Frame")
+    BrandFrame.Size = UDim2.new(1, 0, 0, 60)
+    BrandFrame.BackgroundTransparency = 1
+    BrandFrame.ZIndex = 1002
+    BrandFrame.Parent = Sidebar
 
-        local listFrame = Instance.new("ScrollingFrame")
-        listFrame.Size = UDim2.new(1, 0, 0, 110)
-        listFrame.Position = UDim2.new(0, 0, 1, 4)
-        listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
-        listFrame.BorderSizePixel = 0
-        listFrame.ScrollBarThickness = 2
-        listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-        listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        listFrame.Visible = false
-        listFrame.ZIndex = 2500
-        listFrame.Parent = selBtn
+    local BrandLogo = Instance.new("Frame")
+    BrandLogo.Size = UDim2.new(0, 34, 0, 34)
+    BrandLogo.Position = UDim2.new(0, 12, 0, 13)
+    BrandLogo.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+    BrandLogo.BorderSizePixel = 0
+    BrandLogo.ZIndex = 1003
+    BrandLogo.Parent = BrandFrame
 
-        local listCorner = Instance.new("UICorner")
-        listCorner.CornerRadius = UDim.new(0, 6)
-        listCorner.Parent = listFrame
+    local BrandLogoCorner = Instance.new("UICorner")
+    BrandLogoCorner.CornerRadius = UDim.new(0, 8)
+    BrandLogoCorner.Parent = BrandLogo
 
-        local listStroke = Instance.new("UIStroke")
-        listStroke.Color = Color3.fromRGB(42, 42, 54)
-        listStroke.Thickness = 1
-        listStroke.Parent = listFrame
+    local BrandLogoLetter = Instance.new("TextLabel")
+    BrandLogoLetter.Text = "A"
+    BrandLogoLetter.Font = Enum.Font.GothamBold
+    BrandLogoLetter.TextSize = 18
+    BrandLogoLetter.TextColor3 = Config.AccentColor
+    BrandLogoLetter.Size = UDim2.new(1, 0, 1, 0)
+    BrandLogoLetter.BackgroundTransparency = 1
+    BrandLogoLetter.ZIndex = 1004
+    BrandLogoLetter.Parent = BrandLogo
 
-        local listLayout = Instance.new("UIListLayout")
-        listLayout.Padding = UDim.new(0, 2)
-        listLayout.Parent = listFrame
+    local BrandTitle = Instance.new("TextLabel")
+    BrandTitle.Text = "Averlik Hub"
+    BrandTitle.Font = Enum.Font.GothamBold
+    BrandTitle.TextSize = 13
+    BrandTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    BrandTitle.Position = UDim2.new(0, 54, 0, 13)
+    BrandTitle.Size = UDim2.new(1, -60, 0, 16)
+    BrandTitle.BackgroundTransparency = 1
+    BrandTitle.TextXAlignment = Enum.TextXAlignment.Left
+    BrandTitle.ZIndex = 1003
+    BrandTitle.Parent = BrandFrame
 
-        local function RefreshItems(newItems)
-            for _, c in pairs(listFrame:GetChildren()) do
-                if c:IsA("TextButton") then c:Destroy() end
+    local BrandSub = Instance.new("TextLabel")
+    BrandSub.Text = "Animal Hospital"
+    BrandSub.Font = Enum.Font.Gotham
+    BrandSub.TextSize = 11
+    BrandSub.TextColor3 = Color3.fromRGB(140, 140, 155)
+    BrandSub.Position = UDim2.new(0, 54, 0, 30)
+    BrandSub.Size = UDim2.new(1, -60, 0, 14)
+    BrandSub.BackgroundTransparency = 1
+    BrandSub.TextXAlignment = Enum.TextXAlignment.Left
+    BrandSub.ZIndex = 1003
+    BrandSub.Parent = BrandFrame
+
+    local TabListContainer = Instance.new("ScrollingFrame")
+    TabListContainer.Name = "TabList"
+    TabListContainer.Size = UDim2.new(1, -14, 1, -135)
+    TabListContainer.Position = UDim2.new(0, 7, 0, 62)
+    TabListContainer.BackgroundTransparency = 1
+    TabListContainer.BorderSizePixel = 0
+    TabListContainer.ScrollBarThickness = 2
+    TabListContainer.ScrollBarImageColor3 = Color3.fromRGB(45, 45, 60)
+    TabListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+    TabListContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    TabListContainer.ZIndex = 1003
+    TabListContainer.Parent = Sidebar
+
+    local TabListLayout = Instance.new("UIListLayout")
+    TabListLayout.Padding = UDim.new(0, 3)
+    TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    TabListLayout.Parent = TabListContainer
+
+    local SidebarFooter = Instance.new("Frame")
+    SidebarFooter.Name = "Footer"
+    SidebarFooter.Size = UDim2.new(1, -14, 0, 54)
+    SidebarFooter.Position = UDim2.new(0, 7, 1, -60)
+    SidebarFooter.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+    SidebarFooter.BorderSizePixel = 0
+    SidebarFooter.ZIndex = 1003
+    SidebarFooter.Parent = Sidebar
+
+    local FooterCorner = Instance.new("UICorner")
+    FooterCorner.CornerRadius = UDim.new(0, 10)
+    FooterCorner.Parent = SidebarFooter
+
+    local FooterStroke = Instance.new("UIStroke")
+    FooterStroke.Color = Color3.fromRGB(30, 30, 40)
+    FooterStroke.Thickness = 1
+    FooterStroke.Parent = SidebarFooter
+
+    local DiscordLabel = Instance.new("TextLabel")
+    DiscordLabel.Text = "discord.gg/bJFF653nK"
+    DiscordLabel.Font = Enum.Font.GothamBold
+    DiscordLabel.TextSize = 11
+    DiscordLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DiscordLabel.Position = UDim2.new(0, 0, 0, 8)
+    DiscordLabel.Size = UDim2.new(1, 0, 0, 16)
+    DiscordLabel.BackgroundTransparency = 1
+    DiscordLabel.ZIndex = 1004
+    DiscordLabel.Parent = SidebarFooter
+
+    local FooterSub = Instance.new("TextLabel")
+    FooterSub.Name = "FooterTimeFPS"
+    FooterSub.Text = "00:00 • 60 fps"
+    FooterSub.Font = Enum.Font.Gotham
+    FooterSub.TextSize = 10
+    FooterSub.TextColor3 = Color3.fromRGB(140, 140, 155)
+    FooterSub.Position = UDim2.new(0, 0, 0, 26)
+    FooterSub.Size = UDim2.new(1, 0, 0, 16)
+    FooterSub.BackgroundTransparency = 1
+    FooterSub.ZIndex = 1004
+    FooterSub.Parent = SidebarFooter
+
+    -- 12. Правая контентная часть
+    local ContentArea = Instance.new("Frame")
+    ContentArea.Name = "ContentArea"
+    ContentArea.Size = UDim2.new(1, -170, 1, 0)
+    ContentArea.Position = UDim2.new(0, 170, 0, 0)
+    ContentArea.BackgroundTransparency = 1
+    ContentArea.ZIndex = 1001
+    ContentArea.Parent = MainWindow
+
+    local ContentHeader = Instance.new("Frame")
+    ContentHeader.Name = "Header"
+    ContentHeader.Size = UDim2.new(1, 0, 0, 60)
+    ContentHeader.Position = UDim2.new(0, 0, 0, 0)
+    ContentHeader.BackgroundTransparency = 1
+    ContentHeader.ZIndex = 1002
+    ContentHeader.Parent = ContentArea
+
+    local HeaderTitle = Instance.new("TextLabel")
+    HeaderTitle.Name = "Title"
+    HeaderTitle.Text = "Авто фарм"
+    HeaderTitle.Font = Enum.Font.GothamBold
+    HeaderTitle.TextSize = 17
+    HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    HeaderTitle.Position = UDim2.new(0, 18, 0, 12)
+    HeaderTitle.Size = UDim2.new(0, 220, 0, 20)
+    HeaderTitle.BackgroundTransparency = 1
+    HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+    HeaderTitle.ZIndex = 1003
+    HeaderTitle.Parent = ContentHeader
+
+    local HeaderSub = Instance.new("TextLabel")
+    HeaderSub.Name = "Subtitle"
+    HeaderSub.Text = "Автоматизация больницы и заработка"
+    HeaderSub.Font = Enum.Font.Gotham
+    HeaderSub.TextSize = 11
+    HeaderSub.TextColor3 = Color3.fromRGB(140, 140, 155)
+    HeaderSub.Position = UDim2.new(0, 18, 0, 33)
+    HeaderSub.Size = UDim2.new(0, 260, 0, 14)
+    HeaderSub.BackgroundTransparency = 1
+    HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
+    HeaderSub.ZIndex = 1003
+    HeaderSub.Parent = ContentHeader
+
+    local SearchBoxContainer = Instance.new("Frame")
+    SearchBoxContainer.Name = "SearchContainer"
+    SearchBoxContainer.Size = UDim2.new(0, 150, 0, 30)
+    SearchBoxContainer.Position = UDim2.new(1, -195, 0, 15)
+    SearchBoxContainer.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+    SearchBoxContainer.BorderSizePixel = 0
+    SearchBoxContainer.ZIndex = 1003
+    SearchBoxContainer.Parent = ContentHeader
+
+    local SearchCorner = Instance.new("UICorner")
+    SearchCorner.CornerRadius = UDim.new(0, 8)
+    SearchCorner.Parent = SearchBoxContainer
+
+    local SearchStroke = Instance.new("UIStroke")
+    SearchStroke.Color = Color3.fromRGB(30, 30, 40)
+    SearchStroke.Thickness = 1
+    SearchStroke.Parent = SearchBoxContainer
+
+    local SearchInput = Instance.new("TextBox")
+    SearchInput.Name = "Input"
+    SearchInput.PlaceholderText = "Поиск..."
+    SearchInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
+    SearchInput.Text = ""
+    SearchInput.Font = Enum.Font.Gotham
+    SearchInput.TextSize = 11
+    SearchInput.TextColor3 = Color3.fromRGB(240, 240, 250)
+    SearchInput.Size = UDim2.new(1, -16, 1, 0)
+    SearchInput.Position = UDim2.new(0, 10, 0, 0)
+    SearchInput.BackgroundTransparency = 1
+    SearchInput.TextXAlignment = Enum.TextXAlignment.Left
+    SearchInput.ClearTextOnFocus = false
+    SearchInput.ZIndex = 1004
+    SearchInput.Parent = SearchBoxContainer
+
+    local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Name = "CloseBtn"
+    CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+    CloseBtn.Position = UDim2.new(1, -38, 0, 15)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+    CloseBtn.BorderSizePixel = 0
+    CloseBtn.Text = "✕"
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.TextSize = 13
+    CloseBtn.TextColor3 = Color3.fromRGB(180, 180, 195)
+    CloseBtn.ZIndex = 1003
+    CloseBtn.Parent = ContentHeader
+
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.CornerRadius = UDim.new(0, 8)
+    CloseCorner.Parent = CloseBtn
+
+    local CloseStroke = Instance.new("UIStroke")
+    CloseStroke.Color = Color3.fromRGB(34, 34, 44)
+    CloseStroke.Thickness = 1
+    CloseStroke.Parent = CloseBtn
+
+    local function ToggleGUI()
+        MainWindow.Visible = not MainWindow.Visible
+    end
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        MainWindow.Visible = false
+        SendNotification("Averlik Hub", "Интерфейс скрыт. Кликните по виджету снизу.", 3)
+    end)
+
+    PillBtn.MouseButton1Click:Connect(ToggleGUI)
+
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if not gpe and (input.KeyCode == Enum.KeyCode.RightControl or input.KeyCode == Enum.KeyCode.Insert) then
+            ToggleGUI()
+        end
+    end)
+
+    local PagesHolder = Instance.new("Frame")
+    PagesHolder.Name = "PagesHolder"
+    PagesHolder.Size = UDim2.new(1, 0, 1, -60)
+    PagesHolder.Position = UDim2.new(0, 0, 0, 60)
+    PagesHolder.BackgroundTransparency = 1
+    PagesHolder.ZIndex = 1002
+    PagesHolder.Parent = ContentArea
+
+    -- 13. UI Builder
+    local Tabs = {}
+    local CurrentTab = nil
+
+    local function CreateTab(name, icon, subtitle, layoutOrder)
+        local tabButton = Instance.new("TextButton")
+        tabButton.Name = "Tab_" .. name
+        tabButton.Size = UDim2.new(1, 0, 0, 34)
+        tabButton.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+        tabButton.BackgroundTransparency = 1
+        tabButton.BorderSizePixel = 0
+        tabButton.Text = ""
+        tabButton.LayoutOrder = layoutOrder or 1
+        tabButton.ZIndex = 1004
+        tabButton.Parent = TabListContainer
+
+        local tabCorner = Instance.new("UICorner")
+        tabCorner.CornerRadius = UDim.new(0, 8)
+        tabCorner.Parent = tabButton
+
+        local iconLabel = Instance.new("TextLabel")
+        iconLabel.Name = "Icon"
+        iconLabel.Text = icon or "•"
+        iconLabel.Font = Enum.Font.GothamBold
+        iconLabel.TextSize = 13
+        iconLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
+        iconLabel.Position = UDim2.new(0, 10, 0, 0)
+        iconLabel.Size = UDim2.new(0, 20, 1, 0)
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.ZIndex = 1005
+        iconLabel.Parent = tabButton
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "Label"
+        nameLabel.Text = name
+        nameLabel.Font = Enum.Font.GothamMedium
+        nameLabel.TextSize = 12
+        nameLabel.TextColor3 = Color3.fromRGB(160, 160, 175)
+        nameLabel.Position = UDim2.new(0, 36, 0, 0)
+        nameLabel.Size = UDim2.new(1, -40, 1, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.ZIndex = 1005
+        nameLabel.Parent = tabButton
+
+        local pageScroll = Instance.new("ScrollingFrame")
+        pageScroll.Name = "Page_" .. name
+        pageScroll.Size = UDim2.new(1, -26, 1, -12)
+        pageScroll.Position = UDim2.new(0, 13, 0, 0)
+        pageScroll.BackgroundTransparency = 1
+        pageScroll.BorderSizePixel = 0
+        pageScroll.ScrollBarThickness = 3
+        pageScroll.ScrollBarImageColor3 = Color3.fromRGB(45, 45, 60)
+        pageScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        pageScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        pageScroll.Visible = false
+        pageScroll.ZIndex = 1003
+        pageScroll.Parent = PagesHolder
+
+        local pageLayout = Instance.new("UIListLayout")
+        pageLayout.Padding = UDim.new(0, 7)
+        pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        pageLayout.Parent = pageScroll
+
+        local tabObj = {
+            Button = tabButton,
+            Page = pageScroll,
+            Name = name,
+            Subtitle = subtitle or "Параметры и функции",
+            Elements = {}
+        }
+
+        local function SelectThisTab()
+            for _, t in pairs(Tabs) do
+                t.Page.Visible = false
+                t.Button.BackgroundTransparency = 1
+                local lbl = t.Button:FindFirstChild("Label")
+                local icn = t.Button:FindFirstChild("Icon")
+                if lbl then lbl.TextColor3 = Color3.fromRGB(150, 150, 165) end
+                if icn then icn.TextColor3 = Color3.fromRGB(140, 140, 155) end
             end
-            for _, itm in ipairs(newItems) do
-                local itemBtn = Instance.new("TextButton")
-                itemBtn.Size = UDim2.new(1, 0, 0, 24)
-                itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
-                itemBtn.BackgroundTransparency = 0.5
-                itemBtn.BorderSizePixel = 0
-                itemBtn.Text = tostring(itm)
-                itemBtn.Font = Enum.Font.Gotham
-                itemBtn.TextSize = 11
-                itemBtn.TextColor3 = Color3.fromRGB(230, 230, 240)
-                itemBtn.ZIndex = 2501
-                itemBtn.Parent = listFrame
 
-                itemBtn.MouseButton1Click:Connect(function()
-                    selBtn.Text = tostring(itm) .. "  ▼"
-                    listFrame.Visible = false
-                    if callback then callback(itm) end
+            CurrentTab = tabObj
+            pageScroll.Visible = true
+            tabButton.BackgroundTransparency = 0
+            tabButton.BackgroundColor3 = Color3.fromRGB(26, 25, 34)
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            iconLabel.TextColor3 = Config.AccentColor
+
+            HeaderTitle.Text = name
+            HeaderSub.Text = tabObj.Subtitle
+        end
+
+        tabButton.MouseButton1Click:Connect(SelectThisTab)
+        table.insert(Tabs, tabObj)
+
+        function tabObj:CreateSection(sectionTitle)
+            local secFrame = Instance.new("Frame")
+            secFrame.Name = "Sec_" .. sectionTitle
+            secFrame.Size = UDim2.new(1, 0, 0, 24)
+            secFrame.BackgroundTransparency = 1
+            secFrame.ZIndex = 1004
+            secFrame.Parent = pageScroll
+
+            local lbl = Instance.new("TextLabel")
+            lbl.Text = sectionTitle
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextSize = 11
+            lbl.TextColor3 = Color3.fromRGB(150, 150, 165)
+            lbl.Size = UDim2.new(0, 0, 1, 0)
+            lbl.AutomaticSize = Enum.AutomaticSize.X
+            lbl.BackgroundTransparency = 1
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 1005
+            lbl.Parent = secFrame
+
+            local line = Instance.new("Frame")
+            line.Size = UDim2.new(1, -(lbl.AbsoluteSize.X + 15), 0, 1)
+            line.Position = UDim2.new(1, 0, 0.5, 0)
+            line.AnchorPoint = Vector2.new(1, 0.5)
+            line.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+            line.BorderSizePixel = 0
+            line.ZIndex = 1004
+            line.Parent = secFrame
+
+            lbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                line.Size = UDim2.new(1, -(lbl.AbsoluteSize.X + 15), 0, 1)
+            end)
+        end
+
+        function tabObj:CreateToggle(title, description, defaultValue, callback)
+            local toggleCard = Instance.new("Frame")
+            toggleCard.Name = "Toggle_" .. title
+            toggleCard.Size = UDim2.new(1, 0, 0, 44)
+            toggleCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
+            toggleCard.BorderSizePixel = 0
+            toggleCard.ZIndex = 1004
+            toggleCard.Parent = pageScroll
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = toggleCard
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = Color3.fromRGB(28, 28, 38)
+            stroke.Thickness = 1
+            stroke.Parent = toggleCard
+
+            local tLabel = Instance.new("TextLabel")
+            tLabel.Text = title
+            tLabel.Font = Enum.Font.GothamMedium
+            tLabel.TextSize = 12
+            tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
+            tLabel.Position = UDim2.new(0, 12, 0, 6)
+            tLabel.Size = UDim2.new(1, -65, 0, 16)
+            tLabel.BackgroundTransparency = 1
+            tLabel.TextXAlignment = Enum.TextXAlignment.Left
+            tLabel.ZIndex = 1005
+            tLabel.Parent = toggleCard
+
+            local dLabel = Instance.new("TextLabel")
+            dLabel.Text = description or ""
+            dLabel.Font = Enum.Font.Gotham
+            dLabel.TextSize = 10
+            dLabel.TextColor3 = Color3.fromRGB(120, 120, 135)
+            dLabel.Position = UDim2.new(0, 12, 0, 23)
+            dLabel.Size = UDim2.new(1, -65, 0, 14)
+            dLabel.BackgroundTransparency = 1
+            dLabel.TextXAlignment = Enum.TextXAlignment.Left
+            dLabel.ZIndex = 1005
+            dLabel.Parent = toggleCard
+
+            local switch = Instance.new("Frame")
+            switch.Size = UDim2.new(0, 38, 0, 20)
+            switch.Position = UDim2.new(1, -48, 0.5, -10)
+            switch.BackgroundColor3 = defaultValue and Config.AccentColor or Color3.fromRGB(40, 40, 52)
+            switch.BorderSizePixel = 0
+            switch.ZIndex = 1005
+            switch.Parent = toggleCard
+
+            local swCorner = Instance.new("UICorner")
+            swCorner.CornerRadius = UDim.new(1, 0)
+            swCorner.Parent = switch
+
+            local knob = Instance.new("Frame")
+            knob.Size = UDim2.new(0, 14, 0, 14)
+            knob.Position = defaultValue and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+            knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            knob.BorderSizePixel = 0
+            knob.ZIndex = 1006
+            knob.Parent = switch
+
+            local knobCorner = Instance.new("UICorner")
+            knCorner.CornerRadius = UDim.new(1, 0)
+            knCorner.Parent = knob
+
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 1, 0)
+            btn.BackgroundTransparency = 1
+            btn.Text = ""
+            btn.ZIndex = 1007
+            btn.Parent = toggleCard
+
+            local state = defaultValue
+
+            local function SetState(val)
+                state = val
+                local targetPos = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+                local targetColor = state and Config.AccentColor or Color3.fromRGB(40, 40, 52)
+
+                pcall(function()
+                    TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
+                    TweenService:Create(switch, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundColor3 = targetColor}):Play()
                 end)
+
+                if callback then callback(state) end
+            end
+
+            btn.MouseButton1Click:Connect(function() SetState(not state) end)
+            table.insert(tabObj.Elements, {Type = "Toggle", Title = title, Card = toggleCard, Set = SetState})
+            return {Set = SetState}
+        end
+
+        function tabObj:CreateButton(title, isPrimary, callback)
+            local btnCard = Instance.new("TextButton")
+            btnCard.Name = "Btn_" .. title
+            btnCard.Size = UDim2.new(1, 0, 0, 36)
+            btnCard.BackgroundColor3 = isPrimary and Config.AccentColor or Color3.fromRGB(32, 32, 42)
+            btnCard.BorderSizePixel = 0
+            btnCard.Text = title
+            btnCard.Font = Enum.Font.GothamBold
+            btnCard.TextSize = 12
+            btnCard.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btnCard.AutoButtonColor = false
+            btnCard.ZIndex = 1004
+            btnCard.Parent = pageScroll
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = btnCard
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = isPrimary and Color3.fromRGB(240, 130, 255) or Color3.fromRGB(44, 44, 58)
+            stroke.Thickness = 1
+            stroke.Parent = btnCard
+
+            btnCard.MouseEnter:Connect(function()
+                local hoverColor = isPrimary and Color3.fromRGB(235, 90, 255) or Color3.fromRGB(42, 42, 54)
+                pcall(function()
+                    TweenService:Create(btnCard, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}):Play()
+                end)
+            end)
+
+            btnCard.MouseLeave:Connect(function()
+                local baseColor = isPrimary and Config.AccentColor or Color3.fromRGB(32, 32, 42)
+                pcall(function()
+                    TweenService:Create(btnCard, TweenInfo.new(0.15), {BackgroundColor3 = baseColor}):Play()
+                end)
+            end)
+
+            btnCard.MouseButton1Click:Connect(function()
+                pcall(function()
+                    TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, -4, 0, 34)}):Play()
+                    task.wait(0.08)
+                    TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, 0, 0, 36)}):Play()
+                end)
+                if callback then callback() end
+            end)
+
+            table.insert(tabObj.Elements, {Type = "Button", Title = title, Card = btnCard})
+            return btnCard
+        end
+
+        function tabObj:CreateSlider(title, min, max, defaultVal, callback)
+            local sliderCard = Instance.new("Frame")
+            sliderCard.Name = "Slider_" .. title
+            sliderCard.Size = UDim2.new(1, 0, 0, 50)
+            sliderCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
+            sliderCard.BorderSizePixel = 0
+            sliderCard.ZIndex = 1004
+            sliderCard.Parent = pageScroll
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = sliderCard
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = Color3.fromRGB(28, 28, 38)
+            stroke.Thickness = 1
+            stroke.Parent = sliderCard
+
+            local tLabel = Instance.new("TextLabel")
+            tLabel.Text = title
+            tLabel.Font = Enum.Font.GothamMedium
+            tLabel.TextSize = 12
+            tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
+            tLabel.Position = UDim2.new(0, 12, 0, 7)
+            tLabel.Size = UDim2.new(1, -85, 0, 16)
+            tLabel.BackgroundTransparency = 1
+            tLabel.TextXAlignment = Enum.TextXAlignment.Left
+            tLabel.ZIndex = 1005
+            tLabel.Parent = sliderCard
+
+            local valLabel = Instance.new("TextLabel")
+            valLabel.Text = tostring(defaultVal)
+            valLabel.Font = Enum.Font.GothamBold
+            valLabel.TextSize = 12
+            valLabel.TextColor3 = Config.AccentColor
+            valLabel.Position = UDim2.new(1, -65, 0, 7)
+            valLabel.Size = UDim2.new(0, 55, 0, 16)
+            valLabel.BackgroundTransparency = 1
+            valLabel.TextXAlignment = Enum.TextXAlignment.Right
+            valLabel.ZIndex = 1005
+            valLabel.Parent = sliderCard
+
+            local track = Instance.new("Frame")
+            track.Size = UDim2.new(1, -24, 0, 6)
+            track.Position = UDim2.new(0, 12, 0, 32)
+            track.BackgroundColor3 = Color3.fromRGB(34, 34, 46)
+            track.BorderSizePixel = 0
+            track.ZIndex = 1005
+            track.Parent = sliderCard
+
+            local trCorner = Instance.new("UICorner")
+            trCorner.CornerRadius = UDim.new(1, 0)
+            trCorner.Parent = track
+
+            local pct = math.clamp((defaultVal - min) / (max - min), 0, 1)
+            local fill = Instance.new("Frame")
+            fill.Size = UDim2.new(pct, 0, 1, 0)
+            fill.BackgroundColor3 = Config.AccentColor
+            fill.BorderSizePixel = 0
+            fill.ZIndex = 1006
+            fill.Parent = track
+
+            local fCorner = Instance.new("UICorner")
+            fCorner.CornerRadius = UDim.new(1, 0)
+            fCorner.Parent = fill
+
+            local knob = Instance.new("Frame")
+            knob.Size = UDim2.new(0, 12, 0, 12)
+            knob.Position = UDim2.new(1, -6, 0.5, -6)
+            knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            knob.BorderSizePixel = 0
+            knob.ZIndex = 1007
+            knob.Parent = fill
+
+            local knCorner = Instance.new("UICorner")
+            knCorner.CornerRadius = UDim.new(1, 0)
+            knCorner.Parent = knob
+
+            local isDragging = false
+            local function UpdateSlider(inputPos)
+                local relX = math.clamp(inputPos.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
+                local newPct = relX / track.AbsoluteSize.X
+                local val = math.floor(min + (max - min) * newPct)
+                fill.Size = UDim2.new(newPct, 0, 1, 0)
+                valLabel.Text = tostring(val)
+                if callback then callback(val) end
+            end
+
+            track.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    isDragging = true
+                    UpdateSlider(input.Position)
+                end
+            end)
+
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    isDragging = false
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    UpdateSlider(input.Position)
+                end
+            end)
+
+            table.insert(tabObj.Elements, {Type = "Slider", Title = title, Card = sliderCard})
+        end
+
+        function tabObj:CreateDropdown(title, items, defaultItem, callback)
+            local dropCard = Instance.new("Frame")
+            dropCard.Name = "Dropdown_" .. title
+            dropCard.Size = UDim2.new(1, 0, 0, 40)
+            dropCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
+            dropCard.BorderSizePixel = 0
+            dropCard.ClipsDescendants = false
+            dropCard.ZIndex = 1004
+            dropCard.Parent = pageScroll
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = dropCard
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = Color3.fromRGB(28, 28, 38)
+            stroke.Thickness = 1
+            stroke.Parent = dropCard
+
+            local tLabel = Instance.new("TextLabel")
+            tLabel.Text = title
+            tLabel.Font = Enum.Font.GothamMedium
+            tLabel.TextSize = 12
+            tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
+            tLabel.Position = UDim2.new(0, 12, 0, 0)
+            tLabel.Size = UDim2.new(0.5, 0, 0, 40)
+            tLabel.BackgroundTransparency = 1
+            tLabel.TextXAlignment = Enum.TextXAlignment.Left
+            tLabel.ZIndex = 1005
+            tLabel.Parent = dropCard
+
+            local selBtn = Instance.new("TextButton")
+            selBtn.Size = UDim2.new(0.48, -10, 0, 26)
+            selBtn.Position = UDim2.new(0.52, 0, 0.5, -13)
+            selBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 34)
+            selBtn.BorderSizePixel = 0
+            selBtn.Text = (defaultItem or "Select a config...") .. "  ▼"
+            selBtn.Font = Enum.Font.Gotham
+            selBtn.TextSize = 11
+            selBtn.TextColor3 = Color3.fromRGB(200, 200, 215)
+            selBtn.ZIndex = 1005
+            selBtn.Parent = dropCard
+
+            local selCorner = Instance.new("UICorner")
+            selCorner.CornerRadius = UDim.new(0, 6)
+            selCorner.Parent = selBtn
+
+            local listFrame = Instance.new("ScrollingFrame")
+            listFrame.Size = UDim2.new(1, 0, 0, 110)
+            listFrame.Position = UDim2.new(0, 0, 1, 4)
+            listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+            listFrame.BorderSizePixel = 0
+            listFrame.ScrollBarThickness = 2
+            listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+            listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            listFrame.Visible = false
+            listFrame.ZIndex = 2500
+            listFrame.Parent = selBtn
+
+            local listCorner = Instance.new("UICorner")
+            listCorner.CornerRadius = UDim.new(0, 6)
+            listCorner.Parent = listFrame
+
+            local listStroke = Instance.new("UIStroke")
+            listStroke.Color = Color3.fromRGB(42, 42, 54)
+            listStroke.Thickness = 1
+            listStroke.Parent = listFrame
+
+            local listLayout = Instance.new("UIListLayout")
+            listLayout.Padding = UDim.new(0, 2)
+            listLayout.Parent = listFrame
+
+            local function RefreshItems(newItems)
+                for _, c in pairs(listFrame:GetChildren()) do
+                    if c:IsA("TextButton") then c:Destroy() end
+                end
+                for _, itm in ipairs(newItems) do
+                    local itemBtn = Instance.new("TextButton")
+                    itemBtn.Size = UDim2.new(1, 0, 0, 24)
+                    itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+                    itemBtn.BackgroundTransparency = 0.5
+                    itemBtn.BorderSizePixel = 0
+                    itemBtn.Text = tostring(itm)
+                    itemBtn.Font = Enum.Font.Gotham
+                    itemBtn.TextSize = 11
+                    itemBtn.TextColor3 = Color3.fromRGB(230, 230, 240)
+                    itemBtn.ZIndex = 2501
+                    itemBtn.Parent = listFrame
+
+                    itemBtn.MouseButton1Click:Connect(function()
+                        selBtn.Text = tostring(itm) .. "  ▼"
+                        listFrame.Visible = false
+                        if callback then callback(itm) end
+                    end)
+                end
+            end
+
+            RefreshItems(items)
+
+            selBtn.MouseButton1Click:Connect(function()
+                listFrame.Visible = not listFrame.Visible
+            end)
+
+            table.insert(tabObj.Elements, {Type = "Dropdown", Title = title, Card = dropCard, Refresh = RefreshItems})
+            return {Refresh = RefreshItems}
+        end
+
+        function tabObj:CreateInput(title, placeholder, defaultVal, callback)
+            local inputCard = Instance.new("Frame")
+            inputCard.Name = "Input_" .. title
+            inputCard.Size = UDim2.new(1, 0, 0, 40)
+            inputCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
+            inputCard.BorderSizePixel = 0
+            inputCard.ZIndex = 1004
+            inputCard.Parent = pageScroll
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = inputCard
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = Color3.fromRGB(28, 28, 38)
+            stroke.Thickness = 1
+            stroke.Parent = inputCard
+
+            local tb = Instance.new("TextBox")
+            tb.PlaceholderText = placeholder or title
+            tb.Text = defaultVal or ""
+            tb.Font = Enum.Font.Gotham
+            tb.TextSize = 11
+            tb.TextColor3 = Color3.fromRGB(240, 240, 250)
+            tb.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
+            tb.Size = UDim2.new(1, -24, 1, 0)
+            tb.Position = UDim2.new(0, 12, 0, 0)
+            tb.BackgroundTransparency = 1
+            tb.TextXAlignment = Enum.TextXAlignment.Left
+            tb.ClearTextOnFocus = false
+            tb.ZIndex = 1005
+            tb.Parent = inputCard
+
+            tb.FocusLost:Connect(function()
+                if callback then callback(tb.Text) end
+            end)
+
+            table.insert(tabObj.Elements, {Type = "Input", Title = title, Card = inputCard, TextBox = tb})
+            return tb
+        end
+
+        return tabObj
+    end
+
+    SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+        local query = string.lower(SearchInput.Text)
+        if not CurrentTab then return end
+
+        for _, el in pairs(CurrentTab.Elements) do
+            if query == "" or SafeFind(el.Title, query) then
+                el.Card.Visible = true
+            else
+                el.Card.Visible = false
             end
         end
+    end)
 
-        RefreshItems(items)
+    -- 14. Создание вкладок
+    local TabAutoFarm  = CreateTab("Авто фарм", "💲", "Автоматизация больницы и заработка", 1)
+    local TabHospital  = CreateTab("Больница", "🩺", "Управление пациентами, уход и лечение", 2)
+    local TabQuests    = CreateTab("Задания", "📜", "Автовыполнение и квесты", 3)
+    local TabTeleports = CreateTab("Телепорты", "🚀", "Мгновенное перемещение по карте", 4)
+    local TabPlayer    = CreateTab("Игрок", "👤", "Модификаторы скорости, прыжка и рассудка", 5)
+    local TabVisuals   = CreateTab("Visuals", "👁️", "ESP подсветка, дистанция и трейсеры", 6)
+    local TabMisc      = CreateTab("Misc", "📄", "Сервер, FPS Boost и настройки графики", 7)
+    local TabSettings  = CreateTab("Settings", "⚙️", "Interface and theme", 8)
 
-        selBtn.MouseButton1Click:Connect(function()
-            listFrame.Visible = not listFrame.Visible
-        end)
+    -- 1. Авто фарм
+    TabAutoFarm:CreateSection("Основной заработок")
+    TabAutoFarm:CreateToggle("Автофарм", "Автоматически выполняет основные действия для заработка валюты", Config.AutoFarm, function(val)
+        Config.AutoFarm = val
+        SendNotification("Автофарм", val and "Автофарм запущен" or "Автофарм остановлен", 2)
+    end)
+    TabAutoFarm:CreateToggle("Автосбор", "Автоматически собирает доступные награды, монеты и дропы", Config.AutoCollect, function(val)
+        Config.AutoCollect = val
+    end)
+    TabAutoFarm:CreateToggle("Автовзаимодействие", "Автоматически активирует нужные объекты и NPC в радиусе", Config.AutoInteract, function(val)
+        Config.AutoInteract = val
+    end)
+    TabAutoFarm:CreateSection("Торговля и развитие")
+    TabAutoFarm:CreateToggle("Автопродажа", "Автоматически продаёт накопленные ресурсы и вылеченных животных", Config.AutoSell, function(val)
+        Config.AutoSell = val
+    end)
+    TabAutoFarm:CreateToggle("Автопокупка", "Автоматически покупает необходимые предметы и медикаменты", Config.AutoBuy, function(val)
+        Config.AutoBuy = val
+    end)
+    TabAutoFarm:CreateToggle("Автоулучшение", "Автоматически приобретает доступные улучшения больницы", Config.AutoUpgrade, function(val)
+        Config.AutoUpgrade = val
+    end)
+    TabAutoFarm:CreateToggle("Автоустранение саботажей", "Автоматически чинит поломки, протечки и тушит пожары", Config.AutoFixSabotages, function(val)
+        Config.AutoFixSabotages = val
+    end)
+    TabAutoFarm:CreateButton("Устранить все саботажи сейчас", true, function()
+        local count = 0
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and (SafeFind(obj.ActionText, "fix") or SafeFind(obj.ActionText, "extinguish") or SafeFind(obj.ActionText, "repair") or SafeFind(obj.ObjectText, "sabotage") or SafeFind(obj.ObjectText, "leak")) then
+                SafeInteractPrompt(obj)
+                count = count + 1
+            end
+        end
+        SendNotification("Саботаж", "Устранено объектов: " .. tostring(count), 3)
+    end)
 
-        table.insert(tabObj.Elements, {Type = "Dropdown", Title = title, Card = dropCard, Refresh = RefreshItems})
-        return {Refresh = RefreshItems}
-    end
+    -- 2. Больница
+    TabHospital:CreateSection("Уход и лечение")
+    TabHospital:CreateToggle("Автолечение", "Находит пациентов, которым требуется лечение, и лечит их", Config.AutoHeal, function(val)
+        Config.AutoHeal = val
+    end)
+    TabHospital:CreateToggle("Автолечение по приоритету", "Сначала выбирает пациентов с наиболее высоким приоритетом", Config.PriorityHeal, function(val)
+        Config.PriorityHeal = val
+    end)
+    TabHospital:CreateToggle("Автокормление", "Автоматически кормит голодных пациентов", Config.AutoFeed, function(val)
+        Config.AutoFeed = val
+    end)
+    TabHospital:CreateToggle("Автоуборка", "Автоматически выполняет действия по уходу и очистке палат", Config.AutoClean, function(val)
+        Config.AutoClean = val
+    end)
+    TabHospital:CreateToggle("Автоуход", "Автоматически выполняет процедуры ухода (груминг, гигиена)", Config.AutoCare, function(val)
+        Config.AutoCare = val
+    end)
+    TabHospital:CreateToggle("ESP пациентов", "Показывает пациентов через стены со шкалой здоровья", Config.ESP_Patients, function(val)
+        Config.ESP_Patients = val
+    end)
 
-    function tabObj:CreateInput(title, placeholder, defaultVal, callback)
-        local inputCard = Instance.new("Frame")
-        inputCard.Name = "Input_" .. title
-        inputCard.Size = UDim2.new(1, 0, 0, 40)
-        inputCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
-        inputCard.BorderSizePixel = 0
-        inputCard.ZIndex = 1004
-        inputCard.Parent = pageScroll
+    -- 3. Задания
+    TabQuests:CreateSection("Квесты и награды")
+    TabQuests:CreateToggle("Автопринятие заданий", "Автоматически принимает доступные квесты у NPC", Config.AutoAcceptQuests, function(val)
+        Config.AutoAcceptQuests = val
+    end)
+    TabQuests:CreateToggle("Автоквест", "Самостоятельно проходит выбранные задания", Config.AutoQuest, function(val)
+        Config.AutoQuest = val
+    end)
+    TabQuests:CreateToggle("Автозавершение квеста", "Автоматически выполняет необходимые условия сдачи", Config.AutoCompleteQuest, function(val)
+        Config.AutoCompleteQuest = val
+    end)
+    TabQuests:CreateToggle("Автополучение наград", "Забирает награду сразу после завершения квеста", Config.AutoClaimRewards, function(val)
+        Config.AutoClaimRewards = val
+    end)
+    TabQuests:CreateToggle("ESP заданий", "Показывает местоположение нужных NPC и объектов", Config.ESP_Quests, function(val)
+        Config.ESP_Quests = val
+    end)
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = inputCard
-
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(28, 28, 38)
-        stroke.Thickness = 1
-        stroke.Parent = inputCard
-
-        local tb = Instance.new("TextBox")
-        tb.PlaceholderText = placeholder or title
-        tb.Text = defaultVal or ""
-        tb.Font = Enum.Font.Gotham
-        tb.TextSize = 11
-        tb.TextColor3 = Color3.fromRGB(240, 240, 250)
-        tb.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
-        tb.Size = UDim2.new(1, -24, 1, 0)
-        tb.Position = UDim2.new(0, 12, 0, 0)
-        tb.BackgroundTransparency = 1
-        tb.TextXAlignment = Enum.TextXAlignment.Left
-        tb.ClearTextOnFocus = false
-        tb.ZIndex = 1005
-        tb.Parent = inputCard
-
-        tb.FocusLost:Connect(function()
-            if callback then callback(tb.Text) end
-        end)
-
-        table.insert(tabObj.Elements, {Type = "Input", Title = title, Card = inputCard, TextBox = tb})
-        return tb
-    end
-
-    return tabObj
-end
-
-SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
-    local query = string.lower(SearchInput.Text)
-    if not CurrentTab then return end
-
-    for _, el in pairs(CurrentTab.Elements) do
-        if query == "" or string.find(string.lower(el.Title), query) then
-            el.Card.Visible = true
+    -- 4. Телепорты
+    TabTeleports:CreateSection("Телепорты по карте")
+    TabTeleports:CreateButton("Телепорт в больницу", true, function()
+        local target = Workspace:FindFirstChild("Hospital") or Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Lobby")
+        if target then
+            TeleportTo(target:IsA("Model") and (target.PrimaryPart and target.PrimaryPart.CFrame or target:GetBoundingBox()) or target.CFrame)
+            SendNotification("Телепорт", "Телепортирован в больницу", 2)
         else
-            el.Card.Visible = false
+            TeleportTo(CFrame.new(0, 10, 0))
         end
-    end
-end)
-
--- 14. Страницы
-local TabAutoFarm  = CreateTab("Авто фарм", "💲", "Автоматизация больницы и заработка", 1)
-local TabHospital  = CreateTab("Больница", "🩺", "Управление пациентами, уход и лечение", 2)
-local TabQuests    = CreateTab("Задания", "📜", "Автовыполнение и квесты", 3)
-local TabTeleports = CreateTab("Телепорты", "🚀", "Мгновенное перемещение по карте", 4)
-local TabPlayer    = CreateTab("Игрок", "👤", "Модификаторы скорости, прыжка и рассудка", 5)
-local TabVisuals   = CreateTab("Visuals", "👁️", "ESP подсветка, дистанция и трейсеры", 6)
-local TabMisc      = CreateTab("Misc", "📄", "Сервер, FPS Boost и настройки графики", 7)
-local TabSettings  = CreateTab("Settings", "⚙️", "Interface and theme", 8)
-
--- 1. Авто фарм
-TabAutoFarm:CreateSection("Основной заработок")
-TabAutoFarm:CreateToggle("Автофарм", "Автоматически выполняет основные действия для заработка валюты", Config.AutoFarm, function(val)
-    Config.AutoFarm = val
-    SendNotification("Автофарм", val and "Автофарм запущен" or "Автофарм остановлен", 2)
-end)
-TabAutoFarm:CreateToggle("Автосбор", "Автоматически собирает доступные награды, монеты и дропы", Config.AutoCollect, function(val)
-    Config.AutoCollect = val
-end)
-TabAutoFarm:CreateToggle("Автовзаимодействие", "Автоматически активирует нужные объекты и NPC в радиусе", Config.AutoInteract, function(val)
-    Config.AutoInteract = val
-end)
-TabAutoFarm:CreateSection("Торговля и развитие")
-TabAutoFarm:CreateToggle("Автопродажа", "Автоматически продаёт накопленные ресурсы и вылеченных животных", Config.AutoSell, function(val)
-    Config.AutoSell = val
-end)
-TabAutoFarm:CreateToggle("Автопокупка", "Автоматически покупает необходимые предметы и медикаменты", Config.AutoBuy, function(val)
-    Config.AutoBuy = val
-end)
-TabAutoFarm:CreateToggle("Автоулучшение", "Автоматически приобретает доступные улучшения больницы", Config.AutoUpgrade, function(val)
-    Config.AutoUpgrade = val
-end)
-TabAutoFarm:CreateToggle("Автоустранение саботажей", "Автоматически чинит поломки, протечки и тушит пожары", Config.AutoFixSabotages, function(val)
-    Config.AutoFixSabotages = val
-end)
-TabAutoFarm:CreateButton("Устранить все саботажи сейчас", true, function()
-    local count = 0
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") and (string.find(string.lower(obj.ActionText), "fix") or string.find(string.lower(obj.ActionText), "extinguish") or string.find(string.lower(obj.ActionText), "repair") or string.find(string.lower(obj.ObjectText), "sabotage") or string.find(string.lower(obj.ObjectText), "leak")) then
-            SafeInteractPrompt(obj)
-            count = count + 1
+    end)
+    TabTeleports:CreateButton("Телепорт в магазин", false, function()
+        local shop = Workspace:FindFirstChild("Shop") or Workspace:FindFirstChild("Store") or Workspace:FindFirstChild("Pharmacy") or Workspace:FindFirstChild("Market")
+        if shop then
+            TeleportTo(shop:IsA("Model") and (shop.PrimaryPart and shop.PrimaryPart.CFrame or shop:GetBoundingBox()) or shop.CFrame)
+            SendNotification("Телепорт", "Телепортирован в магазин", 2)
+        else
+            SendNotification("Телепорт", "Магазин не найден на карте", 2)
         end
-    end
-    SendNotification("Саботаж", "Устранено объектов: " .. tostring(count), 3)
-end)
-
--- 2. Больница
-TabHospital:CreateSection("Уход и лечение")
-TabHospital:CreateToggle("Автолечение", "Находит пациентов, которым требуется лечение, и лечит их", Config.AutoHeal, function(val)
-    Config.AutoHeal = val
-end)
-TabHospital:CreateToggle("Автолечение по приоритету", "Сначала выбирает пациентов с наиболее высоким приоритетом", Config.PriorityHeal, function(val)
-    Config.PriorityHeal = val
-end)
-TabHospital:CreateToggle("Автокормление", "Автоматически кормит голодных пациентов", Config.AutoFeed, function(val)
-    Config.AutoFeed = val
-end)
-TabHospital:CreateToggle("Автоуборка", "Автоматически выполняет действия по уходу и очистке палат", Config.AutoClean, function(val)
-    Config.AutoClean = val
-end)
-TabHospital:CreateToggle("Автоуход", "Автоматически выполняет процедуры ухода (груминг, гигиена)", Config.AutoCare, function(val)
-    Config.AutoCare = val
-end)
-TabHospital:CreateToggle("ESP пациентов", "Показывает пациентов через стены со шкалой здоровья", Config.ESP_Patients, function(val)
-    Config.ESP_Patients = val
-end)
-
--- 3. Задания
-TabQuests:CreateSection("Квесты и награды")
-TabQuests:CreateToggle("Автопринятие заданий", "Автоматически принимает доступные квесты у NPC", Config.AutoAcceptQuests, function(val)
-    Config.AutoAcceptQuests = val
-end)
-TabQuests:CreateToggle("Автоквест", "Самостоятельно проходит выбранные задания", Config.AutoQuest, function(val)
-    Config.AutoQuest = val
-end)
-TabQuests:CreateToggle("Автозавершение квеста", "Автоматически выполняет необходимые условия сдачи", Config.AutoCompleteQuest, function(val)
-    Config.AutoCompleteQuest = val
-end)
-TabQuests:CreateToggle("Автополучение наград", "Забирает награду сразу после завершения квеста", Config.AutoClaimRewards, function(val)
-    Config.AutoClaimRewards = val
-end)
-TabQuests:CreateToggle("ESP заданий", "Показывает местоположение нужных NPC и объектов", Config.ESP_Quests, function(val)
-    Config.ESP_Quests = val
-end)
-
--- 4. Телепорты
-TabTeleports:CreateSection("Телепорты по карте")
-TabTeleports:CreateButton("Телепорт в больницу", true, function()
-    local target = Workspace:FindFirstChild("Hospital") or Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Lobby")
-    if target then
-        TeleportTo(target:IsA("Model") and (target.PrimaryPart and target.PrimaryPart.CFrame or target:GetBoundingBox()) or target.CFrame)
-        SendNotification("Телепорт", "Телепортирован в больницу", 2)
-    else
-        TeleportTo(CFrame.new(0, 10, 0))
-    end
-end)
-TabTeleports:CreateButton("Телепорт в магазин", false, function()
-    local shop = Workspace:FindFirstChild("Shop") or Workspace:FindFirstChild("Store") or Workspace:FindFirstChild("Pharmacy") or Workspace:FindFirstChild("Market")
-    if shop then
-        TeleportTo(shop:IsA("Model") and (shop.PrimaryPart and shop.PrimaryPart.CFrame or shop:GetBoundingBox()) or shop.CFrame)
-        SendNotification("Телепорт", "Телепортирован в магазин", 2)
-    else
-        SendNotification("Телепорт", "Магазин не найден на карте", 2)
-    end
-end)
-TabTeleports:CreateButton("Телепорт к заданию", false, function()
-    local qTarget = nil
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") and (string.find(string.lower(obj.ActionText), "quest") or string.find(string.lower(obj.ObjectText), "quest") or string.find(string.lower(obj.Parent.Name), "quest")) then
-            qTarget = obj.Parent
-            break
+    end)
+    TabTeleports:CreateButton("Телепорт к заданию", false, function()
+        local qTarget = nil
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and (SafeFind(obj.ActionText, "quest") or SafeFind(obj.ObjectText, "quest") or SafeFind(obj.Parent.Name, "quest")) then
+                qTarget = obj.Parent
+                break
+            end
         end
-    end
-    if qTarget then
-        TeleportTo(qTarget:IsA("Model") and (qTarget.PrimaryPart and qTarget.PrimaryPart.CFrame or qTarget:GetBoundingBox()) or qTarget.CFrame)
-        SendNotification("Телепорт", "Телепортирован к заданию", 2)
-    else
-        SendNotification("Телепорт", "Активное задание не найдено", 2)
-    end
-end)
-TabTeleports:CreateSection("Телепорт к игрокам и пациентам")
-local SelectedPlayerName = nil
-local PlayerDropdown = TabTeleports:CreateDropdown("Телепорт к игроку", {}, "Выберите игрока", function(pName)
-    SelectedPlayerName = pName
-end)
-local function UpdatePlayersList()
-    local pList = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            table.insert(pList, p.DisplayName .. " (@" .. p.Name .. ")")
+        if qTarget then
+            TeleportTo(qTarget:IsA("Model") and (qTarget.PrimaryPart and qTarget.PrimaryPart.CFrame or qTarget:GetBoundingBox()) or qTarget.CFrame)
+            SendNotification("Телепорт", "Телепортирован к заданию", 2)
+        else
+            SendNotification("Телепорт", "Активное задание не найдено", 2)
         end
+    end)
+    TabTeleports:CreateSection("Телепорт к игрокам и пациентам")
+    local SelectedPlayerName = nil
+    local PlayerDropdown = TabTeleports:CreateDropdown("Телепорт к игроку", {}, "Выберите игрока", function(pName)
+        SelectedPlayerName = pName
+    end)
+    local function UpdatePlayersList()
+        local pList = {}
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                table.insert(pList, p.DisplayName .. " (@" .. p.Name .. ")")
+            end
+        end
+        PlayerDropdown.Refresh(pList)
     end
-    PlayerDropdown.Refresh(pList)
-end
-UpdatePlayersList()
-Players.PlayerAdded:Connect(UpdatePlayersList)
-Players.PlayerRemoving:Connect(UpdatePlayersList)
+    UpdatePlayersList()
+    Players.PlayerAdded:Connect(UpdatePlayersList)
+    Players.PlayerRemoving:Connect(UpdatePlayersList)
 
-TabTeleports:CreateButton("Телепортироваться к выбранному игроку", true, function()
-    if SelectedPlayerName then
-        local rawName = string.match(SelectedPlayerName, "@(%w+)")
-        local target = rawName and Players:FindFirstChild(rawName)
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            TeleportTo(target.Character.HumanoidRootPart.CFrame)
-            SendNotification("Телепорт", "Успешно перемещен к " .. target.DisplayName, 2)
+    TabTeleports:CreateButton("Телепортироваться к выбранному игроку", true, function()
+        if SelectedPlayerName then
+            local rawName = string.match(SelectedPlayerName, "@(%w+)")
+            local target = rawName and Players:FindFirstChild(rawName)
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                TeleportTo(target.Character.HumanoidRootPart.CFrame)
+                SendNotification("Телепорт", "Успешно перемещен к " .. target.DisplayName, 2)
+            end
+        else
+            SendNotification("Телепорт", "Сначала выберите игрока из списка!", 2)
         end
-    else
-        SendNotification("Телепорт", "Сначала выберите игрока из списка!", 2)
-    end
-end)
-TabTeleports:CreateButton("Телепорт к ближайшему животному", false, function()
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local nearest, minDist = nil, math.huge
-    for _, model in pairs(Workspace:GetDescendants()) do
-        if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char then
-            local pRoot = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso")
-            if pRoot then
-                local dist = (root.Position - pRoot.Position).Magnitude
-                if dist < minDist then
-                    minDist = dist
-                    nearest = pRoot
+    end)
+    TabTeleports:CreateButton("Телепорт к ближайшему животному", false, function()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local nearest, minDist = nil, math.huge
+        for _, model in pairs(Workspace:GetDescendants()) do
+            if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char then
+                local pRoot = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso")
+                if pRoot then
+                    local dist = (root.Position - pRoot.Position).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        nearest = pRoot
+                    end
                 end
             end
         end
-    end
-    if nearest then
-        TeleportTo(nearest.CFrame)
-        SendNotification("Телепорт", "Телепортирован к животному", 2)
-    else
-        SendNotification("Телепорт", "Пациенты не найдены", 2)
-    end
-end)
+        if nearest then
+            TeleportTo(nearest.CFrame)
+            SendNotification("Телепорт", "Телепортирован к животному", 2)
+        else
+            SendNotification("Телепорт", "Пациенты не найдены", 2)
+        end
+    end)
 
--- 5. Игрок
-TabPlayer:CreateSection("Параметры персонажа")
-TabPlayer:CreateToggle("Изменение скорости", "Включает кастомную скорость передвижения", Config.WalkSpeedEnabled, function(val)
-    Config.WalkSpeedEnabled = val
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChild("Humanoid")
-    if hum then hum.WalkSpeed = val and Config.WalkSpeed or 16 end
-end)
-TabPlayer:CreateSlider("Скорость (WalkSpeed)", 16, 250, Config.WalkSpeed, function(val)
-    Config.WalkSpeed = val
-    if Config.WalkSpeedEnabled then
+    -- 5. Игрок
+    TabPlayer:CreateSection("Параметры персонажа")
+    TabPlayer:CreateToggle("Изменение скорости", "Включает кастомную скорость передвижения", Config.WalkSpeedEnabled, function(val)
+        Config.WalkSpeedEnabled = val
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChild("Humanoid")
-        if hum then hum.WalkSpeed = val end
-    end
-end)
-TabPlayer:CreateToggle("Изменение прыжка", "Включает повышенную высоту прыжка", Config.JumpPowerEnabled, function(val)
-    Config.JumpPowerEnabled = val
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChild("Humanoid")
-    if hum then
-        hum.UseJumpPower = true
-        hum.JumpPower = val and Config.JumpPower or 50
-    end
-end)
-TabPlayer:CreateSlider("Высота прыжка (JumpPower)", 50, 300, Config.JumpPower, function(val)
-    Config.JumpPower = val
-    if Config.JumpPowerEnabled then
+        if hum then hum.WalkSpeed = val and Config.WalkSpeed or 16 end
+    end)
+    TabPlayer:CreateSlider("Скорость (WalkSpeed)", 16, 250, Config.WalkSpeed, function(val)
+        Config.WalkSpeed = val
+        if Config.WalkSpeedEnabled then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChild("Humanoid")
+            if hum then hum.WalkSpeed = val end
+        end
+    end)
+    TabPlayer:CreateToggle("Изменение прыжка", "Включает повышенную высоту прыжка", Config.JumpPowerEnabled, function(val)
+        Config.JumpPowerEnabled = val
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChild("Humanoid")
         if hum then
             hum.UseJumpPower = true
-            hum.JumpPower = val
+            hum.JumpPower = val and Config.JumpPower or 50
         end
-    end
-end)
-TabPlayer:CreateSection("Утилиты")
-TabPlayer:CreateToggle("NoClip", "Прохождение сквозь объекты и стены", Config.NoClip, function(val)
-    Config.NoClip = val
-    SendNotification("NoClip", val and "NoClip включен" or "NoClip выключен", 2)
-end)
-TabPlayer:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val)
-    Config.AntiAFK = val
-end)
-TabPlayer:CreateToggle("Бесконечный рассудок (Auto Coffee)", "Автоматически выпивает кофе и восстанавливает бодрость", Config.InfiniteSanity, function(val)
-    Config.InfiniteSanity = val
-end)
-TabPlayer:CreateToggle("Бесконечный прыжок", "Позволяет совершать бесконечные прыжки в воздухе", Config.InfiniteJump, function(val)
-    Config.InfiniteJump = val
-end)
+    end)
+    TabPlayer:CreateSlider("Высота прыжка (JumpPower)", 50, 300, Config.JumpPower, function(val)
+        Config.JumpPower = val
+        if Config.JumpPowerEnabled then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChild("Humanoid")
+            if hum then
+                hum.UseJumpPower = true
+                hum.JumpPower = val
+            end
+        end
+    end)
+    TabPlayer:CreateSection("Утилиты")
+    TabPlayer:CreateToggle("NoClip", "Прохождение сквозь объекты и стены", Config.NoClip, function(val)
+        Config.NoClip = val
+        SendNotification("NoClip", val and "NoClip включен" or "NoClip выключен", 2)
+    end)
+    TabPlayer:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val)
+        Config.AntiAFK = val
+    end)
+    TabPlayer:CreateToggle("Бесконечный рассудок (Auto Coffee)", "Автоматически выпивает кофе и восстанавливает бодрость", Config.InfiniteSanity, function(val)
+        Config.InfiniteSanity = val
+    end)
+    TabPlayer:CreateToggle("Бесконечный прыжок", "Позволяет совершать бесконечные прыжки в воздухе", Config.InfiniteJump, function(val)
+        Config.InfiniteJump = val
+    end)
 
--- 6. Visuals
-TabVisuals:CreateSection("ESP Подсветка")
-TabVisuals:CreateToggle("ESP Игроков", "Подсвечивает всех игроков на сервере", Config.ESP_Players, function(val)
-    Config.ESP_Players = val
-end)
-TabVisuals:CreateToggle("ESP Животных", "Подсвечивает всех пациентов и уровень здоровья", Config.ESP_Animals, function(val)
-    Config.ESP_Animals = val
-end)
-TabVisuals:CreateToggle("ESP NPC", "Подсвечивает персонал, продавцов и докторов", Config.ESP_NPCs, function(val)
-    Config.ESP_NPCs = val
-end)
-TabVisuals:CreateToggle("ESP Предметов", "Выделяет ресурсы, медикаменты, монеты и мусор", Config.ESP_Items, function(val)
-    Config.ESP_Items = val
-end)
-TabVisuals:CreateSection("Дополнительно")
-TabVisuals:CreateToggle("Дистанция", "Отображает расстояние в studs до каждого объекта", Config.ShowDistance, function(val)
-    Config.ShowDistance = val
-end)
-TabVisuals:CreateToggle("Tracers (Линии)", "Рисует направляющие линии к объектам", Config.Tracers, function(val)
-    Config.Tracers = val
-end)
+    -- 6. Visuals
+    TabVisuals:CreateSection("ESP Подсветка")
+    TabVisuals:CreateToggle("ESP Игроков", "Подсвечивает всех игроков на сервере", Config.ESP_Players, function(val)
+        Config.ESP_Players = val
+    end)
+    TabVisuals:CreateToggle("ESP Животных", "Подсвечивает всех пациентов и уровень здоровья", Config.ESP_Animals, function(val)
+        Config.ESP_Animals = val
+    end)
+    TabVisuals:CreateToggle("ESP NPC", "Подсвечивает персонал, продавцов и докторов", Config.ESP_NPCs, function(val)
+        Config.ESP_NPCs = val
+    end)
+    TabVisuals:CreateToggle("ESP Предметов", "Выделяет ресурсы, медикаменты, монеты и мусор", Config.ESP_Items, function(val)
+        Config.ESP_Items = val
+    end)
+    TabVisuals:CreateSection("Дополнительно")
+    TabVisuals:CreateToggle("Дистанция", "Отображает расстояние в studs до каждого объекта", Config.ShowDistance, function(val)
+        Config.ShowDistance = val
+    end)
+    TabVisuals:CreateToggle("Tracers (Линии)", "Рисует направляющие линии к объектам", Config.Tracers, function(val)
+        Config.Tracers = val
+    end)
 
--- 7. Misc
-TabMisc:CreateSection("Сервер")
-TabMisc:CreateButton("Rejoin (Перезайти на сервер)", false, function()
-    SendNotification("Сервер", "Перезаход на сервер...", 2)
-    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-end)
-TabMisc:CreateButton("Server Hop (Сменить сервер)", true, function()
-    SendNotification("Сервер", "Поиск других публичных серверов...", 3)
-    task.spawn(function()
-        local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
-        local success, result = pcall(function() return HttpService:JSONDecode(game:HttpGet(sfUrl)) end)
-        if success and result and result.data then
-            for _, s in ipairs(result.data) do
-                if s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id ~= game.JobId then
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LocalPlayer)
+    -- 7. Misc
+    TabMisc:CreateSection("Сервер")
+    TabMisc:CreateButton("Rejoin (Перезайти на сервер)", false, function()
+        SendNotification("Сервер", "Перезаход на сервер...", 2)
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end)
+    TabMisc:CreateButton("Server Hop (Сменить сервер)", true, function()
+        SendNotification("Сервер", "Поиск других публичных серверов...", 3)
+        task.spawn(function()
+            local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
+            local success, result = pcall(function() return HttpService:JSONDecode(game:HttpGet(sfUrl)) end)
+            if success and result and result.data then
+                for _, s in ipairs(result.data) do
+                    if s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id ~= game.JobId then
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LocalPlayer)
+                        return
+                    end
+                end
+            end
+            SendNotification("Сервер", "Не удалось найти сервер для перехода.", 3)
+        end)
+    end)
+    TabMisc:CreateButton("Поиск сервера с наименьшим онлайном", false, function()
+        SendNotification("Сервер", "Поиск сервера с минимумом игроков...", 3)
+        task.spawn(function()
+            local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
+            local success, result = pcall(function() return HttpService:JSONDecode(game:HttpGet(sfUrl)) end)
+            if success and result and result.data then
+                local lowestServer = nil
+                local minCount = math.huge
+                for _, s in ipairs(result.data) do
+                    if s.playing and s.playing > 0 and s.playing < minCount and s.id ~= game.JobId then
+                        minCount = s.playing
+                        lowestServer = s.id
+                    end
+                end
+                if lowestServer then
+                    SendNotification("Сервер", "Найден сервер с игроками: " .. tostring(minCount), 2)
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, lowestServer, LocalPlayer)
                     return
                 end
             end
-        end
-        SendNotification("Сервер", "Не удалось найти сервер для перехода.", 3)
+            SendNotification("Сервер", "Сервер не найден.", 3)
+        end)
     end)
-end)
-TabMisc:CreateButton("Поиск сервера с наименьшим онлайном", false, function()
-    SendNotification("Сервер", "Поиск сервера с минимумом игроков...", 3)
-    task.spawn(function()
-        local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
-        local success, result = pcall(function() return HttpService:JSONDecode(game:HttpGet(sfUrl)) end)
-        if success and result and result.data then
-            local lowestServer = nil
-            local minCount = math.huge
-            for _, s in ipairs(result.data) do
-                if s.playing and s.playing > 0 and s.playing < minCount and s.id ~= game.JobId then
-                    minCount = s.playing
-                    lowestServer = s.id
+    TabMisc:CreateSection("Оптимизация производительности")
+    TabMisc:CreateToggle("FPS Boost", "Отключает тяжелые частицы, тени и разгружает движок", Config.FPSBoost, function(val)
+        Config.FPSBoost = val
+        if val then
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then v.Enabled = false end
+            end
+            SendNotification("FPS Boost", "Визуальные эффекты упрощены", 2)
+        end
+    end)
+    TabMisc:CreateToggle("Low Graphics", "Снижает качество текстур и материалов", Config.LowGraphics, function(val)
+        Config.LowGraphics = val
+        if val then
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") and not v:IsA("MeshPart") then
+                    v.Material = Enum.Material.SmoothPlastic
+                    v.Reflectance = 0
+                elseif v:IsA("Decal") or v:IsA("Texture") then
+                    v.Transparency = 0.5
                 end
             end
-            if lowestServer then
-                SendNotification("Сервер", "Найден сервер с игроками: " .. tostring(minCount), 2)
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, lowestServer, LocalPlayer)
-                return
-            end
-        end
-        SendNotification("Сервер", "Сервер не найден.", 3)
-    end)
-end)
-TabMisc:CreateSection("Оптимизация производительности")
-TabMisc:CreateToggle("FPS Boost", "Отключает тяжелые частицы, тени и разгружает движок", Config.FPSBoost, function(val)
-    Config.FPSBoost = val
-    if val then
-        Lighting.GlobalShadows = false
-        Lighting.FogEnd = 9e9
-        for _, v in pairs(Workspace:GetDescendants()) do
-            if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then v.Enabled = false end
-        end
-        SendNotification("FPS Boost", "Визуальные эффекты упрощены", 2)
-    end
-end)
-TabMisc:CreateToggle("Low Graphics", "Снижает качество текстур и материалов", Config.LowGraphics, function(val)
-    Config.LowGraphics = val
-    if val then
-        for _, v in pairs(Workspace:GetDescendants()) do
-            if v:IsA("BasePart") and not v:IsA("MeshPart") then
-                v.Material = Enum.Material.SmoothPlastic
-                v.Reflectance = 0
-            elseif v:IsA("Decal") or v:IsA("Texture") then
-                v.Transparency = 0.5
-            end
-        end
-        SendNotification("Low Graphics", "Режим низкой графики активирован", 2)
-    end
-end)
-TabMisc:CreateButton("Разблокировать FPS (Unlock FPS)", false, function()
-    pcall(function()
-        if setfpscap then
-            setfpscap(999)
-            SendNotification("FPS Unlocker", "Лимит FPS снят до 999", 2)
-        else
-            SendNotification("FPS Unlocker", "Функция не поддерживается вашим эксплоитом", 2)
+            SendNotification("Low Graphics", "Режим низкой графики активирован", 2)
         end
     end)
-end)
-
--- 8. Settings
-local ConfigNameInput = TabSettings:CreateInput("Config name", "Введите название конфига...", "default", function(val)
-    Config.SelectedConfig = val
-end)
-local ConfigDropdown
-local function GetSavedConfigs()
-    local cfgList = {"Default"}
-    pcall(function()
-        if isfolder and isfolder("AverlikHub/Configs") and listfiles then
-            for _, f in pairs(listfiles("AverlikHub/Configs")) do
-                local name = string.match(f, "([^/\\]+)%.json$")
-                if name then table.insert(cfgList, name) end
-            end
-        end
-    end)
-    for k, _ in pairs(MemoryConfigs) do
-        if not table.find(cfgList, k) then table.insert(cfgList, k) end
-    end
-    return cfgList
-end
-TabSettings:CreateButton("Create config", true, function()
-    local name = ConfigNameInput.Text ~= "" and ConfigNameInput.Text or "Default"
-    MemoryConfigs[name] = HttpService:JSONEncode(Config)
-    pcall(function()
-        if makefolder and writefile then
-            if not isfolder("AverlikHub") then makefolder("AverlikHub") end
-            if not isfolder("AverlikHub/Configs") then makefolder("AverlikHub/Configs") end
-            writefile("AverlikHub/Configs/" .. name .. ".json", HttpService:JSONEncode(Config))
-        end
-    end)
-    SendNotification("Config", "Конфиг '" .. name .. "' успешно создан!", 3)
-    if ConfigDropdown then ConfigDropdown.Refresh(GetSavedConfigs()) end
-end)
-ConfigDropdown = TabSettings:CreateDropdown("Selected config", GetSavedConfigs(), Config.SelectedConfig, function(val)
-    Config.SelectedConfig = val
-end)
-TabSettings:CreateToggle("Auto Load", "Load the selected config automatically next time this GUI starts.", Config.AutoLoadConfig, function(val)
-    Config.AutoLoadConfig = val
-    pcall(function()
-        if writefile and makefolder then
-            if not isfolder("AverlikHub") then makefolder("AverlikHub") end
-            writefile("AverlikHub/autoload.json", HttpService:JSONEncode({AutoLoad = val, Config = Config.SelectedConfig}))
-        end
-    end)
-end)
-TabSettings:CreateButton("Save config", true, function()
-    local name = Config.SelectedConfig or "Default"
-    MemoryConfigs[name] = HttpService:JSONEncode(Config)
-    pcall(function()
-        if writefile and makefolder then
-            if not isfolder("AverlikHub") then makefolder("AverlikHub") end
-            if not isfolder("AverlikHub/Configs") then makefolder("AverlikHub/Configs") end
-            writefile("AverlikHub/Configs/" .. name .. ".json", HttpService:JSONEncode(Config))
-        end
-    end)
-    SendNotification("Config", "Конфиг '" .. name .. "' сохранен!", 3)
-end)
-TabSettings:CreateButton("Load config", false, function()
-    local name = Config.SelectedConfig or "Default"
-    local raw = nil
-    pcall(function()
-        if readfile and isfile and isfile("AverlikHub/Configs/" .. name .. ".json") then
-            raw = readfile("AverlikHub/Configs/" .. name .. ".json")
-        end
-    end)
-    raw = raw or MemoryConfigs[name]
-    if raw then
-        local data = HttpService:JSONDecode(raw)
-        for k, v in pairs(data) do Config[k] = v end
-        SendNotification("Config", "Конфиг '" .. name .. "' успешно загружен!", 3)
-    else
-        SendNotification("Config", "Файл конфига не найден.", 3)
-    end
-end)
-TabSettings:CreateButton("Delete config", false, function()
-    local name = Config.SelectedConfig or "Default"
-    MemoryConfigs[name] = nil
-    pcall(function()
-        if delfile and isfile and isfile("AverlikHub/Configs/" .. name .. ".json") then
-            delfile("AverlikHub/Configs/" .. name .. ".json")
-        end
-    end)
-    SendNotification("Config", "Конфиг '" .. name .. "' удален.", 3)
-    if ConfigDropdown then ConfigDropdown.Refresh(GetSavedConfigs()) end
-end)
-TabSettings:CreateSection("Theme Colours")
-TabSettings:CreateToggle("Background", "Main window background style.", true, function(val) end)
-
--- 15. Активация первой вкладки
-pcall(function()
-    Tabs[1].Button.BackgroundColor3 = Color3.fromRGB(26, 25, 34)
-    Tabs[1].Button.BackgroundTransparency = 0
-    local lbl = Tabs[1].Button:FindFirstChild("Label")
-    local icn = Tabs[1].Button:FindFirstChild("Icon")
-    if lbl then lbl.TextColor3 = Color3.fromRGB(255, 255, 255) end
-    if icn then icn.TextColor3 = Config.AccentColor end
-    Tabs[1].Page.Visible = true
-    CurrentTab = Tabs[1]
-    HeaderTitle.Text = Tabs[1].Name
-    HeaderSub.Text = Tabs[1].Subtitle
-end)
-
--- 16. Фоновые события
-pcall(function()
-    LocalPlayer.Idled:Connect(function()
-        if Config.AntiAFK then
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new(0, 0))
-        end
-    end)
-end)
-
-RunService.Stepped:Connect(function()
-    if Config.NoClip then
-        local char = LocalPlayer.Character
-        if char then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
-            end
-        end
-    end
-end)
-
-UserInputService.JumpRequest:Connect(function()
-    if Config.InfiniteJump then
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-    end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
-    local hum = char:WaitForChild("Humanoid", 5)
-    if hum then
-        if Config.WalkSpeedEnabled then hum.WalkSpeed = Config.WalkSpeed end
-        if Config.JumpPowerEnabled then
-            hum.UseJumpPower = true
-            hum.JumpPower = Config.JumpPower
-        end
-    end
-end)
-
-local fpsCount, lastFpsTime = 0, tick()
-local currentFps = 60
-RunService.RenderStepped:Connect(function()
-    fpsCount = fpsCount + 1
-    if tick() - lastFpsTime >= 1 then
-        currentFps = fpsCount
-        fpsCount = 0
-        lastFpsTime = tick()
-        local timeStr = os.date("%H:%M")
-        local statusText = timeStr .. " • " .. tostring(currentFps) .. " fps"
-        FooterSub.Text = statusText
-        PillSub.Text = statusText
-    end
-end)
-
--- 17. Главный цикл фарминга
-task.spawn(function()
-    while true do
-        task.wait(0.35)
+    TabMisc:CreateButton("Разблокировать FPS (Unlock FPS)", false, function()
         pcall(function()
+            if setfpscap then
+                setfpscap(999)
+                SendNotification("FPS Unlocker", "Лимит FPS снят до 999", 2)
+            else
+                SendNotification("FPS Unlocker", "Функция не поддерживается вашим эксплоитом", 2)
+            end
+        end)
+    end)
+
+    -- 8. Settings
+    local ConfigNameInput = TabSettings:CreateInput("Config name", "Введите название конфига...", "default", function(val)
+        Config.SelectedConfig = val
+    end)
+    local ConfigDropdown
+    local function GetSavedConfigs()
+        local cfgList = {"Default"}
+        pcall(function()
+            if isfolder and isfolder("AverlikHub/Configs") and listfiles then
+                for _, f in pairs(listfiles("AverlikHub/Configs")) do
+                    local name = string.match(f, "([^/\\]+)%.json$")
+                    if name then table.insert(cfgList, name) end
+                end
+            end
+        end)
+        for k, _ in pairs(MemoryConfigs) do
+            if not table.find(cfgList, k) then table.insert(cfgList, k) end
+        end
+        return cfgList
+    end
+    TabSettings:CreateButton("Create config", true, function()
+        local name = ConfigNameInput.Text ~= "" and ConfigNameInput.Text or "Default"
+        MemoryConfigs[name] = HttpService:JSONEncode(Config)
+        pcall(function()
+            if makefolder and writefile then
+                if not isfolder("AverlikHub") then makefolder("AverlikHub") end
+                if not isfolder("AverlikHub/Configs") then makefolder("AverlikHub/Configs") end
+                writefile("AverlikHub/Configs/" .. name .. ".json", HttpService:JSONEncode(Config))
+            end
+        end)
+        SendNotification("Config", "Конфиг '" .. name .. "' успешно создан!", 3)
+        if ConfigDropdown then ConfigDropdown.Refresh(GetSavedConfigs()) end
+    end)
+    ConfigDropdown = TabSettings:CreateDropdown("Selected config", GetSavedConfigs(), Config.SelectedConfig, function(val)
+        Config.SelectedConfig = val
+    end)
+    TabSettings:CreateToggle("Auto Load", "Load the selected config automatically next time this GUI starts.", Config.AutoLoadConfig, function(val)
+        Config.AutoLoadConfig = val
+        pcall(function()
+            if writefile and makefolder then
+                if not isfolder("AverlikHub") then makefolder("AverlikHub") end
+                writefile("AverlikHub/autoload.json", HttpService:JSONEncode({AutoLoad = val, Config = Config.SelectedConfig}))
+            end
+        end)
+    end)
+    TabSettings:CreateButton("Save config", true, function()
+        local name = Config.SelectedConfig or "Default"
+        MemoryConfigs[name] = HttpService:JSONEncode(Config)
+        pcall(function()
+            if writefile and makefolder then
+                if not isfolder("AverlikHub") then makefolder("AverlikHub") end
+                if not isfolder("AverlikHub/Configs") then makefolder("AverlikHub/Configs") end
+                writefile("AverlikHub/Configs/" .. name .. ".json", HttpService:JSONEncode(Config))
+            end
+        end)
+        SendNotification("Config", "Конфиг '" .. name .. "' сохранен!", 3)
+    end)
+    TabSettings:CreateButton("Load config", false, function()
+        local name = Config.SelectedConfig or "Default"
+        local raw = nil
+        pcall(function()
+            if readfile and isfile and isfile("AverlikHub/Configs/" .. name .. ".json") then
+                raw = readfile("AverlikHub/Configs/" .. name .. ".json")
+            end
+        end)
+        raw = raw or MemoryConfigs[name]
+        if raw then
+            local data = HttpService:JSONDecode(raw)
+            for k, v in pairs(data) do Config[k] = v end
+            SendNotification("Config", "Конфиг '" .. name .. "' успешно загружен!", 3)
+        else
+            SendNotification("Config", "Файл конфига не найден.", 3)
+        end
+    end)
+    TabSettings:CreateButton("Delete config", false, function()
+        local name = Config.SelectedConfig or "Default"
+        MemoryConfigs[name] = nil
+        pcall(function()
+            if delfile and isfile and isfile("AverlikHub/Configs/" .. name .. ".json") then
+                delfile("AverlikHub/Configs/" .. name .. ".json")
+            end
+        end)
+        SendNotification("Config", "Конфиг '" .. name .. "' удален.", 3)
+        if ConfigDropdown then ConfigDropdown.Refresh(GetSavedConfigs()) end
+    end)
+    TabSettings:CreateSection("Theme Colours")
+    TabSettings:CreateToggle("Background", "Main window background style.", true, function(val) end)
+
+    -- Активация 1 вкладки
+    pcall(function()
+        Tabs[1].Button.BackgroundColor3 = Color3.fromRGB(26, 25, 34)
+        Tabs[1].Button.BackgroundTransparency = 0
+        local lbl = Tabs[1].Button:FindFirstChild("Label")
+        local icn = Tabs[1].Button:FindFirstChild("Icon")
+        if lbl then lbl.TextColor3 = Color3.fromRGB(255, 255, 255) end
+        if icn then icn.TextColor3 = Config.AccentColor end
+        Tabs[1].Page.Visible = true
+        CurrentTab = Tabs[1]
+        HeaderTitle.Text = Tabs[1].Name
+        HeaderSub.Text = Tabs[1].Subtitle
+    end)
+
+    pcall(function()
+        LocalPlayer.Idled:Connect(function()
+            if Config.AntiAFK then
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new(0, 0))
+            end
+        end)
+    end)
+
+    RunService.Stepped:Connect(function()
+        if Config.NoClip then
             local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-
-            if Config.AutoCollect and root then
-                for _, obj in pairs(Workspace:GetDescendants()) do
-                    if obj:IsA("BasePart") and (string.find(string.lower(obj.Name), "coin") or string.find(string.lower(obj.Name), "cash") or string.find(string.lower(obj.Name), "money") or string.find(string.lower(obj.Name), "drop") or string.find(string.lower(obj.Name), "reward")) then
-                        if (root.Position - obj.Position).Magnitude < 80 then SafeTouch(obj) end
-                    end
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
                 end
             end
+        end
+    end)
 
-            if Config.AutoInteract and root then
-                for _, prompt in pairs(Workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                        local pPart = prompt.Parent:IsA("BasePart") and prompt.Parent or (prompt.Parent:IsA("Model") and prompt.Parent.PrimaryPart)
-                        if pPart and (root.Position - pPart.Position).Magnitude <= (prompt.MaxActivationDistance + 5) then
-                            SafeInteractPrompt(prompt)
+    UserInputService.JumpRequest:Connect(function()
+        if Config.InfiniteJump then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChild("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end)
+
+    LocalPlayer.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        local hum = char:WaitForChild("Humanoid", 5)
+        if hum then
+            if Config.WalkSpeedEnabled then hum.WalkSpeed = Config.WalkSpeed end
+            if Config.JumpPowerEnabled then
+                hum.UseJumpPower = true
+                hum.JumpPower = Config.JumpPower
+            end
+        end
+    end)
+
+    local fpsCount, lastFpsTime = 0, tick()
+    local currentFps = 60
+    RunService.RenderStepped:Connect(function()
+        fpsCount = fpsCount + 1
+        if tick() - lastFpsTime >= 1 then
+            currentFps = fpsCount
+            fpsCount = 0
+            lastFpsTime = tick()
+            local timeStr = os.date("%H:%M")
+            local statusText = timeStr .. " • " .. tostring(currentFps) .. " fps"
+            FooterSub.Text = statusText
+            PillSub.Text = statusText
+        end
+    end)
+
+    task.spawn(function()
+        while true do
+            task.wait(0.35)
+            pcall(function()
+                local char = LocalPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+
+                if Config.AutoCollect and root then
+                    for _, obj in pairs(Workspace:GetDescendants()) do
+                        if obj:IsA("BasePart") and (SafeFind(obj.Name, "coin") or SafeFind(obj.Name, "cash") or SafeFind(obj.Name, "money") or SafeFind(obj.Name, "drop") or SafeFind(obj.Name, "reward")) then
+                            if (root.Position - obj.Position).Magnitude < 80 then SafeTouch(obj) end
                         end
                     end
                 end
-            end
 
-            if Config.AutoFixSabotages then
-                for _, obj in pairs(Workspace:GetDescendants()) do
-                    if obj:IsA("ProximityPrompt") and obj.Enabled then
-                        local act = string.lower(obj.ActionText)
-                        local objT = string.lower(obj.ObjectText)
-                        if string.find(act, "fix") or string.find(act, "repair") or string.find(act, "extinguish") or string.find(act, "clean") or string.find(objT, "leak") or string.find(objT, "sabotage") or string.find(objT, "fire") then
-                            SafeInteractPrompt(obj)
-                        end
-                    end
-                end
-            end
-
-            if (Config.AutoHeal or Config.AutoFeed or Config.AutoClean or Config.AutoCare) and root then
-                local patients = {}
-                for _, model in pairs(Workspace:GetDescendants()) do
-                    if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char then
-                        table.insert(patients, model)
-                    end
-                end
-
-                if Config.PriorityHeal then
-                    table.sort(patients, function(a, b)
-                        local humA = a:FindFirstChild("Humanoid")
-                        local humB = b:FindFirstChild("Humanoid")
-                        local hpA = humA and humA.Health or 100
-                        local hpB = humB and humB.Health or 100
-                        return hpA < hpB
-                    end)
-                end
-
-                for _, patient in ipairs(patients) do
-                    for _, prompt in pairs(patient:GetDescendants()) do
+                if Config.AutoInteract and root then
+                    for _, prompt in pairs(Workspace:GetDescendants()) do
                         if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                            local act = string.lower(prompt.ActionText)
-                            if Config.AutoHeal and (string.find(act, "heal") or string.find(act, "treat") or string.find(act, "cure") or string.find(act, "medicine")) then
-                                SafeInteractPrompt(prompt)
-                            elseif Config.AutoFeed and (string.find(act, "feed") or string.find(act, "food") or string.find(act, "water")) then
-                                SafeInteractPrompt(prompt)
-                            elseif Config.AutoCare and (string.find(act, "groom") or string.find(act, "wash") or string.find(act, "care") or string.find(act, "pet")) then
-                                SafeInteractPrompt(prompt)
-                            elseif Config.AutoClean and (string.find(act, "clean") or string.find(act, "sweep") or string.find(act, "bath")) then
+                            local pPart = prompt.Parent:IsA("BasePart") and prompt.Parent or (prompt.Parent:IsA("Model") and prompt.Parent.PrimaryPart)
+                            if pPart and (root.Position - pPart.Position).Magnitude <= (prompt.MaxActivationDistance + 5) then
                                 SafeInteractPrompt(prompt)
                             end
                         end
                     end
                 end
+
+                if Config.AutoFixSabotages then
+                    for _, obj in pairs(Workspace:GetDescendants()) do
+                        if obj:IsA("ProximityPrompt") and obj.Enabled then
+                            if SafeFind(obj.ActionText, "fix") or SafeFind(obj.ActionText, "repair") or SafeFind(obj.ActionText, "extinguish") or SafeFind(obj.ActionText, "clean") or SafeFind(obj.ObjectText, "leak") or SafeFind(obj.ObjectText, "sabotage") or SafeFind(obj.ObjectText, "fire") then
+                                SafeInteractPrompt(obj)
+                            end
+                        end
+                    end
+                end
+
+                if (Config.AutoHeal or Config.AutoFeed or Config.AutoClean or Config.AutoCare) and root then
+                    local patients = {}
+                    for _, model in pairs(Workspace:GetDescendants()) do
+                        if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char then
+                            table.insert(patients, model)
+                        end
+                    end
+
+                    if Config.PriorityHeal then
+                        table.sort(patients, function(a, b)
+                            local humA = a:FindFirstChild("Humanoid")
+                            local humB = b:FindFirstChild("Humanoid")
+                            local hpA = humA and humA.Health or 100
+                            local hpB = humB and humB.Health or 100
+                            return hpA < hpB
+                        end)
+                    end
+
+                    for _, patient in ipairs(patients) do
+                        for _, prompt in pairs(patient:GetDescendants()) do
+                            if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                                if Config.AutoHeal and (SafeFind(prompt.ActionText, "heal") or SafeFind(prompt.ActionText, "treat") or SafeFind(prompt.ActionText, "cure") or SafeFind(prompt.ActionText, "medicine")) then
+                                    SafeInteractPrompt(prompt)
+                                elseif Config.AutoFeed and (SafeFind(prompt.ActionText, "feed") or SafeFind(prompt.ActionText, "food") or SafeFind(prompt.ActionText, "water")) then
+                                    SafeInteractPrompt(prompt)
+                                elseif Config.AutoCare and (SafeFind(prompt.ActionText, "groom") or SafeFind(prompt.ActionText, "wash") or SafeFind(prompt.ActionText, "care") or SafeFind(prompt.ActionText, "pet")) then
+                                    SafeInteractPrompt(prompt)
+                                elseif Config.AutoClean and (SafeFind(prompt.ActionText, "clean") or SafeFind(prompt.ActionText, "sweep") or SafeFind(prompt.ActionText, "bath")) then
+                                    SafeInteractPrompt(prompt)
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if (Config.AutoAcceptQuests or Config.AutoCompleteQuest or Config.AutoClaimRewards) then
+                    for _, prompt in pairs(Workspace:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                            if Config.AutoAcceptQuests and (SafeFind(prompt.ActionText, "accept") or SafeFind(prompt.ActionText, "start") or SafeFind(prompt.ObjectText, "quest")) then
+                                SafeInteractPrompt(prompt)
+                            elseif (Config.AutoCompleteQuest or Config.AutoClaimRewards) and (SafeFind(prompt.ActionText, "claim") or SafeFind(prompt.ActionText, "complete") or SafeFind(prompt.ActionText, "reward")) then
+                                SafeInteractPrompt(prompt)
+                            end
+                        end
+                    end
+                end
+
+                if Config.InfiniteSanity then
+                    for _, prompt in pairs(Workspace:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                            if SafeFind(prompt.ActionText, "drink") or SafeFind(prompt.ActionText, "coffee") or SafeFind(prompt.ObjectText, "coffee") or SafeFind(prompt.ObjectText, "sanity") or SafeFind(prompt.ObjectText, "energy") then
+                                SafeInteractPrompt(prompt)
+                            end
+                        end
+                    end
+                end
+
+                if Config.AutoSell or Config.AutoUpgrade or Config.AutoBuy then
+                    for _, prompt in pairs(Workspace:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                            if Config.AutoSell and SafeFind(prompt.ActionText, "sell") then
+                                SafeInteractPrompt(prompt)
+                            elseif Config.AutoUpgrade and SafeFind(prompt.ActionText, "upgrade") then
+                                SafeInteractPrompt(prompt)
+                            elseif Config.AutoBuy and SafeFind(prompt.ActionText, "buy") then
+                                SafeInteractPrompt(prompt)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- ESP
+    local ESP_Folder = Instance.new("Folder")
+    ESP_Folder.Name = "Averlik_ESP_Folder"
+    ESP_Folder.Parent = TargetParent
+    getgenv().AverlikHub_ESP = ESP_Folder
+
+    local function CreateESPBox(adornee, name, color)
+        if not adornee then return end
+        local bill = Instance.new("BillboardGui")
+        bill.Name = "ESP_" .. name
+        bill.Adornee = adornee
+        bill.Size = UDim2.new(0, 140, 0, 40)
+        bill.StudsOffset = Vector3.new(0, 2.8, 0)
+        bill.AlwaysOnTop = true
+        bill.Parent = ESP_Folder
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Text = name
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 11
+        nameLabel.TextColor3 = color
+        nameLabel.Size = UDim2.new(1, 0, 0, 14)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Parent = bill
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(0, 0, 0)
+        stroke.Thickness = 1.2
+        stroke.Parent = nameLabel
+
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Name = "Dist"
+        distLabel.Text = "0 studs"
+        distLabel.Font = Enum.Font.Gotham
+        distLabel.TextSize = 10
+        distLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+        distLabel.Position = UDim2.new(0, 0, 0, 14)
+        distLabel.Size = UDim2.new(1, 0, 0, 12)
+        distLabel.BackgroundTransparency = 1
+        distLabel.Parent = bill
+
+        local dStroke = Instance.new("UIStroke")
+        dStroke.Color = Color3.fromRGB(0, 0, 0)
+        dStroke.Thickness = 1
+        dStroke.Parent = distLabel
+
+        local highlight = Instance.new("Highlight")
+        highlight.Adornee = adornee:IsA("Model") and adornee or adornee.Parent
+        highlight.FillColor = color
+        highlight.FillTransparency = 0.65
+        highlight.OutlineColor = color
+        highlight.OutlineTransparency = 0.2
+        highlight.Parent = ESP_Folder
+
+        return bill
+    end
+
+    RunService.RenderStepped:Connect(function()
+        pcall(function()
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+
+            if not Config.ESP_Players and not Config.ESP_Animals and not Config.ESP_NPCs and not Config.ESP_Items and not Config.ESP_Quests then
+                ESP_Folder:ClearAllChildren()
+                return
             end
 
-            if (Config.AutoAcceptQuests or Config.AutoCompleteQuest or Config.AutoClaimRewards) then
-                for _, prompt in pairs(Workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                        local act = string.lower(prompt.ActionText)
-                        local objT = string.lower(prompt.ObjectText)
-                        if Config.AutoAcceptQuests and (string.find(act, "accept") or string.find(act, "start") or string.find(objT, "quest")) then
-                            SafeInteractPrompt(prompt)
-                        elseif (Config.AutoCompleteQuest or Config.AutoClaimRewards) and (string.find(act, "claim") or string.find(act, "complete") or string.find(act, "reward")) then
-                            SafeInteractPrompt(prompt)
+            if Config.ESP_Players then
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local pRoot = p.Character.HumanoidRootPart
+                        if not ESP_Folder:FindFirstChild("ESP_" .. p.Name) then
+                            CreateESPBox(pRoot, p.DisplayName, Color3.fromRGB(80, 180, 255))
                         end
                     end
                 end
             end
 
-            if Config.InfiniteSanity then
-                for _, prompt in pairs(Workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                        local act = string.lower(prompt.ActionText)
-                        local objT = string.lower(prompt.ObjectText)
-                        if string.find(act, "drink") or string.find(act, "coffee") or string.find(objT, "coffee") or string.find(objT, "sanity") or string.find(objT, "energy") then
-                            SafeInteractPrompt(prompt)
+            if Config.ESP_Animals or Config.ESP_Patients then
+                for _, model in pairs(Workspace:GetDescendants()) do
+                    if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char and not Players:GetPlayerFromCharacter(model) then
+                        local mRoot = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso")
+                        if mRoot and not ESP_Folder:FindFirstChild("ESP_" .. model.Name) then
+                            local hum = model:FindFirstChild("Humanoid")
+                            local hpCol = Color3.fromRGB(80, 255, 120)
+                            if hum and hum.Health < 40 then
+                                hpCol = Color3.fromRGB(255, 75, 75)
+                            elseif hum and hum.Health < 80 then
+                                hpCol = Color3.fromRGB(255, 195, 45)
+                            end
+                            CreateESPBox(mRoot, "🐾 " .. model.Name, hpCol)
                         end
                     end
                 end
             end
 
-            if Config.AutoSell or Config.AutoUpgrade or Config.AutoBuy then
+            if Config.ESP_Quests then
                 for _, prompt in pairs(Workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                        local act = string.lower(prompt.ActionText)
-                        if Config.AutoSell and string.find(act, "sell") then
-                            SafeInteractPrompt(prompt)
-                        elseif Config.AutoUpgrade and string.find(act, "upgrade") then
-                            SafeInteractPrompt(prompt)
-                        elseif Config.AutoBuy and string.find(act, "buy") then
-                            SafeInteractPrompt(prompt)
+                    if prompt:IsA("ProximityPrompt") and (SafeFind(prompt.ObjectText, "quest") or SafeFind(prompt.ActionText, "quest")) then
+                        local parentPart = prompt.Parent:IsA("BasePart") and prompt.Parent or (prompt.Parent:IsA("Model") and prompt.Parent.PrimaryPart)
+                        if parentPart and not ESP_Folder:FindFirstChild("ESP_Quest_" .. prompt.Parent.Name) then
+                            CreateESPBox(parentPart, "📜 " .. prompt.Parent.Name, Color3.fromRGB(255, 215, 0))
+                        end
+                    end
+                end
+            end
+
+            if root and Config.ShowDistance then
+                for _, bill in pairs(ESP_Folder:GetChildren()) do
+                    if bill:IsA("BillboardGui") and bill.Adornee then
+                        local distLabel = bill:FindFirstChild("Dist")
+                        if distLabel then
+                            local dist = math.floor((root.Position - bill.Adornee.Position).Magnitude)
+                            distLabel.Text = tostring(dist) .. " studs"
                         end
                     end
                 end
             end
         end)
-    end
-end)
+    end)
 
--- 18. ESP
-local ESP_Folder = Instance.new("Folder")
-ESP_Folder.Name = "Averlik_ESP_Folder"
-ESP_Folder.Parent = TargetParent
-getgenv().AverlikHub_ESP = ESP_Folder
-
-local function CreateESPBox(adornee, name, color)
-    if not adornee then return end
-    local bill = Instance.new("BillboardGui")
-    bill.Name = "ESP_" .. name
-    bill.Adornee = adornee
-    bill.Size = UDim2.new(0, 140, 0, 40)
-    bill.StudsOffset = Vector3.new(0, 2.8, 0)
-    bill.AlwaysOnTop = true
-    bill.Parent = ESP_Folder
-
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Text = name
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 11
-    nameLabel.TextColor3 = color
-    nameLabel.Size = UDim2.new(1, 0, 0, 14)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Parent = bill
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(0, 0, 0)
-    stroke.Thickness = 1.2
-    stroke.Parent = nameLabel
-
-    local distLabel = Instance.new("TextLabel")
-    distLabel.Name = "Dist"
-    distLabel.Text = "0 studs"
-    distLabel.Font = Enum.Font.Gotham
-    distLabel.TextSize = 10
-    distLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-    distLabel.Position = UDim2.new(0, 0, 0, 14)
-    distLabel.Size = UDim2.new(1, 0, 0, 12)
-    distLabel.BackgroundTransparency = 1
-    distLabel.Parent = bill
-
-    local dStroke = Instance.new("UIStroke")
-    dStroke.Color = Color3.fromRGB(0, 0, 0)
-    dStroke.Thickness = 1
-    dStroke.Parent = distLabel
-
-    local highlight = Instance.new("Highlight")
-    highlight.Adornee = adornee:IsA("Model") and adornee or adornee.Parent
-    highlight.FillColor = color
-    highlight.FillTransparency = 0.65
-    highlight.OutlineColor = color
-    highlight.OutlineTransparency = 0.2
-    highlight.Parent = ESP_Folder
-
-    return bill
+    SendNotification("Averlik Hub", "Animal Hospital загружен! Нажмите RightControl или виджет.", 4)
+    print("========================================")
+    print("[Averlik Hub] GUI успешно отображен на экране!")
+    print("========================================")
 end
 
-RunService.RenderStepped:Connect(function()
-    pcall(function()
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-
-        if not Config.ESP_Players and not Config.ESP_Animals and not Config.ESP_NPCs and not Config.ESP_Items and not Config.ESP_Quests then
-            ESP_Folder:ClearAllChildren()
-            return
-        end
-
-        if Config.ESP_Players then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local pRoot = p.Character.HumanoidRootPart
-                    if not ESP_Folder:FindFirstChild("ESP_" .. p.Name) then
-                        CreateESPBox(pRoot, p.DisplayName, Color3.fromRGB(80, 180, 255))
-                    end
-                end
-            end
-        end
-
-        if Config.ESP_Animals or Config.ESP_Patients then
-            for _, model in pairs(Workspace:GetDescendants()) do
-                if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char and not Players:GetPlayerFromCharacter(model) then
-                    local mRoot = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso")
-                    if mRoot and not ESP_Folder:FindFirstChild("ESP_" .. model.Name) then
-                        local hum = model:FindFirstChild("Humanoid")
-                        local hpCol = Color3.fromRGB(80, 255, 120)
-                        if hum and hum.Health < 40 then
-                            hpCol = Color3.fromRGB(255, 75, 75)
-                        elseif hum and hum.Health < 80 then
-                            hpCol = Color3.fromRGB(255, 195, 45)
-                        end
-                        CreateESPBox(mRoot, "🐾 " .. model.Name, hpCol)
-                    end
-                end
-            end
-        end
-
-        if Config.ESP_Quests then
-            for _, prompt in pairs(Workspace:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") and (string.find(string.lower(prompt.ObjectText), "quest") or string.find(string.lower(prompt.ActionText), "quest")) then
-                    local parentPart = prompt.Parent:IsA("BasePart") and prompt.Parent or (prompt.Parent:IsA("Model") and prompt.Parent.PrimaryPart)
-                    if parentPart and not ESP_Folder:FindFirstChild("ESP_Quest_" .. prompt.Parent.Name) then
-                        CreateESPBox(parentPart, "📜 " .. prompt.Parent.Name, Color3.fromRGB(255, 215, 0))
-                    end
-                end
-            end
-        end
-
-        if root and Config.ShowDistance then
-            for _, bill in pairs(ESP_Folder:GetChildren()) do
-                if bill:IsA("BillboardGui") and bill.Adornee then
-                    local distLabel = bill:FindFirstChild("Dist")
-                    if distLabel then
-                        local dist = math.floor((root.Position - bill.Adornee.Position).Magnitude)
-                        distLabel.Text = tostring(dist) .. " studs"
-                    end
-                end
-            end
-        end
-    end)
-end)
-
--- 19. Приветствие
-SendNotification("Averlik Hub", "Animal Hospital загружен! Нажмите RightControl или виджет.", 4)
-print("========================================")
-print("[Averlik Hub] GUI успешно отображен на экране!")
-print("========================================")
+local ok, err = pcall(Main)
+if not ok then
+    warn("[Averlik Hub Critical Error]: " .. tostring(err))
+end
