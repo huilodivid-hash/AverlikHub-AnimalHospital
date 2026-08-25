@@ -1,10 +1,16 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (100% GUI FIX & GUARANTEED DISPLAY)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (OFFICIAL SCRIPT)
+    ══════════════════════════════════════════════════════════════════════════════════
+    • Точный дизайн: Averlik Hub (Glassmorphism & Neon Purple #d946ef)
+    • Совместимость: Все актуальные эксплоиты (Solara, Wave, Delta, Arceus X, etc.)
+    • Все функции ТЗ: Автофарм, Больница, Задания, Телепорты, Игрок, Visuals, Misc, Settings
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
+print("========================================")
 print("[Averlik Hub] Запуск скрипта Animal Hospital...")
+print("========================================")
 
 -- 1. Сервисы
 local Players = game:GetService("Players")
@@ -26,44 +32,49 @@ if not LocalPlayer then
     until LocalPlayer
 end
 
--- 3. Очистка старых копий
-if getgenv and getgenv().AverlikHub_ScreenGui then
-    pcall(function() getgenv().AverlikHub_ScreenGui:Destroy() end)
-end
+-- 3. Очистка предыдущих копий GUI
+pcall(function()
+    if getgenv().AverlikHub_Gui then
+        getgenv().AverlikHub_Gui:Destroy()
+    end
+    if getgenv().AverlikHub_ESP then
+        getgenv().AverlikHub_ESP:Destroy()
+    end
+end)
 
--- 4. Получение PlayerGui / CoreGui (100% надежно)
+-- 4. Получение надежного родительского контейнера
 local function GetParentGui()
     if gethui then
         local ok, res = pcall(gethui)
         if ok and res then return res end
     end
+    local ok, cg = pcall(function() return game:GetService("CoreGui") end)
+    if ok and cg then
+        local testOk = pcall(function()
+            local t = Instance.new("Folder", cg)
+            t:Destroy()
+        end)
+        if testOk then return cg end
+    end
     local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
-    if pg then return pg end
-    local cgOk, cg = pcall(function() return game:GetService("CoreGui") end)
-    if cgOk and cg then return cg end
-    return LocalPlayer:WaitForChild("PlayerGui", 5)
+    return pg or LocalPlayer:WaitForChild("PlayerGui", 5)
 end
 
 local TargetParent = GetParentGui()
 if not TargetParent then
-    warn("[Averlik Hub] Не удалось найти контейнер GUI!")
+    warn("[Averlik Hub] Ошибка: Не удалось получить контейнер GUI!")
     return
 end
 
-print("[Averlik Hub] Контейнер GUI определен: " .. tostring(TargetParent.Name))
-
 -- 5. ScreenGui
 local MainScreenGui = Instance.new("ScreenGui")
-MainScreenGui.Name = "AverlikHub_ScreenGui"
+MainScreenGui.Name = "AverlikHub_MainGui"
 MainScreenGui.ResetOnSpawn = false
 MainScreenGui.IgnoreGuiInset = true
 MainScreenGui.DisplayOrder = 999999
 MainScreenGui.Enabled = true
 MainScreenGui.Parent = TargetParent
-
-if getgenv then
-    getgenv().AverlikHub_ScreenGui = MainScreenGui
-end
+getgenv().AverlikHub_Gui = MainScreenGui
 
 -- 6. Конфигурация
 local Config = {
@@ -113,7 +124,7 @@ local Config = {
     FPSBoost = false,
     LowGraphics = false,
 
-    -- Тема
+    -- Цвета темы
     AccentColor = Color3.fromRGB(219, 70, 237), -- Пурпурный неоновый с фото
     BackgroundColor = Color3.fromRGB(16, 16, 20),
     SidebarColor = Color3.fromRGB(13, 13, 16),
@@ -172,7 +183,7 @@ local function TeleportTo(cf)
     end)
 end
 
--- 8. Уведомления (Toasts)
+-- 8. Уведомления (Toast Notifications)
 local ToastContainer = Instance.new("Frame")
 ToastContainer.Name = "ToastContainer"
 ToastContainer.Size = UDim2.new(0, 260, 0, 300)
@@ -244,7 +255,7 @@ local function SendNotification(title, message, duration)
     end)
 end
 
--- 9. Плавающий виджет HUD (слева снизу)
+-- 9. Плавающий виджет HUD (слева снизу как на фото)
 local FloatingPill = Instance.new("Frame")
 FloatingPill.Name = "FloatingHUD"
 FloatingPill.Size = UDim2.new(0, 165, 0, 46)
@@ -340,7 +351,7 @@ MainStroke.Color = Color3.fromRGB(34, 34, 44)
 MainStroke.Thickness = 1.2
 MainStroke.Parent = MainWindow
 
--- Драг окон
+-- Dragging
 local function EnableDrag(frame, handle)
     handle = handle or frame
     local dragging, dragInput, dragStart, startPos
@@ -352,9 +363,7 @@ local function EnableDrag(frame, handle)
             startPos = frame.Position
 
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
@@ -368,12 +377,7 @@ local function EnableDrag(frame, handle)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
-            frame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 end
@@ -522,7 +526,7 @@ FooterSub.BackgroundTransparency = 1
 FooterSub.ZIndex = 1004
 FooterSub.Parent = SidebarFooter
 
--- 12. Контентная зона
+-- 12. Правая часть
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "ContentArea"
 ContentArea.Size = UDim2.new(1, -170, 1, 0)
@@ -646,7 +650,7 @@ PagesHolder.BackgroundTransparency = 1
 PagesHolder.ZIndex = 1002
 PagesHolder.Parent = ContentArea
 
--- 13. UI Builder Табов
+-- 13. UI Builder
 local Tabs = {}
 local CurrentTab = nil
 
@@ -1193,7 +1197,7 @@ SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
     end
 end)
 
--- 14. Страницы и элементы
+-- 14. Страницы
 local TabAutoFarm  = CreateTab("Авто фарм", "💲", "Автоматизация больницы и заработка", 1)
 local TabHospital  = CreateTab("Больница", "🩺", "Управление пациентами, уход и лечение", 2)
 local TabQuests    = CreateTab("Задания", "📜", "Автовыполнение и квесты", 3)
@@ -1625,7 +1629,7 @@ pcall(function()
     HeaderSub.Text = Tabs[1].Subtitle
 end)
 
--- 16. Фоновые потоки
+-- 16. Фоновые события
 pcall(function()
     LocalPlayer.Idled:Connect(function()
         if Config.AntiAFK then
@@ -1804,6 +1808,7 @@ end)
 local ESP_Folder = Instance.new("Folder")
 ESP_Folder.Name = "Averlik_ESP_Folder"
 ESP_Folder.Parent = TargetParent
+getgenv().AverlikHub_ESP = ESP_Folder
 
 local function CreateESPBox(adornee, name, color)
     if not adornee then return end
@@ -1922,4 +1927,6 @@ end)
 
 -- 19. Приветствие
 SendNotification("Averlik Hub", "Animal Hospital загружен! Нажмите RightControl или виджет.", 4)
+print("========================================")
 print("[Averlik Hub] GUI успешно отображен на экране!")
+print("========================================")
