@@ -1,11 +1,11 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (PRO MAX AUTO-HEAL & FARM ENGINE)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (SMART QUEUE & ANTI-SPAM ENGINE)
     ══════════════════════════════════════════════════════════════════════════════════
     • Точный дизайн: Averlik Hub (Glassmorphism & Neon Purple #d946ef)
     • Совместимость: 100% Все эксплоиты (Solara, Wave, Delta, Arceus X, Codex, etc.)
-    • Продвинутый движок автолечения: Умный поиск пациентов, обход дистанции, авто-ТП,
-      экипировка инструментов, ProximityPrompt + ClickDetector + Remotes.
+    • Умная очередь: Никакого хаотичного спама! Лечит по 1 пациенту с учетом времени
+      удержания (HoldDuration), плавной задержкой и защитой от повторного спама.
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
@@ -29,7 +29,7 @@ local function RunAverlikHub()
         until LocalPlayer
     end
 
-    -- Звуковой сигнал успешного запуска
+    -- Звук успешного запуска
     pcall(function()
         local sound = Instance.new("Sound")
         sound.SoundId = "rbxassetid://4590662766"
@@ -113,9 +113,10 @@ local function RunAverlikHub()
 
         -- Больница
         AutoHeal = false,
-        AutoHealTeleport = true, -- Авто-ТП к больному для гарантированного лечения
-        AutoEquipTools = true,   -- Авто-экипировка медикаментов/инструментов
+        AutoHealTeleport = true,
+        AutoEquipTools = true,
         PriorityHeal = true,
+        HealDelay = 0.8,         -- Задержка между действиями (сек)
         AutoFeed = false,
         AutoClean = false,
         AutoCare = false,
@@ -159,14 +160,14 @@ local function RunAverlikHub()
     }
 
     local MemoryConfigs = {}
+    local DebounceMap = {} -- Защита от спама на один и тот же объект
 
-    -- Поиск строк
     local function SafeFind(str, query)
         if not str or type(str) ~= "string" or not query then return false end
         return string.find(string.lower(str), string.lower(query), 1, true) ~= nil
     end
 
-    -- Экипировка подходящего инструмента из рюкзака
+    -- Экипировка подходящего инструмента
     local function EquipToolMatching(keyword)
         pcall(function()
             local bp = LocalPlayer:FindFirstChild("Backpack")
@@ -178,10 +179,8 @@ local function RunAverlikHub()
                 if tool:IsA("Tool") then
                     if not keyword or SafeFind(tool.Name, keyword) or SafeFind(tool.ToolTip, keyword) then
                         hum:EquipTool(tool)
-                        task.wait(0.05)
-                        if tool:FindFirstChild("Activate") or tool.Parent == char then
-                            pcall(function() tool:Activate() end)
-                        end
+                        task.wait(0.08)
+                        pcall(function() tool:Activate() end)
                         break
                     end
                 end
@@ -189,26 +188,23 @@ local function RunAverlikHub()
         end)
     end
 
-    -- Взаимодействие с ProximityPrompt
+    -- Аккуратное выполнение ProximityPrompt
     local function SafeInteractPrompt(prompt)
         if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+        local holdTime = prompt.HoldDuration or 0
         pcall(function()
             if fireproximityprompt then
-                fireproximityprompt(prompt, 0)
-                fireproximityprompt(prompt, 1)
+                fireproximityprompt(prompt, holdTime)
             else
-                local oldHold = prompt.HoldDuration
-                prompt.HoldDuration = 0
                 prompt:InputHoldBegin()
-                task.wait(0.04)
+                task.wait(holdTime > 0 and (holdTime + 0.05) or 0.1)
                 prompt:InputHoldEnd()
-                prompt.HoldDuration = oldHold
             end
         end)
         return true
     end
 
-    -- Взаимодействие с ClickDetector
+    -- ClickDetector
     local function SafeClickDetector(detector)
         if not detector or not detector:IsA("ClickDetector") then return false end
         pcall(function()
@@ -244,9 +240,9 @@ local function RunAverlikHub()
             local root = char:FindFirstChild("HumanoidRootPart")
             if root then
                 if typeof(cf) == "Vector3" then
-                    root.CFrame = CFrame.new(cf + Vector3.new(0, 3, 0))
+                    root.CFrame = CFrame.new(cf + Vector3.new(0, 2.5, 0))
                 elseif typeof(cf) == "CFrame" then
-                    root.CFrame = cf + Vector3.new(0, 3, 0)
+                    root.CFrame = cf + Vector3.new(0, 2.5, 0)
                 end
             end
         end)
@@ -324,7 +320,7 @@ local function RunAverlikHub()
         end)
     end
 
-    -- Плавающий виджет HUD (слева снизу как на фото)
+    -- Плавающий виджет HUD
     local FloatingPill = Instance.new("Frame")
     FloatingPill.Name = "FloatingHUD"
     FloatingPill.Size = UDim2.new(0, 165, 0, 46)
@@ -601,7 +597,7 @@ local function RunAverlikHub()
     FooterSub.ZIndex = 1004
     FooterSub.Parent = SidebarFooter
 
-    -- Контентная часть
+    -- Контентная область
     local ContentArea = Instance.new("Frame")
     ContentArea.Name = "ContentArea"
     ContentArea.Size = UDim2.new(1, -160, 1, 0)
@@ -1075,7 +1071,8 @@ local function RunAverlikHub()
             local function UpdateSlider(inputPos)
                 local relX = math.clamp(inputPos.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
                 local newPct = relX / track.AbsoluteSize.X
-                local val = math.floor(min + (max - min) * newPct)
+                local val = math.floor((min + (max - min) * newPct) * 10) / 10
+                if max > 50 then val = math.floor(min + (max - min) * newPct) end
                 fill.Size = UDim2.new(newPct, 0, 1, 0)
                 valLabel.Text = tostring(val)
                 if callback then callback(val) end
@@ -1314,10 +1311,13 @@ local function RunAverlikHub()
     end)
 
     -- 2. Больница
-    TabHospital:CreateSection("Лечение и уход (PRO MAX)")
-    TabHospital:CreateToggle("Автолечение", "Находит больных животных/пациентов и лечит их", Config.AutoHeal, function(val)
+    TabHospital:CreateSection("Лечение и уход (Умная очередь)")
+    TabHospital:CreateToggle("Автолечение", "Находит больных животных/пациентов и лечит их по очереди", Config.AutoHeal, function(val)
         Config.AutoHeal = val
         SendNotification("Больница", val and "Автолечение активировано!" or "Автолечение выключено", 2)
+    end)
+    TabHospital:CreateSlider("Задержка лечения (сек)", 0.2, 3.0, Config.HealDelay, function(val)
+        Config.HealDelay = val
     end)
     TabHospital:CreateToggle("Авто-ТП к больным", "Телепортирует к пациенту для гарантированного лечения", Config.AutoHealTeleport, function(val)
         Config.AutoHealTeleport = val
@@ -1346,7 +1346,6 @@ local function RunAverlikHub()
             if not root then return end
             local origPos = root.CFrame
 
-            -- Поиск всех медицинских промптов и пациентов
             for _, obj in pairs(Workspace:GetDescendants()) do
                 if obj:IsA("ProximityPrompt") and obj.Enabled then
                     local act = string.lower(tostring(obj.ActionText or ""))
@@ -1358,10 +1357,10 @@ local function RunAverlikHub()
                         if pPart then
                             if Config.AutoEquipTools then EquipToolMatching() end
                             TeleportTo(pPart.CFrame)
-                            task.wait(0.12)
+                            task.wait(0.2)
                             SafeInteractPrompt(obj)
                             treated = treated + 1
-                            task.wait(0.1)
+                            task.wait(math.max(obj.HoldDuration or 0.3, 0.4))
                         end
                     end
                 end
@@ -1795,114 +1794,175 @@ local function RunAverlikHub()
         end
     end)
 
-    -- Главный цикл автоматизации
+    -- ══════════════════════════════════════════════════════════════════════════
+    -- 🩺 УМНЫЙ ЦИКЛ ОБРАБОТКИ ПАЦИЕНТОВ (1 ЗА РАЗ, БЕЗ СПАМА)
+    -- ══════════════════════════════════════════════════════════════════════════
+    local isHandlingPatient = false
+
+    local function GetNextBestTarget()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return nil, nil end
+
+        local candidates = {}
+        local now = tick()
+
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled then
+                -- Проверка кулдауна на этот объект (не спамить один и тот же объект чаще 4 сек)
+                if not DebounceMap[obj] or (now - DebounceMap[obj]) > 4 then
+                    local act = string.lower(tostring(obj.ActionText or ""))
+                    local objT = string.lower(tostring(obj.ObjectText or ""))
+                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
+                    local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
+
+                    if pPart then
+                        local isHeal = SafeFind(act, "heal") or SafeFind(act, "treat") or SafeFind(act, "cure") or SafeFind(act, "med") or SafeFind(act, "help") or SafeFind(act, "diag") or SafeFind(act, "exam") or SafeFind(act, "inj") or SafeFind(objT, "heal") or SafeFind(objT, "patient") or SafeFind(objT, "animal") or SafeFind(pName, "patient") or SafeFind(pName, "bed") or SafeFind(pName, "cage")
+                        local isFeed = SafeFind(act, "feed") or SafeFind(act, "food") or SafeFind(act, "water") or SafeFind(objT, "feed")
+                        local isCare = SafeFind(act, "groom") or SafeFind(act, "wash") or SafeFind(act, "care") or SafeFind(act, "pet") or SafeFind(act, "brush")
+                        local isClean = SafeFind(act, "clean") or SafeFind(act, "sweep") or SafeFind(act, "bath") or SafeFind(objT, "clean") or SafeFind(objT, "trash")
+
+                        if (Config.AutoHeal and isHeal) or (Config.AutoFeed and isFeed) or (Config.AutoCare and isCare) or (Config.AutoClean and isClean) then
+                            local dist = (root.Position - pPart.Position).Magnitude
+                            local hum = obj.Parent:FindFirstChild("Humanoid") or (obj.Parent.Parent and obj.Parent.Parent:FindFirstChild("Humanoid"))
+                            local hp = hum and hum.Health or 100
+
+                            table.insert(candidates, {
+                                Prompt = obj,
+                                Part = pPart,
+                                Distance = dist,
+                                Health = hp,
+                                Hold = obj.HoldDuration or 0
+                            })
+                        end
+                    end
+                end
+            end
+        end
+
+        if #candidates == 0 then return nil, nil end
+
+        -- Сортировка по приоритету (низкое здоровье / близкая дистанция)
+        if Config.PriorityHeal then
+            table.sort(candidates, function(a, b)
+                if math.abs(a.Health - b.Health) > 5 then
+                    return a.Health < b.Health
+                end
+                return a.Distance < b.Distance
+            end)
+        else
+            table.sort(candidates, function(a, b)
+                return a.Distance < b.Distance
+            end)
+        end
+
+        return candidates[1].Prompt, candidates[1].Part
+    end
+
     task.spawn(function()
         while true do
-            task.wait(0.2)
+            task.wait(0.15)
+            if (Config.AutoHeal or Config.AutoFeed or Config.AutoCare or Config.AutoClean) and not isHandlingPatient then
+                local bestPrompt, bestPart = GetNextBestTarget()
+                if bestPrompt and bestPart and bestPrompt.Enabled then
+                    isHandlingPatient = true
+                    DebounceMap[bestPrompt] = tick()
+
+                    pcall(function()
+                        local char = LocalPlayer.Character
+                        local root = char and char:FindFirstChild("HumanoidRootPart")
+                        if root then
+                            -- 1. Аккуратный подход / ТП
+                            if Config.AutoHealTeleport then
+                                TeleportTo(bestPart.CFrame * CFrame.new(0, 0, 3))
+                                task.wait(0.12)
+                            end
+
+                            -- 2. Экипировка нужного инструмента
+                            if Config.AutoEquipTools then
+                                EquipToolMatching()
+                            end
+
+                            -- 3. Выполнение взаимодействия с выдержкой времени HoldDuration
+                            SafeInteractPrompt(bestPrompt)
+                            
+                            -- 4. Ожидание завершения действия (HoldDuration + настроенная задержка)
+                            local waitTime = math.max(bestPrompt.HoldDuration or 0.3, Config.HealDelay or 0.8)
+                            task.wait(waitTime)
+                        end
+                    end)
+
+                    isHandlingPatient = false
+                end
+            end
+        end
+    end)
+
+    -- Второстепенные циклы автоматизации
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
             pcall(function()
                 local char = LocalPlayer.Character
                 local root = char and char:FindFirstChild("HumanoidRootPart")
+                if not root then return end
 
-                -- 1. Автосбор монет и наград
-                if Config.AutoCollect and root then
+                -- Автосбор
+                if Config.AutoCollect then
                     for _, obj in pairs(Workspace:GetDescendants()) do
                         if obj:IsA("BasePart") and (SafeFind(obj.Name, "coin") or SafeFind(obj.Name, "cash") or SafeFind(obj.Name, "money") or SafeFind(obj.Name, "drop") or SafeFind(obj.Name, "reward")) then
-                            if (root.Position - obj.Position).Magnitude < 80 then SafeTouch(obj) end
-                        end
-                    end
-                end
-
-                -- 2. Автовзаимодействие с промптами в радиусе
-                if Config.AutoInteract and root then
-                    for _, prompt in pairs(Workspace:GetDescendants()) do
-                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                            local pPart = prompt.Parent:IsA("BasePart") and prompt.Parent or (prompt.Parent:IsA("Model") and (prompt.Parent.PrimaryPart or prompt.Parent:FindFirstChildWhichIsA("BasePart")))
-                            if pPart and (root.Position - pPart.Position).Magnitude <= (prompt.MaxActivationDistance + 6) then
-                                SafeInteractPrompt(prompt)
+                            if (root.Position - obj.Position).Magnitude < 40 then
+                                SafeTouch(obj)
                             end
                         end
                     end
                 end
 
-                -- 3. Автоустранение саботажей
+                -- Саботажи
                 if Config.AutoFixSabotages then
                     for _, obj in pairs(Workspace:GetDescendants()) do
                         if obj:IsA("ProximityPrompt") and obj.Enabled then
-                            if SafeFind(obj.ActionText, "fix") or SafeFind(obj.ActionText, "repair") or SafeFind(obj.ActionText, "extinguish") or SafeFind(obj.ActionText, "clean") or SafeFind(obj.ObjectText, "leak") or SafeFind(obj.ObjectText, "sabotage") or SafeFind(obj.ObjectText, "fire") then
-                                SafeInteractPrompt(obj)
-                            end
-                        end
-                    end
-                end
-
-                -- 4. Автолечение, кормление, уход и уборка (ПРОДВИНУТЫЙ ДВИЖОК)
-                if (Config.AutoHeal or Config.AutoFeed or Config.AutoClean or Config.AutoCare) and root then
-                    for _, obj in pairs(Workspace:GetDescendants()) do
-                        if obj:IsA("ProximityPrompt") and obj.Enabled then
-                            local act = string.lower(tostring(obj.ActionText or ""))
-                            local objT = string.lower(tostring(obj.ObjectText or ""))
-                            local parentName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
-                            local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
-
-                            local isHealPrompt = SafeFind(act, "heal") or SafeFind(act, "treat") or SafeFind(act, "cure") or SafeFind(act, "med") or SafeFind(act, "help") or SafeFind(act, "diag") or SafeFind(act, "exam") or SafeFind(act, "inj") or SafeFind(objT, "heal") or SafeFind(objT, "patient") or SafeFind(objT, "animal") or SafeFind(parentName, "patient") or SafeFind(parentName, "bed")
-                            local isFeedPrompt = SafeFind(act, "feed") or SafeFind(act, "food") or SafeFind(act, "water") or SafeFind(objT, "feed")
-                            local isCarePrompt = SafeFind(act, "groom") or SafeFind(act, "wash") or SafeFind(act, "care") or SafeFind(act, "pet") or SafeFind(act, "brush")
-                            local isCleanPrompt = SafeFind(act, "clean") or SafeFind(act, "sweep") or SafeFind(act, "bath") or SafeFind(objT, "clean") or SafeFind(objT, "trash")
-
-                            if (Config.AutoHeal and isHealPrompt) or (Config.AutoFeed and isFeedPrompt) or (Config.AutoCare and isCarePrompt) or (Config.AutoClean and isCleanPrompt) then
-                                if pPart then
-                                    local dist = (root.Position - pPart.Position).Magnitude
-                                    if Config.AutoHealTeleport and dist > (obj.MaxActivationDistance + 4) then
-                                        TeleportTo(pPart.CFrame)
-                                        task.wait(0.08)
-                                    end
-                                    if Config.AutoEquipTools then
-                                        EquipToolMatching()
-                                    end
+                            if SafeFind(obj.ActionText, "fix") or SafeFind(obj.ActionText, "repair") or SafeFind(obj.ActionText, "extinguish") or SafeFind(obj.ObjectText, "leak") or SafeFind(obj.ObjectText, "sabotage") or SafeFind(obj.ObjectText, "fire") then
+                                local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
+                                if pPart and (root.Position - pPart.Position).Magnitude <= (obj.MaxActivationDistance + 5) then
                                     SafeInteractPrompt(obj)
-                                end
-                            end
-                        elseif obj:IsA("ClickDetector") then
-                            local cPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
-                            local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
-                            if SafeFind(pName, "patient") or SafeFind(pName, "animal") or SafeFind(pName, "bed") or SafeFind(pName, "heal") then
-                                if cPart and Config.AutoHeal then
-                                    if Config.AutoHealTeleport and (root.Position - cPart.Position).Magnitude > 15 then
-                                        TeleportTo(cPart.CFrame)
-                                        task.wait(0.08)
-                                    end
-                                    SafeClickDetector(obj)
+                                    task.wait(obj.HoldDuration or 0.3)
                                 end
                             end
                         end
                     end
                 end
 
-                -- 5. Автопринятие и сдача заданий
-                if (Config.AutoAcceptQuests or Config.AutoCompleteQuest or Config.AutoClaimRewards) then
+                -- Задания
+                if Config.AutoAcceptQuests or Config.AutoCompleteQuest or Config.AutoClaimRewards then
                     for _, prompt in pairs(Workspace:GetDescendants()) do
                         if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                            if Config.AutoAcceptQuests and (SafeFind(prompt.ActionText, "accept") or SafeFind(prompt.ActionText, "start") or SafeFind(prompt.ObjectText, "quest")) then
+                            local act = string.lower(prompt.ActionText or "")
+                            local objT = string.lower(prompt.ObjectText or "")
+                            if Config.AutoAcceptQuests and (SafeFind(act, "accept") or SafeFind(act, "start") or SafeFind(objT, "quest")) then
                                 SafeInteractPrompt(prompt)
-                            elseif (Config.AutoCompleteQuest or Config.AutoClaimRewards) and (SafeFind(prompt.ActionText, "claim") or SafeFind(prompt.ActionText, "complete") or SafeFind(prompt.ActionText, "reward")) then
+                                task.wait(0.2)
+                            elseif (Config.AutoCompleteQuest or Config.AutoClaimRewards) and (SafeFind(act, "claim") or SafeFind(act, "complete") or SafeFind(act, "reward")) then
                                 SafeInteractPrompt(prompt)
+                                task.wait(0.2)
                             end
                         end
                     end
                 end
 
-                -- 6. Бесконечный рассудок (Auto Coffee)
+                -- Бесконечный рассудок
                 if Config.InfiniteSanity then
                     for _, prompt in pairs(Workspace:GetDescendants()) do
                         if prompt:IsA("ProximityPrompt") and prompt.Enabled then
                             if SafeFind(prompt.ActionText, "drink") or SafeFind(prompt.ActionText, "coffee") or SafeFind(prompt.ObjectText, "coffee") or SafeFind(prompt.ObjectText, "sanity") or SafeFind(prompt.ObjectText, "energy") then
                                 SafeInteractPrompt(prompt)
+                                task.wait(0.3)
                             end
                         end
                     end
                 end
 
-                -- 7. Автопродажа, автопокупка, автоулучшение
+                -- Магазин / Улучшения
                 if Config.AutoSell or Config.AutoUpgrade or Config.AutoBuy then
                     for _, prompt in pairs(Workspace:GetDescendants()) do
                         if prompt:IsA("ProximityPrompt") and prompt.Enabled then
