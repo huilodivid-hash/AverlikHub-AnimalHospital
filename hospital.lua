@@ -1,20 +1,17 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (FULL 1-5 AUTO HEAL SCRIPT + PRESET WAYPOINTS)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (PERFECT SMART AUTO-HEAL 1-5 & PRESET WAYPOINTS)
     ══════════════════════════════════════════════════════════════════════════════════
-    • Возможности:
-        1. 🎯 ВСЕ СОХРАНЕННЫЕ ТОЧКИ ПОЛЬЗОВАТЕЛЯ ВСТРОЕНЫ ПО УМОЛЧАНИЮ (С УГЛАМИ ВЗГЛЯДА):
-           - Палаты 1 - 5 (Койка + Сканер)
-           - Палата 7 (Реанимация + ЭКГ)
-           - Полки медикаментов: Травы, Таблетки, Капли, Капельницы, Аптечки, Термометры, Сиропы, Микстуры, Бинты, Пластыри
-           - Ресепшен и Кофейный аппарат
-        2. ⚡ ПОЛНОСТЬЮ АВТОНОМНЫЙ СКРИПТ АВТО-ЛЕЧЕНИЯ 1 - 5:
-           - Проверяет койку ➔ Берет анализ ДНК (Hold E)
-           - Перемещается к сканеру в палате ➔ Запускает анализ (Hold E) ➔ Ожидает
-           - Распознает диагноз ➔ Телепортируется ровно к нужной полке лекарств
-           - Берет лекарство ➔ Возвращается к пациенту на койку ➔ Берет в руки и лечит!
-        3. 🚀 Server Hop (Случайный / Малолюдный / Rejoin)
-        4. 💾 Полная синхронизация с Waypoints.json
+    • Ключевые исправления:
+        1. 🚫 НЕ ТЕЛЕПОРТИРУЕТСЯ В ПУСТЫЕ ПАЛАТЫ:
+           - Предварительно сканирует Workspace: если в палате нет больного (нет prompt), палата пропускается мгновенно!
+        2. ⏳ ИДЕАЛЬНЫЙ ТАЙМИНГ НА СКАНЕРЕ И КОМПЬЮТЕРЕ:
+           - Не улетает раньше времени!
+           - Держит E для вставки ДНК ➔ ждет завершения центрифуги (3.5с) ➔ нажимает на компьютер для получения рецепта/вещей!
+        3. 💊 ТОЧНЫЙ ЗАБОР ЛЕКАРСТВА И ЛЕЧЕНИЕ:
+           - ТП к нужной полке ➔ забирает предмет ➔ ТП к койке ➔ берет в руку ➔ лечит больного (Hold E).
+        4. 👀 СОХРАНЕНИЕ ТОЧНОГО УГЛА ВЗГЛЯДА ПЕРСОНАЖА.
+        5. 🌐 Server Hop (Случайный / Малолюдный / Rejoin).
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
@@ -104,7 +101,7 @@ local function RunAverlikHub()
         getgenv().AverlikHub_Instance = ScreenGui
     end
 
-    -- 📍 Таблица кастомных точек телепортации (с вашими точными координатами и ракурсами взгляда!)
+    -- 📍 Таблица кастомных точек телепортации (с вашими точными координатами и ракурсами взгляда)
     local CustomWaypoints = {
         -- Палаты 1 - 5, 7 (Койка + Устройство)
         Ward1_Bed = CFrame.new(-168.2000, 5.8061, -41.2333, -0.9997, 0, -0.0225, 0, 1.0000, 0, 0.0225, 0, -0.9997),
@@ -271,15 +268,16 @@ local function RunAverlikHub()
         return root and root.Position or nil
     end
 
-    local function SafeInteractPrompt(prompt)
+    local function SafeInteractPrompt(prompt, extraHold)
         if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
         local holdTime = prompt.HoldDuration or 0
+        if extraHold then holdTime = holdTime + extraHold end
         pcall(function()
             if fireproximityprompt then
                 fireproximityprompt(prompt, holdTime)
             else
                 prompt:InputHoldBegin()
-                task.wait(holdTime > 0 and (holdTime + 0.1) or 0.15)
+                task.wait(holdTime > 0 and (holdTime + 0.2) or 0.25)
                 prompt:InputHoldEnd()
             end
         end)
@@ -316,7 +314,7 @@ local function RunAverlikHub()
 
             if targetTool then
                 hum:EquipTool(targetTool)
-                task.wait(0.1)
+                task.wait(0.15)
                 pcall(function() targetTool:Activate() end)
             end
         end)
@@ -423,6 +421,30 @@ local function RunAverlikHub()
         local objT = string.lower(tostring(prompt.ObjectText or ""))
         local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
         return SafeFind(act, "coffee") or SafeFind(act, "кофе") or SafeFind(objT, "кофе") or SafeFind(objT, "рассудок") or SafeFind(pName, "coffee")
+    end
+
+    -- Проверка наличия больного на койке ДО телепортации
+    local function FindWardPatientPrompt(wardNum)
+        local bedPos = GetWardBedPosition(wardNum)
+        if not bedPos then return nil, nil end
+        local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
+
+        for _, p in pairs(Workspace:GetDescendants()) do
+            if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
+                local pCF = GetPromptTargetCFrame(p)
+                if pCF then
+                    local dist = (pCF.Position - bedVec).Magnitude
+                    if dist < 20 then
+                        if IsDNAPrompt(p) then
+                            return p, "DNA"
+                        elseif IsHealPrompt(p) then
+                            return p, "Heal"
+                        end
+                    end
+                end
+            end
+        end
+        return nil, nil
     end
 
     local function SolveHeartMinigame()
@@ -1406,7 +1428,7 @@ local function RunAverlikHub()
                     if targetCF then
                         TeleportTo(targetCF)
                         task.wait(0.2)
-                        SafeInteractPrompt(obj)
+                        SafeInteractPrompt(obj, 0.2)
                         count = count + 1
                         task.wait(0.3)
                         if count >= 3 then break end
@@ -1426,7 +1448,7 @@ local function RunAverlikHub()
                     if targetCF then
                         TeleportTo(targetCF)
                         task.wait(0.2)
-                        SafeInteractPrompt(obj)
+                        SafeInteractPrompt(obj, 0.2)
                         SendNotification("Рассудок", "Кофе выпит! Рассудок восстановлен.", 2)
                         return
                     end
@@ -1815,7 +1837,7 @@ local function RunAverlikHub()
                     if rCF then
                         TeleportTo(rCF)
                         task.wait(0.2)
-                        SafeInteractPrompt(rObj)
+                        SafeInteractPrompt(rObj, 0.2)
                         task.wait(Config.StepDelay or 0.5)
                         break
                     end
@@ -1823,7 +1845,7 @@ local function RunAverlikHub()
             end
         end
 
-        -- Проход по палатам 1 - 5 (Койка ➔ Сканер ➔ Полка нужного лекарства ➔ Лечение)
+        -- Проход по палатам 1 - 5 (ПРОВЕРКА НАЛИЧИЯ БОЛЬНОГО ➔ КОЙКА ➔ СКАНЕР ➔ ПОЛКА ➔ ЛЕЧЕНИЕ)
         for wardNum = 1, 5 do
             if not Config.AutoHospitalCycle then break end
 
@@ -1831,52 +1853,58 @@ local function RunAverlikHub()
             local devPos = GetWardDevicePosition(wardNum)
 
             if bedPos then
-                -- ШАГ 1: Телепорт к койке пациента
-                TeleportTo(bedPos)
-                task.wait(0.3)
+                -- 🔍 ПРЕДВАРИТЕЛЬНАЯ ПРОВЕРКА: есть ли больной в этой палате?
+                local patientPrompt, promptType = FindWardPatientPrompt(wardNum)
 
-                local dnaPrompt = nil
-                local healPrompt = nil
-
-                for _, p in pairs(Workspace:GetDescendants()) do
-                    if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
-                        local pCF = GetPromptTargetCFrame(p)
-                        if pCF then
-                            local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
-                            local dist = (pCF.Position - bedVec).Magnitude
-                            if dist < 18 then
-                                if IsDNAPrompt(p) then
-                                    dnaPrompt = p
-                                    break
-                                elseif IsHealPrompt(p) then
-                                    healPrompt = p
-                                end
-                            end
-                        end
-                    end
+                -- Если больного нет (койка пустая) — пропускаем палату сразу!
+                if not patientPrompt then
+                    continue
                 end
 
-                -- Если пациент требует анализа ДНК
-                if dnaPrompt then
-                    SafeInteractPrompt(dnaPrompt)
-                    task.wait(1.0) -- Взятие ДНК
+                -- ШАГ 1: Телепорт к койке пациента
+                TeleportTo(bedPos)
+                task.wait(0.35)
 
-                    -- ШАГ 2: Перенос в сканер
+                -- Если пациент требует анализа ДНК
+                if promptType == "DNA" or IsDNAPrompt(patientPrompt) then
+                    SafeInteractPrompt(patientPrompt, 0.4)
+                    task.wait(1.2) -- Время взятия анализа ДНК
+
+                    -- ШАГ 2: Перенос в сканер/центрифугу в этой же палате
                     if devPos then
                         TeleportTo(devPos)
-                        task.wait(0.25)
+                        task.wait(0.35)
                     end
 
+                    -- Вставляем ДНК в сканер
+                    local devVec = typeof(devPos) == "CFrame" and devPos.Position or devPos
                     for _, lObj in pairs(Workspace:GetDescendants()) do
                         if IsLabMachinePrompt(lObj) then
                             local lCF = GetPromptTargetCFrame(lObj)
-                            if lCF then
-                                local devVec = typeof(devPos) == "CFrame" and devPos.Position or devPos
-                                if devVec and (lCF.Position - devVec).Magnitude < 25 then
-                                    TeleportTo(lCF)
+                            if lCF and devVec and (lCF.Position - devVec).Magnitude < 20 then
+                                TeleportTo(lCF)
+                                task.wait(0.2)
+                                SafeInteractPrompt(lObj, 0.3)
+                                break
+                            end
+                        end
+                    end
+
+                    -- Ожидание работы сканера (3.2 секунды)
+                    task.wait(3.2)
+
+                    -- Взаимодействие с компьютером/результатом анализа
+                    for _, cObj in pairs(Workspace:GetDescendants()) do
+                        if cObj:IsA("ProximityPrompt") and cObj.Enabled and not IsDoorOrTrash(cObj) then
+                            local cCF = GetPromptTargetCFrame(cObj)
+                            if cCF and devVec and (cCF.Position - devVec).Magnitude < 18 then
+                                local act = string.lower(tostring(cObj.ActionText or ""))
+                                local objT = string.lower(tostring(cObj.ObjectText or ""))
+                                if SafeFind(act, "результат") or SafeFind(act, "компьют") or SafeFind(act, "взят") or SafeFind(act, "получит") or SafeFind(act, "рецепт") or SafeFind(objT, "компьют") or SafeFind(act, "анализ") then
+                                    TeleportTo(cCF)
                                     task.wait(0.2)
-                                    SafeInteractPrompt(lObj)
-                                    task.wait(2.2) -- Ожидание расшифровки
+                                    SafeInteractPrompt(cObj, 0.3)
+                                    task.wait(0.5)
                                     break
                                 end
                             end
@@ -1884,7 +1912,7 @@ local function RunAverlikHub()
                     end
                 end
 
-                -- ШАГ 3: Проверка лекарства в инвентаре
+                -- ШАГ 3: Проверка лекарства в инвентаре / Поход к полке
                 local bp = LocalPlayer:FindFirstChild("Backpack")
                 local char = LocalPlayer.Character
                 local hasMed = false
@@ -1898,20 +1926,18 @@ local function RunAverlikHub()
 
                     if medTarget then
                         TeleportTo(medTarget)
-                        task.wait(0.25)
+                        task.wait(0.35)
                     end
 
-                    -- Взаимодействие со шкафом/полкой
+                    -- Забираем лекарство со шкафа/полки
+                    local myP = GetMyPosition()
                     for _, cabObj in pairs(Workspace:GetDescendants()) do
                         if IsCabinetPrompt(cabObj) then
                             local cabCF = GetPromptTargetCFrame(cabObj)
-                            if cabCF then
-                                local myP = GetMyPosition()
-                                if myP and (cabCF.Position - myP).Magnitude < 15 then
-                                    SafeInteractPrompt(cabObj)
-                                    task.wait(0.4)
-                                    break
-                                end
+                            if cabCF and myP and (cabCF.Position - myP).Magnitude < 14 then
+                                SafeInteractPrompt(cabObj, 0.4)
+                                task.wait(0.5)
+                                break
                             end
                         end
                     end
@@ -1919,20 +1945,18 @@ local function RunAverlikHub()
 
                 -- ШАГ 4 & 5: Возврат к койке с лекарством и лечение
                 TeleportTo(bedPos)
-                task.wait(0.25)
+                task.wait(0.35)
                 EquipMedicalTool()
-                task.wait(0.15)
+                task.wait(0.2)
 
+                local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
                 for _, p in pairs(Workspace:GetDescendants()) do
                     if IsHealPrompt(p) then
                         local pCF = GetPromptTargetCFrame(p)
-                        if pCF then
-                            local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
-                            if (pCF.Position - bedVec).Magnitude < 18 then
-                                SafeInteractPrompt(p)
-                                task.wait(1.4) -- Процесс лечения
-                                break
-                            end
+                        if pCF and (pCF.Position - bedVec).Magnitude < 18 then
+                            SafeInteractPrompt(p, 0.5)
+                            task.wait(1.5) -- Процесс лечения больного
+                            break
                         end
                     end
                 end
@@ -1965,10 +1989,10 @@ local function RunAverlikHub()
                     local room7Dev = CustomWaypoints.Ward7_Device or room7Pos
                     if room7Pos then
                         TeleportTo(room7Pos)
-                        task.wait(0.25)
+                        task.wait(0.3)
 
                         if Config.Room7_AutoHeartGame then
-                            if room7Dev then TeleportTo(room7Dev); task.wait(0.2) end
+                            if room7Dev then TeleportTo(room7Dev); task.wait(0.25) end
                             for i = 1, 15 do
                                 SolveHeartMinigame()
                                 task.wait(0.1)
@@ -1984,7 +2008,7 @@ local function RunAverlikHub()
 
                             if not hasDrip then
                                 local cabPos = CustomWaypoints.Med_IVDrip or CustomWaypoints.Med_FirstAid
-                                if cabPos then TeleportTo(cabPos); task.wait(0.2) end
+                                if cabPos then TeleportTo(cabPos); task.wait(0.3) end
                                 for _, medObj in pairs(Workspace:GetDescendants()) do
                                     if IsCabinetPrompt(medObj) then
                                         local act = string.lower(tostring(medObj.ActionText or ""))
@@ -1993,8 +2017,8 @@ local function RunAverlikHub()
                                             if medCF then
                                                 TeleportTo(medCF)
                                                 task.wait(0.2)
-                                                SafeInteractPrompt(medObj)
-                                                task.wait(0.3)
+                                                SafeInteractPrompt(medObj, 0.3)
+                                                task.wait(0.4)
                                                 break
                                             end
                                         end
@@ -2003,7 +2027,7 @@ local function RunAverlikHub()
                             end
 
                             TeleportTo(room7Pos)
-                            task.wait(0.2)
+                            task.wait(0.3)
                             EquipMedicalTool("капельниц")
                             for _, pPrompt in pairs(Workspace:GetDescendants()) do
                                 if IsHealPrompt(pPrompt) or IsDNAPrompt(pPrompt) then
@@ -2011,7 +2035,7 @@ local function RunAverlikHub()
                                     if pCF then
                                         local r7Vec = typeof(room7Pos) == "CFrame" and room7Pos.Position or room7Pos
                                         if (r7Vec - pCF.Position).Magnitude < 25 then
-                                            SafeInteractPrompt(pPrompt)
+                                            SafeInteractPrompt(pPrompt, 0.5)
                                             task.wait(0.8)
                                             break
                                         end
@@ -2040,7 +2064,7 @@ local function RunAverlikHub()
                             if targetCF then
                                 TeleportTo(targetCF)
                                 task.wait(0.2)
-                                SafeInteractPrompt(obj)
+                                SafeInteractPrompt(obj, 0.3)
                                 task.wait(0.4)
                                 break
                             end
@@ -2051,8 +2075,8 @@ local function RunAverlikHub()
         end
     end)
 
-    SendNotification("Averlik Hub", "Animal Hospital готов к авто-лечению!", 4)
-    print("[Averlik Hub] Авто-цикл палат 1-5 готов!")
+    SendNotification("Averlik Hub", "Animal Hospital: идеальный авто-цикл готов!", 4)
+    print("[Averlik Hub] Умная фильтрация палат и тайминги компьютеров готовы!")
 end
 
 local ok, err = pcall(RunAverlikHub)
