@@ -1758,53 +1758,53 @@ local function RunAverlikHub()
         local t = string.lower(tostring(text or ""))
         local i = string.lower(tostring(img or ""))
 
-        -- Травы (Herbs)
-        if SafeFind(t, "трав") or SafeFind(t, "растен") or SafeFind(t, "herb") or SafeFind(t, "plant") or SafeFind(t, "leaf") or SafeFind(i, "herb") or SafeFind(i, "plant") or SafeFind(i, "leaf") then
+        -- 1. 🌿 Травы (Живот / Тошнота / Отравление / Желудок)
+        if SafeFind(t, "живот") or SafeFind(t, "болит живот") or SafeFind(t, "тошнот") or SafeFind(t, "рвот") or SafeFind(t, "отравлен") or SafeFind(t, "желудок") or SafeFind(t, "пищевар") or SafeFind(t, "несварен") or SafeFind(t, "газ") or SafeFind(t, "колик") or SafeFind(t, "аппетит") or SafeFind(t, "stomach") or SafeFind(t, "belly") or SafeFind(t, "tummy") or SafeFind(t, "nausea") or SafeFind(t, "vomit") or SafeFind(t, "poison") or SafeFind(t, "digest") or SafeFind(t, "cramp") or SafeFind(t, "gut") or SafeFind(t, "трав") or SafeFind(t, "растен") or SafeFind(t, "herb") or SafeFind(t, "plant") or SafeFind(t, "leaf") or SafeFind(i, "herb") or SafeFind(i, "plant") or SafeFind(i, "leaf") then
             return "Med_Herbs"
         end
 
-        -- Таблетки (Pills)
-        if SafeFind(t, "таблет") or SafeFind(t, "pill") or SafeFind(t, "capsul") or SafeFind(t, "капсул") or SafeFind(i, "pill") then
+        -- 2. 💊 Таблетки (Голова / Мигрень / Давление / Стресс)
+        if SafeFind(t, "голов") or SafeFind(t, "болит голова") or SafeFind(t, "мигрен") or SafeFind(t, "давлен") or SafeFind(t, "головокружен") or SafeFind(t, "бессонниц") or SafeFind(t, "стресс") or SafeFind(t, "headache") or SafeFind(t, "head") or SafeFind(t, "migraine") or SafeFind(t, "dizzy") or SafeFind(t, "dizziness") or SafeFind(t, "pressure") or SafeFind(t, "таблет") or SafeFind(t, "пилюл") or SafeFind(t, "капсул") or SafeFind(t, "pill") or SafeFind(i, "pill") then
             return "Med_Pills"
         end
 
-        -- Капли (Drops)
-        if SafeFind(t, "капл") or SafeFind(t, "глазн") or SafeFind(t, "drop") or SafeFind(i, "drop") then
+        -- 3. 💧 Капли (Глаза / Зрение / Нос / Уши / Слезы)
+        if SafeFind(t, "глаз") or SafeFind(t, "зрени") or SafeFind(t, "слез") or SafeFind(t, "конъюнктивит") or SafeFind(t, "насморк") or SafeFind(t, "сопл") or SafeFind(t, "уши") or SafeFind(t, "ухо") or SafeFind(t, "отит") or SafeFind(t, "заложенност") or SafeFind(t, "eye") or SafeFind(t, "eyes") or SafeFind(t, "vision") or SafeFind(t, "tear") or SafeFind(t, "tears") or SafeFind(t, "nose") or SafeFind(t, "ear") or SafeFind(t, "ears") or SafeFind(t, "капл") or SafeFind(t, "drop") or SafeFind(i, "drop") then
             return "Med_Drops"
         end
 
-        -- Капельницы (IV Drip)
-        if SafeFind(t, "капельниц") or SafeFind(t, "drip") or SafeFind(t, "iv") or SafeFind(i, "drip") or SafeFind(i, "iv") then
+        -- 4. 💉 Капельницы (Обезвоживание / Истощение / Слабость / Кровь)
+        if SafeFind(t, "обезвоживан") or SafeFind(t, "истощен") or SafeFind(t, "слабост") or SafeFind(t, "упадок сил") or SafeFind(t, "потеря сознания") or SafeFind(t, "анеми") or SafeFind(t, "интоксикац") or SafeFind(t, "dehydration") or SafeFind(t, "exhaust") or SafeFind(t, "weak") or SafeFind(t, "weakness") or SafeFind(t, "faint") or SafeFind(t, "blood") or SafeFind(t, "капельниц") or SafeFind(t, "iv") or SafeFind(t, "drip") or SafeFind(i, "drip") or SafeFind(i, "iv") then
             return "Med_IVDrip"
         end
 
-        -- Аптечки (First Aid)
-        if SafeFind(t, "аптеч") or SafeFind(t, "первая помощ") or SafeFind(t, "first aid") or SafeFind(t, "kit") or SafeFind(i, "kit") or SafeFind(i, "aid") then
+        -- 5. 🧰 Аптечки (Тяжелая травма / Кровотечение / Открытая рана / Укус)
+        if SafeFind(t, "тяжелая травма") or SafeFind(t, "травм") or SafeFind(t, "ран") or SafeFind(t, "кровотечен") or SafeFind(t, "глубокий порез") or SafeFind(t, "укус") or SafeFind(t, "injury") or SafeFind(t, "wound") or SafeFind(t, "bleed") or SafeFind(t, "bleeding") or SafeFind(t, "bite") or SafeFind(t, "trauma") or SafeFind(t, "аптеч") or SafeFind(t, "первая помощ") or SafeFind(t, "first aid") or SafeFind(t, "kit") or SafeFind(i, "kit") or SafeFind(i, "aid") then
             return "Med_FirstAid"
         end
 
-        -- Термометры / Шприцы (Thermometer / Syringe)
-        if SafeFind(t, "термометр") or SafeFind(t, "шприц") or SafeFind(t, "укол") or SafeFind(t, "градусник") or SafeFind(t, "thermometer") or SafeFind(t, "syringe") or SafeFind(t, "inject") or SafeFind(i, "thermo") or SafeFind(i, "syringe") then
+        -- 6. 🌡️ Термометры / Шприцы (Температура / Жар / Лихорадка / Вирус / Грипп)
+        if SafeFind(t, "температур") or SafeFind(t, "жар") or SafeFind(t, "лихорадк") or SafeFind(t, "озноб") or SafeFind(t, "инфекци") or SafeFind(t, "вирус") or SafeFind(t, "грипп") or SafeFind(t, "воспален") or SafeFind(t, "temperature") or SafeFind(t, "fever") or SafeFind(t, "hot") or SafeFind(t, "virus") or SafeFind(t, "infection") or SafeFind(t, "flu") or SafeFind(t, "chill") or SafeFind(t, "термометр") or SafeFind(t, "шприц") or SafeFind(t, "укол") or SafeFind(t, "градусник") or SafeFind(t, "вакцин") or SafeFind(t, "thermometer") or SafeFind(t, "syringe") or SafeFind(t, "inject") or SafeFind(i, "thermo") or SafeFind(i, "syringe") then
             return "Med_Thermometer"
         end
 
-        -- Сиропы (Syrup)
-        if SafeFind(t, "сироп") or SafeFind(t, "syrup") or SafeFind(i, "syrup") then
+        -- 7. 🍯 Сиропы (Кашель / Горло / Простуда / Ангина)
+        if SafeFind(t, "кашел") or SafeFind(t, "кашля") or SafeFind(t, "горл") or SafeFind(t, "болит горло") or SafeFind(t, "простуд") or SafeFind(t, "хрип") or SafeFind(t, "ангин") or SafeFind(t, "першен") or SafeFind(t, "голос") or SafeFind(t, "бронхит") or SafeFind(t, "cough") or SafeFind(t, "throat") or SafeFind(t, "sore throat") or SafeFind(t, "bronchitis") or SafeFind(t, "cold") or SafeFind(t, "сироп") or SafeFind(t, "syrup") or SafeFind(i, "syrup") then
             return "Med_Syrup"
         end
 
-        -- Микстуры (Mixture)
-        if SafeFind(t, "микстур") or SafeFind(t, "mixture") or SafeFind(t, "potion") or SafeFind(i, "mixture") then
+        -- 8. 🧪 Микстуры (Аллергия / Зуд / Сыпь / Покраснение / Кожа)
+        if SafeFind(t, "аллерги") or SafeFind(t, "зуд") or SafeFind(t, "сып") or SafeFind(t, "покраснени") or SafeFind(t, "чешет") or SafeFind(t, "раздражен") or SafeFind(t, "кож") or SafeFind(t, "отек") or SafeFind(t, "крапивниц") or SafeFind(t, "allergy") or SafeFind(t, "itch") or SafeFind(t, "itchy") or SafeFind(t, "rash") or SafeFind(t, "redness") or SafeFind(t, "skin") or SafeFind(t, "irritation") or SafeFind(t, "микстур") or SafeFind(t, "зель") or SafeFind(t, "mixture") or SafeFind(t, "potion") or SafeFind(i, "mixture") then
             return "Med_Mixture"
         end
 
-        -- Бинты (Bandage)
-        if SafeFind(t, "бинт") or SafeFind(t, "перевяз") or SafeFind(t, "bandage") or SafeFind(t, "band") or SafeFind(i, "band") then
+        -- 9. 🩹 Бинты (Перелом / Вывих / Сломана лапа / Кость / Растяжение)
+        if SafeFind(t, "перелом") or SafeFind(t, "вывих") or SafeFind(t, "сломан") or SafeFind(t, "кость") or SafeFind(t, "трещин") or SafeFind(t, "растяжен") or SafeFind(t, "лап") or SafeFind(t, "нога") or SafeFind(t, "broken") or SafeFind(t, "fracture") or SafeFind(t, "bone") or SafeFind(t, "sprain") or SafeFind(t, "dislocate") or SafeFind(t, "leg") or SafeFind(t, "arm") or SafeFind(t, "paw") or SafeFind(t, "бинт") or SafeFind(t, "повязк") or SafeFind(t, "перевязк") or SafeFind(t, "bandage") or SafeFind(t, "band") or SafeFind(i, "band") then
             return "Med_Bandage"
         end
 
-        -- Пластыри (Plaster)
-        if SafeFind(t, "пластыр") or SafeFind(t, "plaster") or SafeFind(t, "patch") or SafeFind(i, "plaster") or SafeFind(i, "patch") then
+        -- 10. 🩹 Пластыри (Царапина / Ссадина / Мелкий порез / Мозоль / Синяк)
+        if SafeFind(t, "царапин") or SafeFind(t, "ссадин") or SafeFind(t, "мелкий порез") or SafeFind(t, "мозол") or SafeFind(t, "синяк") or SafeFind(t, "потертост") or SafeFind(t, "scratch") or SafeFind(t, "scrape") or SafeFind(t, "bruise") or SafeFind(t, "small cut") or SafeFind(t, "blister") or SafeFind(t, "пластыр") or SafeFind(t, "лейкопластыр") or SafeFind(t, "plaster") or SafeFind(t, "patch") or SafeFind(i, "plaster") or SafeFind(i, "patch") then
             return "Med_Plaster"
         end
 
