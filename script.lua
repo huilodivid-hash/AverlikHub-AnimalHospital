@@ -1447,7 +1447,11 @@ local function RunAverlikHub()
 
     -- 8. SETTINGS
     TabSettings:CreateSection("Конфигурация")
-    local ConfigInput = TabSettings:CreateInput("Название конфига", "default", "default", function(val) Config.SelectedConfig = val end)
+    pcall(function()
+        if TabSettings.CreateInput then
+            TabSettings:CreateInput("Название конфига", "default", "default", function(val) Config.SelectedConfig = val end)
+        end
+    end)
     TabSettings:CreateButton("Сохранить конфиг", true, function()
         pcall(function()
             if writefile and makefolder then
