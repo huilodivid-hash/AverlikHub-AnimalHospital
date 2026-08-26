@@ -1,13 +1,20 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (PRO WAYPOINT CUSTOMIZER & SMART AUTOFARM)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (ADVANCED PER-WARD & PER-CABINET WAYPOINTS)
     ══════════════════════════════════════════════════════════════════════════════════
     • Возможности:
-        1. 📍 ПОЛНАЯ НАСТРОЙКА ТОЧЕК ТЕЛЕПОРТА (Пользователь сам задает куда ТПшить)
-        2. 💾 Сохранение и загрузка точек из файла Waypoints.json
-        3. 🧠 Smart Targeter: находит живого больного в любой палате без спама пустых комнат
-        4. 💊 Контроль инвентаря (3/3): не спамит шкафы если полная сумка
-        5. ⚡ Палата 7 (Реанимация / Мини-игра сердца)
+        1. 📍 ПОЛНАЯ НАСТРОЙКА ТОЧЕК ДЛЯ КАЖДОЙ ПАЛАТЫ 1-7:
+           - Койка пациента (Bed)
+           - Устройство / Сканер ДНК / Центрифуга (Device)
+        2. 💊 НАСТРОЙКА ТОЧЕК ДЛЯ КАЖДОГО ШКАФА/АВТОМАТА В КОРИДОРЕ ПО ЦВЕТАМ:
+           - 🟩 Зеленый шкаф (Травы / Таблетки)
+           - 🟦 Синий шкаф (Капли / Капельницы)
+           - 🟥 Красный шкаф (Аптечки / Термометры)
+           - 🟨 Желтый шкаф (Сиропы / Микстуры)
+           - ⬜ Серый шкаф (Бинты / Пластыри)
+        3. 🏢 Инфраструктура: Ресепшен (Вход), Кофейный автомат (Рассудок)
+        4. 💾 Полное сохранение в файл Waypoints.json и моментальный экспорт/импорт
+        5. ⚡ Умный авто-цикл: идет строго по вашим точкам (Койка ➔ Устройство ➔ Нужный шкаф ➔ Койка)!
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
@@ -30,7 +37,7 @@ local function RunAverlikHub()
         until LocalPlayer
     end
 
-    -- Звук запуска
+    -- Звук успешного запуска
     pcall(function()
         local sound = Instance.new("Sound")
         sound.SoundId = "rbxassetid://4590662766"
@@ -97,22 +104,56 @@ local function RunAverlikHub()
         getgenv().AverlikHub_Instance = ScreenGui
     end
 
-    -- Таблица пользовательских точек телепорта (Waypoints)
+    -- 📍 Таблица кастомных точек телепортации (с координатами по умолчанию)
     local CustomWaypoints = {
-        Ward1 = Vector3.new(-168.42, 5.81, -41.04),
-        Ward2 = Vector3.new(-121.33, 5.81, -59.95),
-        Ward3 = Vector3.new(-168.08, 5.81, -80.10),
-        Ward4 = Vector3.new(-121.16, 5.81, -99.06),
-        Ward5 = Vector3.new(-153.91, 5.81, -114.83),
-        Ward6 = nil,
-        Ward7 = nil,
-        Cabinets = nil,
-        LabScanner = nil,
+        -- Палаты 1 - 7: Койка (Bed) и Устройство/Сканер (Device)
+        Ward1_Bed = Vector3.new(-168.42, 5.81, -41.04),
+        Ward1_Device = nil,
+        Ward2_Bed = Vector3.new(-121.33, 5.81, -59.95),
+        Ward2_Device = nil,
+        Ward3_Bed = Vector3.new(-168.08, 5.81, -80.10),
+        Ward3_Device = nil,
+        Ward4_Bed = Vector3.new(-121.16, 5.81, -99.06),
+        Ward4_Device = nil,
+        Ward5_Bed = Vector3.new(-153.91, 5.81, -114.83),
+        Ward5_Device = nil,
+        Ward6_Bed = nil,
+        Ward6_Device = nil,
+        Ward7_Bed = nil,
+        Ward7_Device = nil,
+
+        -- 💊 Шкафы в коридоре (По цветам на фото)
+        Cabinet_Green = nil,   -- 🟩 Зеленый шкаф (Травы / Таблетки)
+        Cabinet_Blue = nil,    -- 🟦 Синий шкаф (Капли / Капельницы)
+        Cabinet_Red = nil,     -- 🟥 Красный шкаф (Аптечки / Термометры)
+        Cabinet_Yellow = nil,  -- 🟨 Желтый шкаф (Сиропы / Микстуры)
+        Cabinet_Grey = nil,    -- ⬜ Серый шкаф (Бинты / Пластыри)
+
+        -- 🏢 Инфраструктура
         Reception = Vector3.new(-108.72, 3.41, 10.20),
         Coffee = Vector3.new(-123.82, 7.93, 10.22)
     }
 
-    -- Конфигурация
+    -- Загрузка точек из файла Waypoints.json
+    pcall(function()
+        if readfile and isfile and isfile("AverlikHub/Waypoints.json") then
+            local data = HttpService:JSONDecode(readfile("AverlikHub/Waypoints.json"))
+            if data and type(data) == "table" then
+                for k, v in pairs(data) do
+                    if v and v.x and v.y and v.z then
+                        local vec = Vector3.new(v.x, v.y, v.z)
+                        CustomWaypoints[k] = vec
+                        -- Обратная совместимость с форматом Ward1..Ward7
+                        if string.sub(k, 1, 4) == "Ward" and not string.find(k, "_") then
+                            CustomWaypoints[k .. "_Bed"] = vec
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    -- Конфигурация хаба
     local Config = {
         AutoHospitalCycle = false,
         AutoRegistration = true,
@@ -139,20 +180,6 @@ local function RunAverlikHub()
         SidebarColor = Color3.fromRGB(13, 13, 16),
         SelectedConfig = "Default"
     }
-
-    -- Загрузка точек из файла если существует
-    pcall(function()
-        if readfile and isfile and isfile("AverlikHub/Waypoints.json") then
-            local data = HttpService:JSONDecode(readfile("AverlikHub/Waypoints.json"))
-            if data and type(data) == "table" then
-                for k, v in pairs(data) do
-                    if v and v.x and v.y and v.z then
-                        CustomWaypoints[k] = Vector3.new(v.x, v.y, v.z)
-                    end
-                end
-            end
-        end
-    end)
 
     local function SafeFind(str, query)
         if not str or type(str) ~= "string" or not query then return false end
@@ -284,11 +311,11 @@ local function RunAverlikHub()
         return nil
     end
 
-    local function FindWardBedPosition(wardNumber)
-        local key = "Ward" .. tostring(wardNumber)
-        if CustomWaypoints[key] then
-            return CustomWaypoints[key]
-        end
+    -- Получение позиции койки палаты
+    local function GetWardBedPosition(wardNumber)
+        local key = "Ward" .. tostring(wardNumber) .. "_Bed"
+        if CustomWaypoints[key] then return CustomWaypoints[key] end
+        if CustomWaypoints["Ward" .. tostring(wardNumber)] then return CustomWaypoints["Ward" .. tostring(wardNumber)] end
 
         local wardModel = FindWardModel(wardNumber)
         if wardModel then
@@ -298,6 +325,24 @@ local function RunAverlikHub()
             end
             local anyPart = wardModel:FindFirstChildWhichIsA("BasePart", true)
             if anyPart then return anyPart.Position end
+        end
+        return nil
+    end
+
+    -- Получение позиции устройства/сканера палаты
+    local function GetWardDevicePosition(wardNumber)
+        local key = "Ward" .. tostring(wardNumber) .. "_Device"
+        if CustomWaypoints[key] then return CustomWaypoints[key] end
+
+        local wardModel = FindWardModel(wardNumber)
+        if wardModel then
+            for _, p in pairs(wardModel:GetDescendants()) do
+                local pName = string.lower(p.Name)
+                if SafeFind(pName, "scanner") or SafeFind(pName, "centrifuge") or SafeFind(pName, "pc") or SafeFind(pName, "computer") or SafeFind(pName, "desk") or SafeFind(pName, "стол") then
+                    if p:IsA("BasePart") then return p.Position
+                    elseif p:IsA("Model") and p.PrimaryPart then return p.PrimaryPart.Position end
+                end
+            end
         end
         return nil
     end
@@ -533,8 +578,8 @@ local function RunAverlikHub()
     -- Главное окно
     local cam = Workspace.CurrentCamera
     local vpSize = cam and cam.ViewportSize or Vector2.new(1280, 720)
-    local winW = math.clamp(vpSize.X - 40, 340, 680)
-    local winH = math.clamp(vpSize.Y - 60, 300, 460)
+    local winW = math.clamp(vpSize.X - 40, 360, 700)
+    local winH = math.clamp(vpSize.Y - 60, 320, 480)
 
     local MainWindow = Instance.new("Frame")
     MainWindow.Name = "MainWindow"
@@ -1077,15 +1122,15 @@ local function RunAverlikHub()
 
         function tabObj:CreateDualButton(titleLeft, titleRight, callbackLeft, callbackRight)
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 34)
+            row.Size = UDim2.new(1, 0, 0, 32)
             row.BackgroundTransparency = 1
             row.ZIndex = 1004
             row.Parent = pageScroll
 
             local btnL = Instance.new("TextButton")
-            btnL.Size = UDim2.new(0.68, -4, 1, 0)
+            btnL.Size = UDim2.new(0.72, -4, 1, 0)
             btnL.Position = UDim2.new(0, 0, 0, 0)
-            btnL.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+            btnL.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
             btnL.BorderSizePixel = 0
             btnL.Text = titleLeft
             btnL.Font = Enum.Font.GothamMedium
@@ -1099,13 +1144,13 @@ local function RunAverlikHub()
             cL.Parent = btnL
 
             local sL = Instance.new("UIStroke")
-            sL.Color = Color3.fromRGB(45, 45, 60)
+            sL.Color = Color3.fromRGB(40, 40, 56)
             sL.Thickness = 1
             sL.Parent = btnL
 
             local btnR = Instance.new("TextButton")
-            btnR.Size = UDim2.new(0.32, -4, 1, 0)
-            btnR.Position = UDim2.new(0.68, 4, 0, 0)
+            btnR.Size = UDim2.new(0.28, -4, 1, 0)
+            btnR.Position = UDim2.new(0.72, 4, 0, 0)
             btnR.BackgroundColor3 = Config.AccentColor
             btnR.BorderSizePixel = 0
             btnR.Text = titleRight
@@ -1302,18 +1347,18 @@ local function RunAverlikHub()
     end
 
     -- Вкладки хаба
-    local TabHospital  = CreateTab("Больница", "🩺", "Авто-цикл: Палаты 1 - 5 (Как на видео)", 1)
-    local TabWaypoints = CreateTab("Точки ТП", "📍", "Настройка кастомных точек телепорта", 2)
+    local TabHospital  = CreateTab("Больница", "🩺", "Авто-цикл: Палаты 1 - 5 (Полный процесс)", 1)
+    local TabWaypoints = CreateTab("Точки ТП", "📍", "Настройка палат (Койка/Сканер) и шкафов", 2)
     local TabRoom7     = CreateTab("Палата 7", "⚡", "Реанимация, ЭКГ сердца и капельница", 3)
-    local TabTeleports = CreateTab("Телепорты", "🚀", "Мгновенное перемещение по палатам 1-7", 4)
+    local TabTeleports = CreateTab("Телепорты", "🚀", "Мгновенное перемещение по всем объектам", 4)
     local TabAutoFarm  = CreateTab("Авто фарм", "💲", "Автоматизация больницы и заработка", 5)
     local TabPlayer    = CreateTab("Игрок", "👤", "Модификаторы скорости, прыжка и рассудка", 6)
     local TabMisc      = CreateTab("Misc", "📄", "Сервер, FPS Boost и настройки графики", 7)
     local TabSettings  = CreateTab("Settings", "⚙️", "Конфигурация и интерфейс", 8)
 
-    -- 1. БОЛЬНИЦА (ПАЛАТЫ 1 - 5 ПОЛНЫЙ ЦИКЛ)
-    TabHospital:CreateSection("Авто-прохождение палат 1 - 5")
-    TabHospital:CreateToggle("Авто-цикл больницы (Палаты 1-5)", "Проходит все 5 шагов: ДНК ➔ Сканер ➔ Аптека ➔ Лечение", Config.AutoHospitalCycle, function(val)
+    -- 1. БОЛЬНИЦА
+    TabHospital:CreateSection("Авто-прохождение палат 1 - 5 (Полный цикл)")
+    TabHospital:CreateToggle("Авто-цикл больницы (Палаты 1-5)", "Проходит все 5 шагов: ДНК ➔ Сканер ➔ Шкаф ➔ Лечение", Config.AutoHospitalCycle, function(val)
         Config.AutoHospitalCycle = val
         SendNotification("Больница", val and "Авто-цикл больницы запущен!" or "Авто-цикл выключен", 3)
     end)
@@ -1325,9 +1370,9 @@ local function RunAverlikHub()
     end)
 
     TabHospital:CreateSection("Быстрые действия")
-    TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить слоты)", true, function()
+    TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить инвентарь)", true, function()
         task.spawn(function()
-            local cabPos = CustomWaypoints.Cabinets
+            local cabPos = CustomWaypoints.Cabinet_Green or CustomWaypoints.Cabinet_Blue or CustomWaypoints.Cabinet_Red or CustomWaypoints.Cabinet_Yellow or CustomWaypoints.Cabinet_Grey
             if cabPos then TeleportTo(cabPos) end
             local count = 0
             for _, obj in pairs(Workspace:GetDescendants()) do
@@ -1366,8 +1411,8 @@ local function RunAverlikHub()
         end)
     end)
 
-    -- 2. ТОЧКИ ТЕЛЕПОРТА (КАСТОМНЫЙ РЕДАКТОР)
-    TabWaypoints:CreateSection("Кастомная запись точек телепорта")
+    -- 2. ТОЧКИ ТЕЛЕПОРТА (КАСТОМНЫЙ РЕДАКТОР ПАЛАТ И ШКАФОВ)
+    TabWaypoints:CreateSection("💾 Сохранение")
     TabWaypoints:CreateButton("💾 Сохранить все точки в файл (Waypoints.json)", true, function()
         pcall(function()
             if writefile and makefolder then
@@ -1383,37 +1428,52 @@ local function RunAverlikHub()
     end)
 
     local function MakeWaypointRow(keyName, displayName)
-        TabWaypoints:CreateDualButton("📍 Записать точку: " .. displayName, "🚀 ТП", function()
+        TabWaypoints:CreateDualButton("📍 " .. displayName, "🚀 ТП", function()
             local pos = GetMyPosition()
             if pos then
                 CustomWaypoints[keyName] = pos
                 SendNotification("Точка сохранена", displayName .. ": (" .. math.floor(pos.X) .. ", " .. math.floor(pos.Y) .. ", " .. math.floor(pos.Z) .. ")", 2)
             end
         end, function()
-            local pos = CustomWaypoints[keyName] or FindWardBedPosition(tonumber(string.match(keyName, "%d+")) or 1)
+            local pos = CustomWaypoints[keyName]
+            if not pos and string.find(keyName, "Bed") then
+                local num = tonumber(string.match(keyName, "%d+")) or 1
+                pos = GetWardBedPosition(num)
+            elseif not pos and string.find(keyName, "Device") then
+                local num = tonumber(string.match(keyName, "%d+")) or 1
+                pos = GetWardDevicePosition(num)
+            end
+
             if pos then
                 TeleportTo(pos)
                 SendNotification("Телепорт", "Перемещен к: " .. displayName, 2)
             else
-                SendNotification("Ошибка", "Сначала подойдите и нажмите 'Записать точку'", 2)
+                SendNotification("Ошибка", "Сначала подойдите и нажмите '📍 Записать'", 2)
             end
         end)
     end
 
-    TabWaypoints:CreateSection("Палаты (Койки пациентов)")
-    MakeWaypointRow("Ward1", "Палата 1 (Койка)")
-    MakeWaypointRow("Ward2", "Палата 2 (Койка)")
-    MakeWaypointRow("Ward3", "Палата 3 (Койка)")
-    MakeWaypointRow("Ward4", "Палата 4 (Койка)")
-    MakeWaypointRow("Ward5", "Палата 5 (Койка)")
-    MakeWaypointRow("Ward6", "Палата 6 (Койка)")
-    MakeWaypointRow("Ward7", "Палата 7 (Реанимация)")
+    -- Настройка для каждой палаты (Койка + Устройство)
+    for i = 1, 6 do
+        TabWaypoints:CreateSection("Палата " .. tostring(i) .. " (Койка + Сканер)")
+        MakeWaypointRow("Ward" .. tostring(i) .. "_Bed", "Палата " .. tostring(i) .. ": Койка пациента")
+        MakeWaypointRow("Ward" .. tostring(i) .. "_Device", "Палата " .. tostring(i) .. ": Устройство / Сканер")
+    end
 
-    TabWaypoints:CreateSection("Инфраструктура")
-    MakeWaypointRow("Cabinets", "Шкаф с лекарствами")
-    MakeWaypointRow("LabScanner", "Лаборатория (Сканер)")
-    MakeWaypointRow("Reception", "Ресепшен (Вход)")
-    MakeWaypointRow("Coffee", "Кофейный автомат")
+    TabWaypoints:CreateSection("Палата 7 (Реанимация)")
+    MakeWaypointRow("Ward7_Bed", "Палата 7: Стол пациента")
+    MakeWaypointRow("Ward7_Device", "Палата 7: ЭКГ Монитор сердца")
+
+    TabWaypoints:CreateSection("💊 Шкафы в коридоре (По цветам на фото)")
+    MakeWaypointRow("Cabinet_Green", "🟩 Зеленый шкаф (Травы / Таблетки)")
+    MakeWaypointRow("Cabinet_Blue", "🟦 Синий шкаф (Капли / Капельницы)")
+    MakeWaypointRow("Cabinet_Red", "🟥 Красный шкаф (Аптечки / Термометры)")
+    MakeWaypointRow("Cabinet_Yellow", "🟨 Желтый шкаф (Сиропы / Микстуры)")
+    MakeWaypointRow("Cabinet_Grey", "⬜ Серый шкаф (Бинты / Пластыри)")
+
+    TabWaypoints:CreateSection("🏢 Инфраструктура")
+    MakeWaypointRow("Reception", "📋 Ресепшен (Вход / Регистрация)")
+    MakeWaypointRow("Coffee", "☕ Кофейный автомат (Рассудок)")
 
     -- 3. ПАЛАТА 7 (РЕАНИМАЦИЯ)
     TabRoom7:CreateSection("Реанимация Палаты 7")
@@ -1433,18 +1493,49 @@ local function RunAverlikHub()
     end)
 
     -- 4. ТЕЛЕПОРТЫ
-    TabTeleports:CreateSection("Все палаты больницы (1 - 7)")
+    TabTeleports:CreateSection("Койки палат (1 - 7)")
     for i = 1, 6 do
-        TabTeleports:CreateButton("Палата " .. tostring(i) .. " (Койка пациента)", i <= 3, function()
-            local cf = FindWardBedPosition(i)
-            if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату " .. tostring(i), 2)
+        TabTeleports:CreateButton("Палата " .. tostring(i) .. " (Койка)", i <= 3, function()
+            local pos = GetWardBedPosition(i)
+            if pos then TeleportTo(pos); SendNotification("Телепорт", "Перемещен в Палату " .. tostring(i), 2)
             else SendNotification("Телепорт", "Палата " .. tostring(i) .. " не найдена", 2) end
         end)
     end
     TabTeleports:CreateButton("Палата 7 (Реанимация / ICU)", true, function()
-        local cf = FindWardBedPosition(7)
-        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 7 (Реанимация)", 2)
+        local pos = CustomWaypoints.Ward7_Bed or GetWardBedPosition(7)
+        if pos then TeleportTo(pos); SendNotification("Телепорт", "Перемещен в Палату 7 (Реанимация)", 2)
         else SendNotification("Телепорт", "Палата 7 не найдена", 2) end
+    end)
+
+    TabTeleports:CreateSection("Устройства / Сканеры палат (1 - 6)")
+    for i = 1, 6 do
+        TabTeleports:CreateButton("Палата " .. tostring(i) .. " (Сканер/Стол)", false, function()
+            local pos = GetWardDevicePosition(i) or GetWardBedPosition(i)
+            if pos then TeleportTo(pos); SendNotification("Телепорт", "Перемещен к сканеру Палаты " .. tostring(i), 2)
+            else SendNotification("Телепорт", "Точка сканера не записана", 2) end
+        end)
+    end
+
+    TabTeleports:CreateSection("Шкафы с медикаментами")
+    TabTeleports:CreateButton("🟩 Зеленый шкаф (Травы / Таблетки)", false, function()
+        if CustomWaypoints.Cabinet_Green then TeleportTo(CustomWaypoints.Cabinet_Green); SendNotification("Телепорт", "Зеленый шкаф", 2)
+        else SendNotification("Телепорт", "Точка зеленого шкафа еще не записана", 2) end
+    end)
+    TabTeleports:CreateButton("🟦 Синий шкаф (Капли / Капельницы)", false, function()
+        if CustomWaypoints.Cabinet_Blue then TeleportTo(CustomWaypoints.Cabinet_Blue); SendNotification("Телепорт", "Синий шкаф", 2)
+        else SendNotification("Телепорт", "Точка синего шкафа еще не записана", 2) end
+    end)
+    TabTeleports:CreateButton("🟥 Красный шкаф (Аптечки / Термометры)", false, function()
+        if CustomWaypoints.Cabinet_Red then TeleportTo(CustomWaypoints.Cabinet_Red); SendNotification("Телепорт", "Красный шкаф", 2)
+        else SendNotification("Телепорт", "Точка красного шкафа еще не записана", 2) end
+    end)
+    TabTeleports:CreateButton("🟨 Желтый шкаф (Сиропы / Микстуры)", false, function()
+        if CustomWaypoints.Cabinet_Yellow then TeleportTo(CustomWaypoints.Cabinet_Yellow); SendNotification("Телепорт", "Желтый шкаф", 2)
+        else SendNotification("Телепорт", "Точка желтого шкафа еще не записана", 2) end
+    end)
+    TabTeleports:CreateButton("⬜ Серый шкаф (Бинты / Пластыри)", false, function()
+        if CustomWaypoints.Cabinet_Grey then TeleportTo(CustomWaypoints.Cabinet_Grey); SendNotification("Телепорт", "Серый шкаф", 2)
+        else SendNotification("Телепорт", "Точка серого шкафа еще не записана", 2) end
     end)
 
     -- 5. АВТО ФАРМ
@@ -1557,7 +1648,7 @@ local function RunAverlikHub()
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🎬 УМНЫЙ ЦИКЛ БОЛЬНИЦЫ (С ИСПОЛЬЗОВАНИЕМ КАСТОМНЫХ ТОЧЕК И ПОИСКА БОЛЬНЫХ)
+    -- 🎬 УМНЫЙ ЦИКЛ БОЛЬНИЦЫ (КОЙКА ➔ УСТРОЙСТВО/СКАНЕР ➔ ШКАФ ➔ КОЙКА)
     -- ══════════════════════════════════════════════════════════════════════════
     local isHospitalRunning = false
 
@@ -1583,129 +1674,98 @@ local function RunAverlikHub()
             end
         end
 
-        -- 1. Сначала проверяем: есть ли активный больной для ДНК или Лечения в ЛЮБОЙ палате
-        local activeDnaPrompt = nil
-        local activeHealPrompt = nil
+        -- Проход по палатам 1 - 5 (Койка ➔ Устройство ➔ Шкаф ➔ Лечение)
+        for wardNum = 1, 5 do
+            if not Config.AutoHospitalCycle then break end
 
-        for _, p in pairs(Workspace:GetDescendants()) do
-            if IsDNAPrompt(p) then
-                activeDnaPrompt = p
-                break
-            elseif IsHealPrompt(p) then
-                activeHealPrompt = p
-                break
-            end
-        end
+            local bedPos = GetWardBedPosition(wardNum)
+            local devPos = GetWardDevicePosition(wardNum)
 
-        -- 2. Если есть пациент для ДНК анализа:
-        if activeDnaPrompt then
-            local pCF = GetPromptTargetCFrame(activeDnaPrompt)
-            if pCF then
-                TeleportTo(pCF)
+            if bedPos then
+                -- ШАГ 1: Телепорт к койке пациента
+                TeleportTo(bedPos)
                 task.wait(0.3)
-                SafeInteractPrompt(activeDnaPrompt)
-                task.wait(1.0) -- Взятие ДНК
 
-                -- Перенос в лабораторию
-                local labPos = CustomWaypoints.LabScanner
-                if labPos then
-                    TeleportTo(labPos)
-                    task.wait(0.2)
-                end
-
-                for _, lObj in pairs(Workspace:GetDescendants()) do
-                    if IsLabMachinePrompt(lObj) then
-                        local lCF = GetPromptTargetCFrame(lObj)
-                        if lCF then
-                            TeleportTo(lCF)
-                            task.wait(0.2)
-                            SafeInteractPrompt(lObj)
-                            task.wait(2.2) -- Ожидание расшифровки анализа
+                -- Проверяем: есть ли больной для ДНК анализа на койке
+                local dnaFound = false
+                for _, p in pairs(Workspace:GetDescendants()) do
+                    if IsDNAPrompt(p) then
+                        local pCF = GetPromptTargetCFrame(p)
+                        if pCF and (pCF.Position - bedPos).Magnitude < 18 then
+                            SafeInteractPrompt(p)
+                            task.wait(1.0) -- Взятие ДНК
+                            dnaFound = true
                             break
                         end
                     end
                 end
-            end
-        end
 
-        -- 3. Если есть пациент для лечения:
-        if activeHealPrompt then
-            -- Проверяем инвентарь: есть ли лекарство?
-            local bp = LocalPlayer:FindFirstChild("Backpack")
-            local char = LocalPlayer.Character
-            local hasTool = false
-            if char and char:FindFirstChildWhichIsA("Tool") then hasTool = true end
-            if bp and #bp:GetChildren() > 0 then hasTool = true end
-
-            -- Если нет лекарства в руках/рюкзаке — берем из шкафа
-            if not hasTool then
-                local cabPos = CustomWaypoints.Cabinets
-                if cabPos then
-                    TeleportTo(cabPos)
-                    task.wait(0.2)
-                end
-                for _, cabObj in pairs(Workspace:GetDescendants()) do
-                    if IsCabinetPrompt(cabObj) then
-                        local cabCF = GetPromptTargetCFrame(cabObj)
-                        if cabCF then
-                            TeleportTo(cabCF)
-                            task.wait(0.2)
-                            SafeInteractPrompt(cabObj)
-                            task.wait(0.4)
-                            break
-                        end
+                -- ШАГ 2 & 3: Если взяли ДНК — переносим в устройство/сканер
+                if dnaFound then
+                    if devPos then
+                        TeleportTo(devPos)
+                        task.wait(0.25)
                     end
-                end
-            end
 
-            -- Подходим к больному, берем лекарство и лечим
-            local hCF = GetPromptTargetCFrame(activeHealPrompt)
-            if hCF then
-                TeleportTo(hCF)
-                task.wait(0.25)
-                EquipMedicalTool()
-                task.wait(0.15)
-                SafeInteractPrompt(activeHealPrompt)
-                task.wait(1.4) -- Лечение
-            end
-        end
-
-        -- 4. Если нет напрямую найденных промптов — обходим палаты по очереди (по кастомным точкам или авто-поиску)
-        if not activeDnaPrompt and not activeHealPrompt then
-            for wardNum = 1, 5 do
-                if not Config.AutoHospitalCycle then break end
-                local wardPos = FindWardBedPosition(wardNum)
-                if wardPos then
-                    TeleportTo(wardPos)
-                    task.wait(0.3)
-
-                    -- Проверяем промпты рядом с койкой (в радиусе 15 studs)
-                    for _, p in pairs(Workspace:GetDescendants()) do
-                        if IsDNAPrompt(p) or IsHealPrompt(p) then
-                            local pCF = GetPromptTargetCFrame(p)
-                            if pCF and (pCF.Position - wardPos).Magnitude < 18 then
-                                if IsDNAPrompt(p) then
-                                    SafeInteractPrompt(p)
-                                    task.wait(1.0)
-                                    -- Сканер
-                                    local labPos = CustomWaypoints.LabScanner
-                                    if labPos then TeleportTo(labPos); task.wait(0.2) end
-                                    for _, lObj in pairs(Workspace:GetDescendants()) do
-                                        if IsLabMachinePrompt(lObj) then
-                                            local lCF = GetPromptTargetCFrame(lObj)
-                                            if lCF then TeleportTo(lCF); SafeInteractPrompt(lObj); task.wait(2.2); break end
-                                        end
-                                    end
-                                elseif IsHealPrompt(p) then
-                                    EquipMedicalTool()
-                                    SafeInteractPrompt(p)
-                                    task.wait(1.4)
-                                end
+                    for _, lObj in pairs(Workspace:GetDescendants()) do
+                        if IsLabMachinePrompt(lObj) then
+                            local lCF = GetPromptTargetCFrame(lObj)
+                            if lCF and ((devPos and (lCF.Position - devPos).Magnitude < 25) or (lCF.Position - bedPos).Magnitude < 35) then
+                                TeleportTo(lCF)
+                                task.wait(0.2)
+                                SafeInteractPrompt(lObj)
+                                task.wait(2.2) -- Ожидание расшифровки анализа
                                 break
                             end
                         end
                     end
                 end
+
+                -- ШАГ 4: Проверка лекарства в инвентаре / Поход к шкафу
+                local bp = LocalPlayer:FindFirstChild("Backpack")
+                local char = LocalPlayer.Character
+                local hasMed = false
+                if char and char:FindFirstChildWhichIsA("Tool") then hasMed = true end
+                if bp and #bp:GetChildren() > 0 then hasMed = true end
+
+                if not hasMed then
+                    -- Идем к шкафу (используем кастомные точки цветных шкафов если записаны)
+                    local cabPos = CustomWaypoints.Cabinet_Green or CustomWaypoints.Cabinet_Blue or CustomWaypoints.Cabinet_Red or CustomWaypoints.Cabinet_Yellow or CustomWaypoints.Cabinet_Grey
+                    if cabPos then
+                        TeleportTo(cabPos)
+                        task.wait(0.25)
+                    end
+
+                    for _, cabObj in pairs(Workspace:GetDescendants()) do
+                        if IsCabinetPrompt(cabObj) then
+                            local cabCF = GetPromptTargetCFrame(cabObj)
+                            if cabCF then
+                                TeleportTo(cabCF)
+                                task.wait(0.2)
+                                SafeInteractPrompt(cabObj)
+                                task.wait(0.4)
+                                break
+                            end
+                        end
+                    end
+                end
+
+                -- ШАГ 5: Возврат к койке с лекарством в руках и лечение
+                TeleportTo(bedPos)
+                task.wait(0.25)
+                for _, p in pairs(Workspace:GetDescendants()) do
+                    if IsHealPrompt(p) then
+                        local pCF = GetPromptTargetCFrame(p)
+                        if pCF and (pCF.Position - bedPos).Magnitude < 18 then
+                            EquipMedicalTool()
+                            task.wait(0.15)
+                            SafeInteractPrompt(p)
+                            task.wait(1.4) -- Лечение
+                            break
+                        end
+                    end
+                end
+
                 task.wait(Config.StepDelay or 0.5)
             end
         end
@@ -1730,12 +1790,14 @@ local function RunAverlikHub()
             if Config.Room7_AutoCycle and not isHandlingRoom7 then
                 isHandlingRoom7 = true
                 pcall(function()
-                    local room7Pos = CustomWaypoints.Ward7 or FindWardBedPosition(7)
+                    local room7Pos = CustomWaypoints.Ward7_Bed or GetWardBedPosition(7)
+                    local room7Dev = CustomWaypoints.Ward7_Device or room7Pos
                     if room7Pos then
                         TeleportTo(room7Pos)
                         task.wait(0.25)
 
                         if Config.Room7_AutoHeartGame then
+                            if room7Dev then TeleportTo(room7Dev); task.wait(0.2) end
                             for i = 1, 15 do
                                 SolveHeartMinigame()
                                 task.wait(0.1)
@@ -1750,7 +1812,7 @@ local function RunAverlikHub()
                             if bp and #bp:GetChildren() > 0 then hasDrip = true end
 
                             if not hasDrip then
-                                local cabPos = CustomWaypoints.Cabinets
+                                local cabPos = CustomWaypoints.Cabinet_Blue or CustomWaypoints.Cabinet_Red or CustomWaypoints.Cabinet_Green
                                 if cabPos then TeleportTo(cabPos); task.wait(0.2) end
                                 for _, medObj in pairs(Workspace:GetDescendants()) do
                                     if IsCabinetPrompt(medObj) then
@@ -1815,8 +1877,8 @@ local function RunAverlikHub()
         end
     end)
 
-    SendNotification("Averlik Hub", "Averlik Hub загружен! Вкладка 'Точки ТП' доступна для настройки.", 4)
-    print("[Averlik Hub] Кастомный менеджер точек готов к работе!")
+    SendNotification("Averlik Hub", "Animal Hospital загружен! Настройте точки в 'Точки ТП'.", 4)
+    print("[Averlik Hub] Кастомная настройка палат и шкафов готова!")
 end
 
 local ok, err = pcall(RunAverlikHub)
