@@ -1195,6 +1195,64 @@ local function RunAverlikHub()
             table.insert(tabObj.Elements, {Type = "Slider", Title = title, Card = sliderCard})
         end
 
+        function tabObj:CreateInput(title, placeholder, defaultVal, callback)
+            local inputCard = Instance.new("Frame")
+            inputCard.Name = "Input_" .. title
+            inputCard.Size = UDim2.new(1, 0, 0, 44)
+            inputCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
+            inputCard.BorderSizePixel = 0
+            inputCard.ZIndex = 1004
+            inputCard.Parent = pageScroll
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 8)
+            corner.Parent = inputCard
+
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = Color3.fromRGB(28, 28, 38)
+            stroke.Thickness = 1
+            stroke.Parent = inputCard
+
+            local tLabel = Instance.new("TextLabel")
+            tLabel.Text = title
+            tLabel.Font = Enum.Font.GothamMedium
+            tLabel.TextSize = 11
+            tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
+            tLabel.Position = UDim2.new(0, 10, 0, 0)
+            tLabel.Size = UDim2.new(0.5, 0, 1, 0)
+            tLabel.BackgroundTransparency = 1
+            tLabel.TextXAlignment = Enum.TextXAlignment.Left
+            tLabel.ZIndex = 1005
+            tLabel.Parent = inputCard
+
+            local tbBox = Instance.new("TextBox")
+            tbBox.Size = UDim2.new(0.45, 0, 0, 26)
+            tbBox.Position = UDim2.new(0.52, 0, 0.5, -13)
+            tbBox.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+            tbBox.BorderSizePixel = 0
+            tbBox.Text = defaultVal or ""
+            tbBox.PlaceholderText = placeholder or ""
+            tbBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
+            tbBox.Font = Enum.Font.Gotham
+            tbBox.TextSize = 11
+            tbBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tbBox.ClearTextOnFocus = false
+            tbBox.ZIndex = 1005
+            tbBox.Parent = inputCard
+
+            local tbCorner = Instance.new("UICorner")
+            tbCorner.CornerRadius = UDim.new(0, 6)
+            tbCorner.Parent = tbBox
+
+            tbBox.FocusLost:Connect(function()
+                if callback then callback(tbBox.Text) end
+            end)
+
+            table.insert(tabObj.Elements, {Type = "Input", Title = title, Card = inputCard})
+            return tbBox
+        end
+
+
         return tabObj
     end
 
