@@ -668,7 +668,7 @@ local function RunAverlikHub()
     Sidebar.BackgroundColor3 = Config.SidebarColor
     Sidebar.BorderSizePixel = 0
     Sidebar.ZIndex = 1001
-    Sidebar.Parent = Sidebar
+    Sidebar.Parent = MainWindow
 
     local SidebarCorner = Instance.new("UICorner")
     SidebarCorner.CornerRadius = UDim.new(0, 14)
