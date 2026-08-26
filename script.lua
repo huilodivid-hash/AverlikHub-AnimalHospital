@@ -1,11 +1,14 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (PERFECT BED & PATIENT DETECTION)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (FULL HOSPITAL GAMEPLAY AUTOMATION)
     ══════════════════════════════════════════════════════════════════════════════════
     • Точный дизайн: Averlik Hub (Glassmorphism & Neon Purple #d946ef)
     • Совместимость: 100% Все эксплоиты (Solara, Wave, Delta, Arceus X, Codex, etc.)
-    • Точный ТП к койке: Поддержка Attachment/WorldCFrame, строгая фильтрация дверей
-      и кофе, мгновенный ТП прямо к больному животному на кровати!
+    • Разделение объектов:
+        - Койки пациентов (Палаты 1-5, взятие анализов ДНК, лечение, уход)
+        - Шкафы с медикаментами (Кленовый сироп, Травы, Таблетки, Аптечка, Бинты)
+        - Лабораторные компьютеры и сканеры анализов
+        - Автоматы с кофе для рассудка
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
@@ -114,6 +117,8 @@ local function RunAverlikHub()
         -- Больница
         AutoHeal = false,
         AutoHealTeleport = true,
+        AutoTakeMedicine = true,     -- Автоматически брать лекарства со шкафа
+        AutoScanner = true,          -- Автоматически сдавать анализ в сканер
         AutoEquipTools = true,
         PriorityHeal = true,
         HealDelay = 0.8,
@@ -121,6 +126,7 @@ local function RunAverlikHub()
         AutoClean = false,
         AutoCare = false,
         ESP_Patients = false,
+        ESP_Cabinets = false,
 
         -- Задания
         AutoAcceptQuests = false,
@@ -167,65 +173,95 @@ local function RunAverlikHub()
         return string.find(string.lower(str), string.lower(query), 1, true) ~= nil
     end
 
-    -- Исключения: Двери, Кофе, Магазины, Мусор
-    local function IsIgnoredObject(prompt)
+    -- Проверка на игнорируемые объекты (двери, мусор)
+    local function IsDoorOrTrash(prompt)
         if not prompt or not prompt:IsA("ProximityPrompt") then return true end
         local act = string.lower(tostring(prompt.ActionText or ""))
         local objT = string.lower(tostring(prompt.ObjectText or ""))
         local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
-        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
-
-        -- Двери (любые ручки, двери, вход, выход)
         if SafeFind(act, "door") or SafeFind(act, "двер") or SafeFind(act, "откры") or SafeFind(act, "open") or SafeFind(act, "закры") or SafeFind(act, "close") then return true end
         if SafeFind(objT, "door") or SafeFind(objT, "двер") or SafeFind(pName, "door") or SafeFind(pName, "двер") or SafeFind(pName, "handle") or SafeFind(pName, "knob") then return true end
-
-        -- Кофе и рассудок
-        if SafeFind(act, "coffee") or SafeFind(act, "кофе") or SafeFind(objT, "coffee") or SafeFind(objT, "кофе") or SafeFind(objT, "рассудок") or SafeFind(pName, "coffee") then return true end
-
-        -- Магазин и NPC диалоги
-        if SafeFind(act, "shop") or SafeFind(act, "магаз") or SafeFind(objT, "shop") or SafeFind(objT, "купить") or SafeFind(pName, "shop") or SafeFind(pName, "merchant") then return true end
-
-        -- Мусорки
-        if SafeFind(act, "trash") or SafeFind(act, "мусор") or SafeFind(objT, "trash") or SafeFind(objT, "мусор") or SafeFind(pName, "trash") or SafeFind(pName, "bin") then return true end
-
+        if SafeFind(act, "trash") or SafeFind(act, "мусор") or SafeFind(objT, "trash") or SafeFind(pName, "trash") or SafeFind(pName, "bin") then return true end
         return false
     end
 
-    -- Проверка, является ли промпт пациентом / койкой
-    local function IsPatientMedicalPrompt(prompt)
+    -- Определение: промпт на койке/пациенте
+    local function IsBedPatientPrompt(prompt)
         if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
-        if IsIgnoredObject(prompt) then return false end
+        if IsDoorOrTrash(prompt) then return false end
+
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
+        local ggName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Parent and prompt.Parent.Parent.Parent.Name or ""))
+
+        -- Исключаем шкафы и полки в коридоре
+        if SafeFind(pName, "shelf") or SafeFind(pName, "cabinet") or SafeFind(pName, "шкаф") or SafeFind(pName, "полк") or SafeFind(gName, "shelf") or SafeFind(gName, "cabinet") or SafeFind(gName, "шкаф") then
+            return false
+        end
 
         local act = string.lower(tostring(prompt.ActionText or ""))
         local objT = string.lower(tostring(prompt.ObjectText or ""))
-        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
-        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
 
-        -- Ключевые слова процедур
-        local keywords = {
-            "анализ", "днк", "укол", "лекарств", "таблетк", "лечить", "помочь", "диагноз", "осмотр",
-            "больно", "пациент", "животн", "кот", "собак", "капельниц", "бинтов", "термометр",
-            "стетоскоп", "взять", "сделать", "дать", "покормить", "помыть", "вылечить", "уход",
-            "heal", "treat", "cure", "med", "dna", "test", "help", "diag", "exam", "inj",
-            "shot", "pill", "bandage", "care", "feed", "clean", "patient", "animal", "bed",
-            "cage", "pet", "cat", "dog", "take", "give", "do"
-        }
-
-        for _, w in ipairs(keywords) do
-            if SafeFind(act, w) or SafeFind(objT, w) or SafeFind(pName, w) or SafeFind(gName, w) then
-                return true
-            end
+        -- Анализ ДНК
+        if SafeFind(act, "анализ") or SafeFind(act, "днк") or SafeFind(act, "dna") or SafeFind(act, "test") then
+            return true
         end
 
-        -- Промпты на койках/столах
-        if SafeFind(pName, "bed") or SafeFind(pName, "patient") or SafeFind(pName, "cat") or SafeFind(pName, "dog") or SafeFind(pName, "cage") or SafeFind(pName, "table") or SafeFind(pName, "койк") or SafeFind(pName, "кроват") then
+        -- На койке или в пациенте
+        if SafeFind(pName, "bed") or SafeFind(pName, "patient") or SafeFind(pName, "cat") or SafeFind(pName, "dog") or SafeFind(pName, "койк") or SafeFind(pName, "кроват") or SafeFind(gName, "bed") or SafeFind(gName, "patient") or SafeFind(ggName, "bed") then
             return true
         end
 
         return false
     end
 
-    -- Получение точной мировой CFrame точки промпта (с поддержкой Attachment)
+    -- Определение: промпт в шкафу с лекарствами
+    local function IsMedicineCabinetPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+        if IsDoorOrTrash(prompt) then return false end
+
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
+
+        if SafeFind(pName, "shelf") or SafeFind(pName, "cabinet") or SafeFind(pName, "шкаф") or SafeFind(pName, "полк") or SafeFind(gName, "shelf") or SafeFind(gName, "cabinet") or SafeFind(gName, "шкаф") or SafeFind(gName, "pharmacy") then
+            return true
+        end
+
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local medWords = {"сироп", "травы", "аптечка", "таблетк", "пластыр", "бинт", "шприц", "syrup", "herbs", "kit", "pill", "bandage"}
+        for _, m in ipairs(medWords) do
+            if SafeFind(act, m) and not SafeFind(pName, "bed") then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    -- Определение: сканер/компьютер анализов
+    local function IsLabScannerPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local objT = string.lower(tostring(prompt.ObjectText or ""))
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
+
+        if SafeFind(act, "сканир") or SafeFind(act, "scan") or SafeFind(act, "анализ") or SafeFind(act, "компьют") or SafeFind(act, "computer") or SafeFind(objT, "компьют") or SafeFind(pName, "scan") or SafeFind(pName, "pc") or SafeFind(pName, "lab") or SafeFind(gName, "table") or SafeFind(gName, "desk") then
+            return true
+        end
+        return false
+    end
+
+    -- Определение: кофейный автомат
+    local function IsCoffeePrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local objT = string.lower(tostring(prompt.ObjectText or ""))
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        return SafeFind(act, "coffee") or SafeFind(act, "кофе") or SafeFind(objT, "кофе") or SafeFind(objT, "рассудок") or SafeFind(pName, "coffee")
+    end
+
+    -- Получение точной CFrame точки
     local function GetPromptTargetCFrame(prompt)
         if not prompt then return nil end
         local parent = prompt.Parent
@@ -246,7 +282,7 @@ local function RunAverlikHub()
         return nil
     end
 
-    -- Экипировка инструментов / лекарств из рюкзака
+    -- Экипировка инструментов / лекарств
     local function EquipAnyMedicalTool()
         pcall(function()
             local bp = LocalPlayer:FindFirstChild("Backpack")
@@ -282,7 +318,7 @@ local function RunAverlikHub()
         return true
     end
 
-    -- Телепорт персонажа прямо к точке
+    -- Телепорт персонажа
     local function TeleportTo(cf)
         pcall(function()
             local char = LocalPlayer.Character
@@ -303,6 +339,26 @@ local function RunAverlikHub()
                 end
             end
         end)
+    end
+
+    -- Поиск конкретных палат на карте
+    local function FindWardCFrame(wardNumber)
+        local query = "палата " .. tostring(wardNumber)
+        local queryEng = "room " .. tostring(wardNumber)
+        local queryNum = tostring(wardNumber)
+
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") or obj:IsA("BasePart") then
+                local oName = string.lower(obj.Name)
+                if oName == query or oName == queryEng or (SafeFind(oName, "room") and SafeFind(oName, queryNum)) or (SafeFind(oName, "палат") and SafeFind(oName, queryNum)) then
+                    local bed = obj:FindFirstChild("Bed", true) or obj:FindFirstChildWhichIsA("BasePart", true)
+                    if bed then
+                        return bed:IsA("Model") and (bed.PrimaryPart and bed.PrimaryPart.CFrame or bed:GetBoundingBox()) or bed.CFrame
+                    end
+                end
+            end
+        end
+        return nil
     end
 
     -- Уведомления (Toasts)
@@ -1356,73 +1412,90 @@ local function RunAverlikHub()
     TabAutoFarm:CreateToggle("Автоустранение саботажей", "Автоматически чинит поломки, протечки и тушит пожары", Config.AutoFixSabotages, function(val)
         Config.AutoFixSabotages = val
     end)
-    TabAutoFarm:CreateButton("Устранить все саботажи сейчас", true, function()
-        local count = 0
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and (SafeFind(obj.ActionText, "fix") or SafeFind(obj.ActionText, "extinguish") or SafeFind(obj.ActionText, "repair") or SafeFind(obj.ObjectText, "sabotage") or SafeFind(obj.ObjectText, "leak")) then
-                SafeInteractPrompt(obj)
-                count = count + 1
-            end
-        end
-        SendNotification("Саботаж", "Устранено объектов: " .. tostring(count), 3)
-    end)
 
     -- 2. Больница
-    TabHospital:CreateSection("Лечение и уход (Умный поиск)")
-    TabHospital:CreateToggle("Автолечение", "Автоматически находит больных пациентов и лечит их", Config.AutoHeal, function(val)
+    TabHospital:CreateSection("Автоматизация лечения (Полный цикл)")
+    TabHospital:CreateToggle("Автолечение (Full Auto)", "Полный цикл: анализ ДНК -> сканер -> аптека -> лечение", Config.AutoHeal, function(val)
         Config.AutoHeal = val
         SendNotification("Больница", val and "Автолечение запущено!" or "Автолечение выключено", 2)
     end)
     TabHospital:CreateSlider("Задержка лечения (сек)", 0.2, 3.0, Config.HealDelay, function(val)
         Config.HealDelay = val
     end)
-    TabHospital:CreateToggle("Авто-ТП к больным", "Телепортирует прямо к койке пациента для лечения", Config.AutoHealTeleport, function(val)
+    TabHospital:CreateToggle("Авто-ТП к больным", "Телепортирует прямо на койку больного в палате", Config.AutoHealTeleport, function(val)
         Config.AutoHealTeleport = val
     end)
-    TabHospital:CreateToggle("Авто-экипировка лекарств", "Автоматически берет в руки лекарства и шприцы", Config.AutoEquipTools, function(val)
+    TabHospital:CreateToggle("Авто-взятие медикаментов", "Автоматически забирает нужные лекарства со шкафа в коридоре", Config.AutoTakeMedicine, function(val)
+        Config.AutoTakeMedicine = val
+    end)
+    TabHospital:CreateToggle("Авто-сканирование анализов", "Автоматически кладет пробирку с анализом в ПК-сканер", Config.AutoScanner, function(val)
+        Config.AutoScanner = val
+    end)
+    TabHospital:CreateToggle("Авто-экипировка лекарств", "Автоматически достает нужные лекарства из рюкзака", Config.AutoEquipTools, function(val)
         Config.AutoEquipTools = val
     end)
-    TabHospital:CreateToggle("Автолечение по приоритету", "Сначала выбирает пациентов с критическим здоровьем", Config.PriorityHeal, function(val)
-        Config.PriorityHeal = val
-    end)
-    TabHospital:CreateToggle("Автокормление", "Автоматически кормит и поит пациентов", Config.AutoFeed, function(val)
-        Config.AutoFeed = val
-    end)
-    TabHospital:CreateToggle("Автоуборка", "Очищает палаты, вольеры, столы и убирает мусор", Config.AutoClean, function(val)
-        Config.AutoClean = val
-    end)
-    TabHospital:CreateToggle("Автоуход", "Проводит процедуры гигиены, расчесывания и ухода", Config.AutoCare, function(val)
-        Config.AutoCare = val
-    end)
-    TabHospital:CreateButton("Вылечить всех пациентов сейчас", true, function()
-        SendNotification("Больница", "Лечение всех пациентов на карте...", 3)
-        task.spawn(function()
-            local treated = 0
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if not root then return end
-            local origPos = root.CFrame
 
+    TabHospital:CreateSection("Быстрые действия")
+    TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить инвентарь 3/3)", true, function()
+        task.spawn(function()
+            local count = 0
             for _, obj in pairs(Workspace:GetDescendants()) do
-                if IsPatientMedicalPrompt(obj) then
+                if IsMedicineCabinetPrompt(obj) then
                     local targetCF = GetPromptTargetCFrame(obj)
                     if targetCF then
-                        if Config.AutoEquipTools then EquipAnyMedicalTool() end
                         TeleportTo(targetCF)
-                        task.wait(0.2)
+                        task.wait(0.15)
                         SafeInteractPrompt(obj)
-                        treated = treated + 1
-                        task.wait(math.max(obj.HoldDuration or 0.3, 0.4))
+                        count = count + 1
+                        task.wait(0.25)
+                        if count >= 3 then break end
                     end
                 end
             end
-
-            TeleportTo(origPos)
-            SendNotification("Больница", "Обработано пациентов: " .. tostring(treated), 3)
+            SendNotification("Аптека", "Взято лекарств: " .. tostring(count), 2)
         end)
     end)
-    TabHospital:CreateToggle("ESP пациентов", "Показывает пациентов через стены со шкалой здоровья", Config.ESP_Patients, function(val)
+    TabHospital:CreateButton("Сдать анализы в сканер сейчас", false, function()
+        task.spawn(function()
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if IsLabScannerPrompt(obj) then
+                    local targetCF = GetPromptTargetCFrame(obj)
+                    if targetCF then
+                        TeleportTo(targetCF)
+                        task.wait(0.15)
+                        SafeInteractPrompt(obj)
+                        task.wait(0.2)
+                        SendNotification("Сканер", "Анализ загружен в компьютер!", 2)
+                        return
+                    end
+                end
+            end
+            SendNotification("Сканер", "Сканер не найден рядом", 2)
+        end)
+    end)
+    TabHospital:CreateButton("Выпить кофе (Восстановить рассудок)", false, function()
+        task.spawn(function()
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if IsCoffeePrompt(obj) then
+                    local targetCF = GetPromptTargetCFrame(obj)
+                    if targetCF then
+                        TeleportTo(targetCF)
+                        task.wait(0.15)
+                        SafeInteractPrompt(obj)
+                        SendNotification("Рассудок", "Кофе выпит! Рассудок восстановлен.", 2)
+                        return
+                    end
+                end
+            end
+            SendNotification("Рассудок", "Кофейный аппарат не найден", 2)
+        end)
+    end)
+
+    TabHospital:CreateToggle("ESP пациентов на койках", "Подсвечивает койки с больными животными", Config.ESP_Patients, function(val)
         Config.ESP_Patients = val
+    end)
+    TabHospital:CreateToggle("ESP шкафов с лекарствами", "Подсвечивает шкафы медикаментов в коридоре", Config.ESP_Cabinets, function(val)
+        Config.ESP_Cabinets = val
     end)
 
     -- 3. Задания
@@ -1444,41 +1517,34 @@ local function RunAverlikHub()
     end)
 
     -- 4. Телепорты
-    TabTeleports:CreateSection("Телепорты по карте")
-    TabTeleports:CreateButton("Телепорт в больницу", true, function()
-        local target = Workspace:FindFirstChild("Hospital") or Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Lobby")
-        if target then
-            TeleportTo(target:IsA("Model") and (target.PrimaryPart and target.PrimaryPart.CFrame or target:GetBoundingBox()) or target.CFrame)
-            SendNotification("Телепорт", "Телепортирован в больницу", 2)
-        else
-            TeleportTo(CFrame.new(0, 10, 0))
-        end
+    TabTeleports:CreateSection("Телепорты по палатам")
+    TabTeleports:CreateButton("Палата 1 (Койка пациента)", true, function()
+        local cf = FindWardCFrame(1)
+        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 1", 2)
+        else SendNotification("Телепорт", "Палата 1 не найдена", 2) end
     end)
-    TabTeleports:CreateButton("Телепорт в магазин", false, function()
-        local shop = Workspace:FindFirstChild("Shop") or Workspace:FindFirstChild("Store") or Workspace:FindFirstChild("Pharmacy") or Workspace:FindFirstChild("Market")
-        if shop then
-            TeleportTo(shop:IsA("Model") and (shop.PrimaryPart and shop.PrimaryPart.CFrame or shop:GetBoundingBox()) or shop.CFrame)
-            SendNotification("Телепорт", "Телепортирован в магазин", 2)
-        else
-            SendNotification("Телепорт", "Магазин не найден на карте", 2)
-        end
+    TabTeleports:CreateButton("Палата 2 (Койка пациента)", true, function()
+        local cf = FindWardCFrame(2)
+        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 2", 2)
+        else SendNotification("Телепорт", "Палата 2 не найдена", 2) end
     end)
-    TabTeleports:CreateButton("Телепорт к заданию", false, function()
-        local qTarget = nil
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and (SafeFind(obj.ActionText, "quest") or SafeFind(obj.ObjectText, "quest") or SafeFind(obj.Parent.Name, "quest")) then
-                qTarget = obj.Parent
-                break
-            end
-        end
-        if qTarget then
-            TeleportTo(qTarget:IsA("Model") and (qTarget.PrimaryPart and qTarget.PrimaryPart.CFrame or qTarget:GetBoundingBox()) or qTarget.CFrame)
-            SendNotification("Телепорт", "Телепортирован к заданию", 2)
-        else
-            SendNotification("Телепорт", "Активное задание не найдено", 2)
-        end
+    TabTeleports:CreateButton("Палата 3 (Койка пациента)", true, function()
+        local cf = FindWardCFrame(3)
+        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 3", 2)
+        else SendNotification("Телепорт", "Палата 3 не найдена", 2) end
     end)
-    TabTeleports:CreateSection("Телепорт к пациентам и игрокам")
+    TabTeleports:CreateButton("Палата 4 (Койка пациента)", false, function()
+        local cf = FindWardCFrame(4)
+        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 4", 2)
+        else SendNotification("Телепорт", "Палата 4 не найдена", 2) end
+    end)
+    TabTeleports:CreateButton("Палата 5 (Койка пациента)", false, function()
+        local cf = FindWardCFrame(5)
+        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 5", 2)
+        else SendNotification("Телепорт", "Палата 5 не найдена", 2) end
+    end)
+
+    TabTeleports:CreateSection("Ключевые точки больницы")
     TabTeleports:CreateButton("Телепорт к ближайшей койке с пациентом", true, function()
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -1486,7 +1552,7 @@ local function RunAverlikHub()
         local nearestCF, minDist = nil, math.huge
 
         for _, obj in pairs(Workspace:GetDescendants()) do
-            if IsPatientMedicalPrompt(obj) then
+            if IsBedPatientPrompt(obj) then
                 local targetCF = GetPromptTargetCFrame(obj)
                 if targetCF then
                     local dist = (root.Position - targetCF.Position).Magnitude
@@ -1500,40 +1566,51 @@ local function RunAverlikHub()
 
         if nearestCF then
             TeleportTo(nearestCF)
-            SendNotification("Телепорт", "Телепортирован к пациенту на койке!", 2)
+            SendNotification("Телепорт", "Телепортирован к койке больного!", 2)
         else
-            SendNotification("Телепорт", "Пациенты не найдены на карте.", 2)
+            SendNotification("Телепорт", "Койки с активными пациентами не найдены", 2)
         end
     end)
 
-    local SelectedPlayerName = nil
-    local PlayerDropdown = TabTeleports:CreateDropdown("Телепорт к игроку", {}, "Выберите игрока", function(pName)
-        SelectedPlayerName = pName
-    end)
-    local function UpdatePlayersList()
-        local pList = {}
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer then
-                table.insert(pList, p.DisplayName .. " (@" .. p.Name .. ")")
-            end
-        end
-        PlayerDropdown.Refresh(pList)
-    end
-    UpdatePlayersList()
-    Players.PlayerAdded:Connect(UpdatePlayersList)
-    Players.PlayerRemoving:Connect(UpdatePlayersList)
+    TabTeleports:CreateButton("Телепорт к шкафу с медикаментами (Аптека)", false, function()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local nearestCF, minDist = nil, math.huge
 
-    TabTeleports:CreateButton("Телепортироваться к выбранному игроку", false, function()
-        if SelectedPlayerName then
-            local rawName = string.match(SelectedPlayerName, "@(%w+)")
-            local target = rawName and Players:FindFirstChild(rawName)
-            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                TeleportTo(target.Character.HumanoidRootPart.CFrame)
-                SendNotification("Телепорт", "Успешно перемещен к " .. target.DisplayName, 2)
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if IsMedicineCabinetPrompt(obj) then
+                local targetCF = GetPromptTargetCFrame(obj)
+                if targetCF then
+                    local dist = (root.Position - targetCF.Position).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        nearestCF = targetCF
+                    end
+                end
             end
-        else
-            SendNotification("Телепорт", "Сначала выберите игрока из списка!", 2)
         end
+
+        if nearestCF then
+            TeleportTo(nearestCF)
+            SendNotification("Телепорт", "Телепортирован к шкафу с лекарствами!", 2)
+        else
+            SendNotification("Телепорт", "Шкаф с лекарствами не найден", 2)
+        end
+    end)
+
+    TabTeleports:CreateButton("Телепорт к кофе (Восстановление рассудка)", false, function()
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if IsCoffeePrompt(obj) then
+                local targetCF = GetPromptTargetCFrame(obj)
+                if targetCF then
+                    TeleportTo(targetCF)
+                    SendNotification("Телепорт", "Телепортирован к кофейному аппарату!", 2)
+                    return
+                end
+            end
+        end
+        SendNotification("Телепорт", "Кофейный аппарат не найден", 2)
     end)
 
     -- 5. Игрок
@@ -1580,7 +1657,7 @@ local function RunAverlikHub()
     TabPlayer:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val)
         Config.AntiAFK = val
     end)
-    TabPlayer:CreateToggle("Бесконечный рассудок (Auto Coffee)", "Автоматически выпивает кофе и восстанавливает бодрость", Config.InfiniteSanity, function(val)
+    TabPlayer:CreateToggle("Бесконечный рассудок (Auto Coffee)", "Автоматически выпивает кофе при падении рассудка", Config.InfiniteSanity, function(val)
         Config.InfiniteSanity = val
     end)
     TabPlayer:CreateToggle("Бесконечный прыжок", "Позволяет совершать бесконечные прыжки в воздухе", Config.InfiniteJump, function(val)
@@ -1592,12 +1669,11 @@ local function RunAverlikHub()
     TabVisuals:CreateToggle("ESP Игроков", "Подсвечивает всех игроков на сервере", Config.ESP_Players, function(val)
         Config.ESP_Players = val
     end)
-    TabVisuals:CreateToggle("ESP Животных / Пациентов", "Подсвечивает всех пациентов и койки через стены", Config.ESP_Patients, function(val)
+    TabVisuals:CreateToggle("ESP Коек с пациентами", "Подсвечивает койки с больными животными", Config.ESP_Patients, function(val)
         Config.ESP_Patients = val
-        Config.ESP_Animals = val
     end)
-    TabVisuals:CreateToggle("ESP NPC", "Подсвечивает персонал, продавцов и докторов", Config.ESP_NPCs, function(val)
-        Config.ESP_NPCs = val
+    TabVisuals:CreateToggle("ESP Шкафов с медикаментами", "Подсвечивает полки с лекарствами в коридоре", Config.ESP_Cabinets, function(val)
+        Config.ESP_Cabinets = val
     end)
     TabVisuals:CreateToggle("ESP Предметов", "Выделяет ресурсы, медикаменты, монеты и мусор", Config.ESP_Items, function(val)
         Config.ESP_Items = val
@@ -1632,29 +1708,6 @@ local function RunAverlikHub()
             SendNotification("Сервер", "Не удалось найти сервер для перехода.", 3)
         end)
     end)
-    TabMisc:CreateButton("Поиск сервера с наименьшим онлайном", false, function()
-        SendNotification("Сервер", "Поиск сервера с минимумом игроков...", 3)
-        task.spawn(function()
-            local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
-            local success, result = pcall(function() return HttpService:JSONDecode(game:HttpGet(sfUrl)) end)
-            if success and result and result.data then
-                local lowestServer = nil
-                local minCount = math.huge
-                for _, s in ipairs(result.data) do
-                    if s.playing and s.playing > 0 and s.playing < minCount and s.id ~= game.JobId then
-                        minCount = s.playing
-                        lowestServer = s.id
-                    end
-                end
-                if lowestServer then
-                    SendNotification("Сервер", "Найден сервер с игроками: " .. tostring(minCount), 2)
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, lowestServer, LocalPlayer)
-                    return
-                end
-            end
-            SendNotification("Сервер", "Сервер не найден.", 3)
-        end)
-    end)
     TabMisc:CreateSection("Оптимизация производительности")
     TabMisc:CreateToggle("FPS Boost", "Отключает тяжелые частицы, тени и разгружает движок", Config.FPSBoost, function(val)
         Config.FPSBoost = val
@@ -1680,16 +1733,6 @@ local function RunAverlikHub()
             end
             SendNotification("Low Graphics", "Режим низкой графики активирован", 2)
         end
-    end)
-    TabMisc:CreateButton("Разблокировать FPS (Unlock FPS)", false, function()
-        pcall(function()
-            if setfpscap then
-                setfpscap(999)
-                SendNotification("FPS Unlocker", "Лимит FPS снят до 999", 2)
-            else
-                SendNotification("FPS Unlocker", "Функция не поддерживается вашим эксплоитом", 2)
-            end
-        end)
     end)
 
     -- 8. Settings
@@ -1728,15 +1771,6 @@ local function RunAverlikHub()
     ConfigDropdown = TabSettings:CreateDropdown("Selected config", GetSavedConfigs(), Config.SelectedConfig, function(val)
         Config.SelectedConfig = val
     end)
-    TabSettings:CreateToggle("Auto Load", "Load the selected config automatically next time this GUI starts.", Config.AutoLoadConfig, function(val)
-        Config.AutoLoadConfig = val
-        pcall(function()
-            if writefile and makefolder then
-                if not isfolder("AverlikHub") then makefolder("AverlikHub") end
-                writefile("AverlikHub/autoload.json", HttpService:JSONEncode({AutoLoad = val, Config = Config.SelectedConfig}))
-            end
-        end)
-    end)
     TabSettings:CreateButton("Save config", true, function()
         local name = Config.SelectedConfig or "Default"
         MemoryConfigs[name] = HttpService:JSONEncode(Config)
@@ -1749,36 +1783,6 @@ local function RunAverlikHub()
         end)
         SendNotification("Config", "Конфиг '" .. name .. "' сохранен!", 3)
     end)
-    TabSettings:CreateButton("Load config", false, function()
-        local name = Config.SelectedConfig or "Default"
-        local raw = nil
-        pcall(function()
-            if readfile and isfile and isfile("AverlikHub/Configs/" .. name .. ".json") then
-                raw = readfile("AverlikHub/Configs/" .. name .. ".json")
-            end
-        end)
-        raw = raw or MemoryConfigs[name]
-        if raw then
-            local data = HttpService:JSONDecode(raw)
-            for k, v in pairs(data) do Config[k] = v end
-            SendNotification("Config", "Конфиг '" .. name .. "' успешно загружен!", 3)
-        else
-            SendNotification("Config", "Файл конфига не найден.", 3)
-        end
-    end)
-    TabSettings:CreateButton("Delete config", false, function()
-        local name = Config.SelectedConfig or "Default"
-        MemoryConfigs[name] = nil
-        pcall(function()
-            if delfile and isfile and isfile("AverlikHub/Configs/" .. name .. ".json") then
-                delfile("AverlikHub/Configs/" .. name .. ".json")
-            end
-        end)
-        SendNotification("Config", "Конфиг '" .. name .. "' удален.", 3)
-        if ConfigDropdown then ConfigDropdown.Refresh(GetSavedConfigs()) end
-    end)
-    TabSettings:CreateSection("Theme Colours")
-    TabSettings:CreateToggle("Background", "Main window background style.", true, function(val) end)
 
     -- Активация 1 вкладки
     pcall(function()
@@ -1850,11 +1854,11 @@ local function RunAverlikHub()
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🩺 ПОИСК И ТОЧНЫЙ АВТО-ТП К БОЛЬНЫМ ПАЦИЕНТАМ НА КОЙКАХ
+    -- 🩺 ПОЛНЫЙ ЦИКЛ АВТОЛЕЧЕНИЯ (КОЙКА -> СКАНЕР -> АПТЕКА -> ЛЕЧЕНИЕ)
     -- ══════════════════════════════════════════════════════════════════════════
     local isHandlingPatient = false
 
-    local function GetNextPatientTarget()
+    local function FindActiveBedTarget()
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return nil, nil end
@@ -1863,35 +1867,19 @@ local function RunAverlikHub()
         local now = tick()
 
         for _, obj in pairs(Workspace:GetDescendants()) do
-            if IsPatientMedicalPrompt(obj) then
-                if not DebounceMap[obj] or (now - DebounceMap[obj]) > 3.5 then
+            if IsBedPatientPrompt(obj) then
+                if not DebounceMap[obj] or (now - DebounceMap[obj]) > 3.0 then
                     local targetCF = GetPromptTargetCFrame(obj)
                     if targetCF then
                         local dist = (root.Position - targetCF.Position).Magnitude
-                        local hum = obj.Parent:FindFirstChild("Humanoid") or (obj.Parent.Parent and obj.Parent.Parent:FindFirstChild("Humanoid"))
-                        local hp = hum and hum.Health or 100
-
-                        table.insert(candidates, {
-                            Prompt = obj,
-                            CFrame = targetCF,
-                            Distance = dist,
-                            Health = hp
-                        })
+                        table.insert(candidates, {Prompt = obj, CFrame = targetCF, Distance = dist})
                     end
                 end
             end
         end
 
         if #candidates == 0 then return nil, nil end
-
-        -- Сортировка
-        table.sort(candidates, function(a, b)
-            if Config.PriorityHeal and math.abs(a.Health - b.Health) > 5 then
-                return a.Health < b.Health
-            end
-            return a.Distance < b.Distance
-        end)
-
+        table.sort(candidates, function(a, b) return a.Distance < b.Distance end)
         return candidates[1].Prompt, candidates[1].CFrame
     end
 
@@ -1899,7 +1887,7 @@ local function RunAverlikHub()
         while true do
             task.wait(0.2)
             if Config.AutoHeal and not isHandlingPatient then
-                local bestPrompt, bestCF = GetNextPatientTarget()
+                local bestPrompt, bestCF = FindActiveBedTarget()
                 if bestPrompt and bestCF and bestPrompt.Enabled then
                     isHandlingPatient = true
                     DebounceMap[bestPrompt] = tick()
@@ -1908,23 +1896,56 @@ local function RunAverlikHub()
                         local char = LocalPlayer.Character
                         local root = char and char:FindFirstChild("HumanoidRootPart")
                         if root then
-                            -- 1. Точный телепорт прямо к койке больного
+                            -- 1. ТП прямо на койку к пациенту
                             if Config.AutoHealTeleport then
                                 TeleportTo(bestCF)
                                 task.wait(0.18)
                             end
 
-                            -- 2. Экипировка любого инструмента/лекарства
+                            -- 2. Экипировка любого лекарства/инструмента
                             if Config.AutoEquipTools then
                                 EquipAnyMedicalTool()
                             end
 
-                            -- 3. Выполнение взаимодействия
+                            -- 3. Выполнение взаимодействия (Взять анализ ДНК или лечение)
                             SafeInteractPrompt(bestPrompt)
+                            task.wait(math.max(bestPrompt.HoldDuration or 0.3, Config.HealDelay or 0.8))
 
-                            -- 4. Выдержка времени HoldDuration + задержка
-                            local waitTime = math.max(bestPrompt.HoldDuration or 0.3, Config.HealDelay or 0.8)
-                            task.wait(waitTime)
+                            -- 4. Если в руках анализ ДНК и включен AutoScanner -> несем в сканер
+                            if Config.AutoScanner then
+                                for _, scObj in pairs(Workspace:GetDescendants()) do
+                                    if IsLabScannerPrompt(scObj) then
+                                        local scCF = GetPromptTargetCFrame(scObj)
+                                        if scCF then
+                                            TeleportTo(scCF)
+                                            task.wait(0.15)
+                                            SafeInteractPrompt(scObj)
+                                            task.wait(0.2)
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+
+                            -- 5. Если нужны лекарства со шкафа и включен AutoTakeMedicine
+                            if Config.AutoTakeMedicine then
+                                local bp = LocalPlayer:FindFirstChild("Backpack")
+                                local toolCount = bp and #bp:GetChildren() or 0
+                                if toolCount < 3 then
+                                    for _, medObj in pairs(Workspace:GetDescendants()) do
+                                        if IsMedicineCabinetPrompt(medObj) then
+                                            local medCF = GetPromptTargetCFrame(medObj)
+                                            if medCF then
+                                                TeleportTo(medCF)
+                                                task.wait(0.15)
+                                                SafeInteractPrompt(medObj)
+                                                task.wait(0.2)
+                                                break
+                                            end
+                                        end
+                                    end
+                                end
+                            end
                         end
                     end)
 
@@ -1934,89 +1955,30 @@ local function RunAverlikHub()
         end
     end)
 
-    -- Второстепенные циклы
+    -- Авто-кофе при низком рассудке
     task.spawn(function()
         while true do
-            task.wait(0.5)
-            pcall(function()
-                local char = LocalPlayer.Character
-                local root = char and char:FindFirstChild("HumanoidRootPart")
-                if not root then return end
-
-                -- Автосбор
-                if Config.AutoCollect then
+            task.wait(2.5)
+            if Config.InfiniteSanity then
+                pcall(function()
                     for _, obj in pairs(Workspace:GetDescendants()) do
-                        if obj:IsA("BasePart") and (SafeFind(obj.Name, "coin") or SafeFind(obj.Name, "cash") or SafeFind(obj.Name, "money") or SafeFind(obj.Name, "drop") or SafeFind(obj.Name, "reward")) then
-                            if (root.Position - obj.Position).Magnitude < 40 then
-                                SafeTouch(obj)
-                            end
-                        end
-                    end
-                end
-
-                -- Саботажи
-                if Config.AutoFixSabotages then
-                    for _, obj in pairs(Workspace:GetDescendants()) do
-                        if obj:IsA("ProximityPrompt") and obj.Enabled then
-                            if SafeFind(obj.ActionText, "fix") or SafeFind(obj.ActionText, "repair") or SafeFind(obj.ActionText, "extinguish") or SafeFind(obj.ObjectText, "leak") or SafeFind(obj.ObjectText, "sabotage") or SafeFind(obj.ObjectText, "fire") then
-                                local targetCF = GetPromptTargetCFrame(obj)
-                                if targetCF and (root.Position - targetCF.Position).Magnitude <= (obj.MaxActivationDistance + 5) then
-                                    SafeInteractPrompt(obj)
-                                    task.wait(obj.HoldDuration or 0.3)
-                                end
-                            end
-                        end
-                    end
-                end
-
-                -- Задания
-                if Config.AutoAcceptQuests or Config.AutoCompleteQuest or Config.AutoClaimRewards then
-                    for _, prompt in pairs(Workspace:GetDescendants()) do
-                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                            local act = string.lower(prompt.ActionText or "")
-                            local objT = string.lower(prompt.ObjectText or "")
-                            if Config.AutoAcceptQuests and (SafeFind(act, "accept") or SafeFind(act, "start") or SafeFind(objT, "quest")) then
-                                SafeInteractPrompt(prompt)
-                                task.wait(0.2)
-                            elseif (Config.AutoCompleteQuest or Config.AutoClaimRewards) and (SafeFind(act, "claim") or SafeFind(act, "complete") or SafeFind(act, "reward")) then
-                                SafeInteractPrompt(prompt)
-                                task.wait(0.2)
-                            end
-                        end
-                    end
-                end
-
-                -- Бесконечный рассудок
-                if Config.InfiniteSanity then
-                    for _, prompt in pairs(Workspace:GetDescendants()) do
-                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                            if SafeFind(prompt.ActionText, "drink") or SafeFind(prompt.ActionText, "coffee") or SafeFind(prompt.ObjectText, "coffee") or SafeFind(prompt.ObjectText, "sanity") or SafeFind(prompt.ObjectText, "energy") then
-                                SafeInteractPrompt(prompt)
+                        if IsCoffeePrompt(obj) then
+                            local targetCF = GetPromptTargetCFrame(obj)
+                            if targetCF then
+                                TeleportTo(targetCF)
+                                task.wait(0.15)
+                                SafeInteractPrompt(obj)
                                 task.wait(0.3)
+                                break
                             end
                         end
                     end
-                end
-
-                -- Магазин / Улучшения
-                if Config.AutoSell or Config.AutoUpgrade or Config.AutoBuy then
-                    for _, prompt in pairs(Workspace:GetDescendants()) do
-                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                            if Config.AutoSell and SafeFind(prompt.ActionText, "sell") then
-                                SafeInteractPrompt(prompt)
-                            elseif Config.AutoUpgrade and SafeFind(prompt.ActionText, "upgrade") then
-                                SafeInteractPrompt(prompt)
-                            elseif Config.AutoBuy and SafeFind(prompt.ActionText, "buy") then
-                                SafeInteractPrompt(prompt)
-                            end
-                        end
-                    end
-                end
-            end)
+                end)
+            end
         end
     end)
 
-    -- ESP Пациентов и Игроков
+    -- ESP Пациентов и Шкафов
     local ESP_Folder = Instance.new("Folder")
     ESP_Folder.Name = "Averlik_ESP_Folder"
     ESP_Folder.Parent = GuiParent
@@ -2080,7 +2042,7 @@ local function RunAverlikHub()
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
 
-            if not Config.ESP_Players and not Config.ESP_Animals and not Config.ESP_NPCs and not Config.ESP_Items and not Config.ESP_Quests and not Config.ESP_Patients then
+            if not Config.ESP_Players and not Config.ESP_Animals and not Config.ESP_Items and not Config.ESP_Patients and not Config.ESP_Cabinets then
                 ESP_Folder:ClearAllChildren()
                 return
             end
@@ -2096,24 +2058,25 @@ local function RunAverlikHub()
                 end
             end
 
-            if Config.ESP_Animals or Config.ESP_Patients then
+            if Config.ESP_Patients then
                 for _, obj in pairs(Workspace:GetDescendants()) do
-                    if IsPatientMedicalPrompt(obj) then
+                    if IsBedPatientPrompt(obj) then
                         local targetPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Attachment") and obj.Parent.Parent) or (obj.Parent:IsA("Model") and obj.Parent.PrimaryPart)
-                        if targetPart and not ESP_Folder:FindFirstChild("ESP_Patient_" .. targetPart.Name) then
-                            local actText = obj.ActionText ~= "" and obj.ActionText or "Пациент"
-                            CreateESPBox(targetPart, "🐾 " .. actText, Color3.fromRGB(80, 255, 140))
+                        if targetPart and not ESP_Folder:FindFirstChild("ESP_Bed_" .. targetPart.Name) then
+                            local actText = obj.ActionText ~= "" and obj.ActionText or "Койка пациента"
+                            CreateESPBox(targetPart, "🛏️ " .. actText, Color3.fromRGB(80, 255, 140))
                         end
                     end
                 end
             end
 
-            if Config.ESP_Quests then
-                for _, prompt in pairs(Workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and (SafeFind(prompt.ObjectText, "quest") or SafeFind(prompt.ActionText, "quest")) then
-                        local parentPart = prompt.Parent:IsA("BasePart") and prompt.Parent or (prompt.Parent:IsA("Model") and prompt.Parent.PrimaryPart)
-                        if parentPart and not ESP_Folder:FindFirstChild("ESP_Quest_" .. prompt.Parent.Name) then
-                            CreateESPBox(parentPart, "📜 " .. prompt.Parent.Name, Color3.fromRGB(255, 215, 0))
+            if Config.ESP_Cabinets then
+                for _, obj in pairs(Workspace:GetDescendants()) do
+                    if IsMedicineCabinetPrompt(obj) then
+                        local targetPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Attachment") and obj.Parent.Parent) or (obj.Parent:IsA("Model") and obj.Parent.PrimaryPart)
+                        if targetPart and not ESP_Folder:FindFirstChild("ESP_Cab_" .. targetPart.Name) then
+                            local actText = obj.ActionText ~= "" and obj.ActionText or "Аптека"
+                            CreateESPBox(targetPart, "💊 " .. actText, Color3.fromRGB(255, 215, 80))
                         end
                     end
                 end
