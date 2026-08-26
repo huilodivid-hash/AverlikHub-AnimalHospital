@@ -1598,8 +1598,56 @@ local function RunAverlikHub()
     TabPlayer:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val) Config.AntiAFK = val end)
 
     -- 7. MISC
-    TabMisc:CreateSection("Сервер и Графика")
-    TabMisc:CreateButton("Rejoin (Перезайти на сервер)", false, function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end)
+    TabMisc:CreateSection("Управление сервером")
+    local function ServerHop(lowestPlayers)
+        SendNotification("Server Hop", "Поиск подходящего сервера...", 2)
+        task.spawn(function()
+            local success, servers = pcall(function()
+                local url = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
+                local response = game:HttpGet(url)
+                return HttpService:JSONDecode(response)
+            end)
+
+            if success and servers and servers.data then
+                local validServers = {}
+                for _, s in pairs(servers.data) do
+                    if type(s) == "table" and s.id and s.id ~= game.JobId and (s.playing or 0) < (s.maxPlayers or 10) and (s.playing or 0) > 0 then
+                        table.insert(validServers, s)
+                    end
+                end
+
+                if #validServers > 0 then
+                    if lowestPlayers then
+                        table.sort(validServers, function(a, b)
+                            return (a.playing or 0) < (b.playing or 0)
+                        end)
+                        local target = validServers[1]
+                        SendNotification("Server Hop", "Вход на сервер (" .. tostring(target.playing) .. "/" .. tostring(target.maxPlayers) .. " игроков)...", 3)
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, LocalPlayer)
+                    else
+                        local target = validServers[math.random(1, #validServers)]
+                        SendNotification("Server Hop", "Вход на сервер (" .. tostring(target.playing) .. "/" .. tostring(target.maxPlayers) .. " игроков)...", 3)
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, LocalPlayer)
+                    end
+                    return
+                end
+            end
+
+            -- Fallback
+            SendNotification("Server Hop", "Перезаход...", 2)
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+        end)
+    end
+
+    TabMisc:CreateButton("Server Hop (Случайный сервер)", true, function() ServerHop(false) end)
+    TabMisc:CreateButton("Server Hop (Малолюдный сервер)", false, function() ServerHop(true) end)
+    TabMisc:CreateButton("Rejoin (Перезайти на этот же сервер)", false, function()
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+        end)
+    end)
+
+    TabMisc:CreateSection("Графика и Оптимизация")
     TabMisc:CreateToggle("FPS Boost", "Отключает тени и тяжелые эффекты", Config.FPSBoost, function(val)
         Config.FPSBoost = val
         if val then
