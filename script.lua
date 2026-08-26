@@ -99,17 +99,17 @@ local function RunAverlikHub()
 
     -- Таблица пользовательских точек телепорта (Waypoints)
     local CustomWaypoints = {
-        Ward1 = nil,
-        Ward2 = nil,
-        Ward3 = nil,
-        Ward4 = nil,
-        Ward5 = nil,
+        Ward1 = Vector3.new(-168.42, 5.81, -41.04),
+        Ward2 = Vector3.new(-121.33, 5.81, -59.95),
+        Ward3 = Vector3.new(-168.08, 5.81, -80.10),
+        Ward4 = Vector3.new(-121.16, 5.81, -99.06),
+        Ward5 = Vector3.new(-153.91, 5.81, -114.83),
         Ward6 = nil,
         Ward7 = nil,
         Cabinets = nil,
         LabScanner = nil,
-        Reception = nil,
-        Coffee = nil
+        Reception = Vector3.new(-108.72, 3.41, 10.20),
+        Coffee = Vector3.new(-123.82, 7.93, 10.22)
     }
 
     -- Конфигурация
