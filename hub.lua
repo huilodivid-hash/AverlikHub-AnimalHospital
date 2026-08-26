@@ -1392,6 +1392,9 @@ local function RunAverlikHub()
     TabHospital:CreateSlider("Задержка между шагами (сек)", 0.2, 2.0, Config.StepDelay, function(val)
         Config.StepDelay = val
     end)
+    TabHospital:CreateSlider("Ожидание сканера/центрифуги (сек)", 3.0, 12.0, Config.ScannerWaitDelay or 6.0, function(val)
+        Config.ScannerWaitDelay = val
+    end)
 
     TabHospital:CreateSection("Быстрые действия")
     TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить инвентарь)", true, function()
@@ -1933,8 +1936,31 @@ local function RunAverlikHub()
             end
         end
 
-        -- Ожидание работы центрифуги (3.6 сек)
-        task.wait(3.6)
+        -- Ожидание работы центрифуги (до появления «Завершено» или по таймеру)
+        local maxWait = Config.ScannerWaitDelay or 6.5
+        local startTime = tick()
+        while (tick() - startTime) < maxWait do
+            task.wait(0.3)
+            local isFinished = false
+            for _, sg in pairs(Workspace:GetDescendants()) do
+                if (sg:IsA("SurfaceGui") or sg:IsA("BillboardGui")) and sg.Adornee then
+                    local adPart = sg.Adornee:IsA("BasePart") and sg.Adornee or nil
+                    if adPart and (adPart.Position - devVec).Magnitude < 16 then
+                        for _, txt in pairs(sg:GetDescendants()) do
+                            if (txt:IsA("TextLabel") or txt:IsA("TextButton")) and SafeFind(txt.Text, "завершен") then
+                                isFinished = true
+                                break
+                            end
+                        end
+                    end
+                end
+                if isFinished then break end
+            end
+            if isFinished and (tick() - startTime >= 4.0) then
+                break
+            end
+        end
+        task.wait(0.8) -- Дополнительный буфер для обновления ПК
 
         -- ШАГ 2.2: Встаем прямо перед компьютером (сдвиг вправо к монитору и клавиатуре)
         local pcPos = typeof(devPos) == "CFrame" and (devPos * CFrame.new(2.8, 0, 0)) or (devVec + Vector3.new(2.8, 0, 0))
