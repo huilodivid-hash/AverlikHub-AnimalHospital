@@ -1,11 +1,11 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (SMART QUEUE & ANTI-SPAM ENGINE)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (UNIVERSAL RUSSIAN & ENGLISH PROMPT ENGINE)
     ══════════════════════════════════════════════════════════════════════════════════
     • Точный дизайн: Averlik Hub (Glassmorphism & Neon Purple #d946ef)
     • Совместимость: 100% Все эксплоиты (Solara, Wave, Delta, Arceus X, Codex, etc.)
-    • Умная очередь: Никакого хаотичного спама! Лечит по 1 пациенту с учетом времени
-      удержания (HoldDuration), плавной задержкой и защитой от повторного спама.
+    • Авто-ТП к пациентам: Распознает любые промпты на русском и английском
+      (Взять анализ ДНК, Сделать укол, Дать лекарство, Осмотреть, Heal, Treat, etc.)
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
@@ -116,7 +116,7 @@ local function RunAverlikHub()
         AutoHealTeleport = true,
         AutoEquipTools = true,
         PriorityHeal = true,
-        HealDelay = 0.8,         -- Задержка между действиями (сек)
+        HealDelay = 0.8,
         AutoFeed = false,
         AutoClean = false,
         AutoCare = false,
@@ -160,26 +160,72 @@ local function RunAverlikHub()
     }
 
     local MemoryConfigs = {}
-    local DebounceMap = {} -- Защита от спама на один и тот же объект
+    local DebounceMap = {}
 
     local function SafeFind(str, query)
         if not str or type(str) ~= "string" or not query then return false end
         return string.find(string.lower(str), string.lower(query), 1, true) ~= nil
     end
 
-    -- Экипировка подходящего инструмента
-    local function EquipToolMatching(keyword)
+    -- Проверка, является ли промпт медицинским/пациентским (русский и английский)
+    local function IsPatientMedicalPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local objT = string.lower(tostring(prompt.ObjectText or ""))
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
+
+        -- Исключения: двери, кофе, мусорки, магазины
+        if SafeFind(act, "door") or SafeFind(act, "двер") or SafeFind(act, "open") or SafeFind(act, "откры") then return false end
+        if SafeFind(act, "coffee") or SafeFind(act, "кофе") or SafeFind(objT, "coffee") or SafeFind(objT, "кофе") then return false end
+        if SafeFind(act, "shop") or SafeFind(act, "магаз") or SafeFind(objT, "shop") or SafeFind(objT, "купить") then return false end
+
+        -- Пациенты и медицинские действия
+        local rusKeywords = {
+            "анализ", "днк", "укол", "лекарств", "таблетк", "лечить", "помочь", "диагноз", "осмотр",
+            "больно", "пациент", "животн", "кот", "собак", "капельниц", "бинтов", "термометр",
+            "стетоскоп", "взять", "сделать", "дать", "покормить", "помыть", "вылечить", "уход",
+            "груминг", "расчес", "принять", "процедур", "палат", "кровать", "койк"
+        }
+        for _, k in ipairs(rusKeywords) do
+            if SafeFind(act, k) or SafeFind(objT, k) or SafeFind(pName, k) or SafeFind(gName, k) then
+                return true
+            end
+        end
+
+        local engKeywords = {
+            "heal", "treat", "cure", "med", "dna", "test", "help", "diag", "exam", "inj",
+            "shot", "pill", "bandage", "care", "feed", "clean", "patient", "animal", "bed",
+            "cage", "doctor", "nurse", "surgery", "take", "give", "do", "pet", "wash"
+        }
+        for _, k in ipairs(engKeywords) do
+            if SafeFind(act, k) or SafeFind(objT, k) or SafeFind(pName, k) or SafeFind(gName, k) then
+                return true
+            end
+        end
+
+        -- Если промпт прикреплен к кровати/пациенту в палате
+        if SafeFind(pName, "bed") or SafeFind(pName, "patient") or SafeFind(pName, "cat") or SafeFind(pName, "dog") or SafeFind(gName, "room") or SafeFind(gName, "hospital") then
+            return true
+        end
+
+        return false
+    end
+
+    -- Экипировка любого подходящего инструмента
+    local function EquipAnyMedicalTool()
         pcall(function()
             local bp = LocalPlayer:FindFirstChild("Backpack")
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChild("Humanoid")
             if not bp or not hum then return end
 
-            for _, tool in pairs(bp:GetChildren()) do
-                if tool:IsA("Tool") then
-                    if not keyword or SafeFind(tool.Name, keyword) or SafeFind(tool.ToolTip, keyword) then
+            local tools = bp:GetChildren()
+            if #tools > 0 then
+                for _, tool in ipairs(tools) do
+                    if tool:IsA("Tool") then
                         hum:EquipTool(tool)
-                        task.wait(0.08)
+                        task.wait(0.05)
                         pcall(function() tool:Activate() end)
                         break
                     end
@@ -188,7 +234,7 @@ local function RunAverlikHub()
         end)
     end
 
-    -- Аккуратное выполнение ProximityPrompt
+    -- Выполнение ProximityPrompt
     local function SafeInteractPrompt(prompt)
         if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
         local holdTime = prompt.HoldDuration or 0
@@ -232,7 +278,7 @@ local function RunAverlikHub()
         end)
     end
 
-    -- Телепорт
+    -- Телепорт (прямо перед объектом)
     local function TeleportTo(cf)
         pcall(function()
             local char = LocalPlayer.Character
@@ -240,9 +286,9 @@ local function RunAverlikHub()
             local root = char:FindFirstChild("HumanoidRootPart")
             if root then
                 if typeof(cf) == "Vector3" then
-                    root.CFrame = CFrame.new(cf + Vector3.new(0, 2.5, 0))
+                    root.CFrame = CFrame.new(cf + Vector3.new(0, 3, 0))
                 elseif typeof(cf) == "CFrame" then
-                    root.CFrame = cf + Vector3.new(0, 2.5, 0)
+                    root.CFrame = cf + Vector3.new(0, 3, 0)
                 end
             end
         end)
@@ -1311,18 +1357,18 @@ local function RunAverlikHub()
     end)
 
     -- 2. Больница
-    TabHospital:CreateSection("Лечение и уход (Умная очередь)")
-    TabHospital:CreateToggle("Автолечение", "Находит больных животных/пациентов и лечит их по очереди", Config.AutoHeal, function(val)
+    TabHospital:CreateSection("Лечение и уход (Умный поиск)")
+    TabHospital:CreateToggle("Автолечение", "Автоматически находит больных пациентов и лечит их", Config.AutoHeal, function(val)
         Config.AutoHeal = val
-        SendNotification("Больница", val and "Автолечение активировано!" or "Автолечение выключено", 2)
+        SendNotification("Больница", val and "Автолечение запущено!" or "Автолечение выключено", 2)
     end)
     TabHospital:CreateSlider("Задержка лечения (сек)", 0.2, 3.0, Config.HealDelay, function(val)
         Config.HealDelay = val
     end)
-    TabHospital:CreateToggle("Авто-ТП к больным", "Телепортирует к пациенту для гарантированного лечения", Config.AutoHealTeleport, function(val)
+    TabHospital:CreateToggle("Авто-ТП к больным", "Телепортирует к пациенту прямо к койке для лечения", Config.AutoHealTeleport, function(val)
         Config.AutoHealTeleport = val
     end)
-    TabHospital:CreateToggle("Авто-экипировка лекарств", "Автоматически достает медикаменты и инструменты из рюкзака", Config.AutoEquipTools, function(val)
+    TabHospital:CreateToggle("Авто-экипировка лекарств", "Автоматически берет в руки лекарства и шприцы", Config.AutoEquipTools, function(val)
         Config.AutoEquipTools = val
     end)
     TabHospital:CreateToggle("Автолечение по приоритету", "Сначала выбирает пациентов с критическим здоровьем", Config.PriorityHeal, function(val)
@@ -1347,21 +1393,15 @@ local function RunAverlikHub()
             local origPos = root.CFrame
 
             for _, obj in pairs(Workspace:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") and obj.Enabled then
-                    local act = string.lower(tostring(obj.ActionText or ""))
-                    local objT = string.lower(tostring(obj.ObjectText or ""))
-                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
-
-                    if SafeFind(act, "heal") or SafeFind(act, "treat") or SafeFind(act, "cure") or SafeFind(act, "med") or SafeFind(act, "help") or SafeFind(act, "diag") or SafeFind(act, "exam") or SafeFind(act, "inj") or SafeFind(act, "care") or SafeFind(act, "feed") or SafeFind(act, "clean") or SafeFind(objT, "patient") or SafeFind(objT, "animal") or SafeFind(pName, "patient") or SafeFind(pName, "animal") or SafeFind(pName, "bed") or SafeFind(pName, "cage") then
-                        local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
-                        if pPart then
-                            if Config.AutoEquipTools then EquipToolMatching() end
-                            TeleportTo(pPart.CFrame)
-                            task.wait(0.2)
-                            SafeInteractPrompt(obj)
-                            treated = treated + 1
-                            task.wait(math.max(obj.HoldDuration or 0.3, 0.4))
-                        end
+                if IsPatientMedicalPrompt(obj) then
+                    local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
+                    if pPart then
+                        if Config.AutoEquipTools then EquipAnyMedicalTool() end
+                        TeleportTo(pPart.CFrame)
+                        task.wait(0.2)
+                        SafeInteractPrompt(obj)
+                        treated = treated + 1
+                        task.wait(math.max(obj.HoldDuration or 0.3, 0.4))
                     end
                 end
             end
@@ -1427,7 +1467,34 @@ local function RunAverlikHub()
             SendNotification("Телепорт", "Активное задание не найдено", 2)
         end
     end)
-    TabTeleports:CreateSection("Телепорт к игрокам и пациентам")
+    TabTeleports:CreateSection("Телепорт к пациентам и игрокам")
+    TabTeleports:CreateButton("Телепорт к ближайшему пациенту / животному", true, function()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local nearestPart, minDist = nil, math.huge
+
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if IsPatientMedicalPrompt(obj) then
+                local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
+                if pPart then
+                    local dist = (root.Position - pPart.Position).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        nearestPart = pPart
+                    end
+                end
+            end
+        end
+
+        if nearestPart then
+            TeleportTo(nearestPart.CFrame)
+            SendNotification("Телепорт", "Телепортирован к пациенту!", 2)
+        else
+            SendNotification("Телепорт", "Пациенты не найдены на карте.", 2)
+        end
+    end)
+
     local SelectedPlayerName = nil
     local PlayerDropdown = TabTeleports:CreateDropdown("Телепорт к игроку", {}, "Выберите игрока", function(pName)
         SelectedPlayerName = pName
@@ -1445,7 +1512,7 @@ local function RunAverlikHub()
     Players.PlayerAdded:Connect(UpdatePlayersList)
     Players.PlayerRemoving:Connect(UpdatePlayersList)
 
-    TabTeleports:CreateButton("Телепортироваться к выбранному игроку", true, function()
+    TabTeleports:CreateButton("Телепортироваться к выбранному игроку", false, function()
         if SelectedPlayerName then
             local rawName = string.match(SelectedPlayerName, "@(%w+)")
             local target = rawName and Players:FindFirstChild(rawName)
@@ -1455,30 +1522,6 @@ local function RunAverlikHub()
             end
         else
             SendNotification("Телепорт", "Сначала выберите игрока из списка!", 2)
-        end
-    end)
-    TabTeleports:CreateButton("Телепорт к ближайшему животному", false, function()
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local nearest, minDist = nil, math.huge
-        for _, model in pairs(Workspace:GetDescendants()) do
-            if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char then
-                local pRoot = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso")
-                if pRoot then
-                    local dist = (root.Position - pRoot.Position).Magnitude
-                    if dist < minDist then
-                        minDist = dist
-                        nearest = pRoot
-                    end
-                end
-            end
-        end
-        if nearest then
-            TeleportTo(nearest.CFrame)
-            SendNotification("Телепорт", "Телепортирован к животному", 2)
-        else
-            SendNotification("Телепорт", "Пациенты не найдены", 2)
         end
     end)
 
@@ -1538,7 +1581,8 @@ local function RunAverlikHub()
     TabVisuals:CreateToggle("ESP Игроков", "Подсвечивает всех игроков на сервере", Config.ESP_Players, function(val)
         Config.ESP_Players = val
     end)
-    TabVisuals:CreateToggle("ESP Животных", "Подсвечивает всех пациентов и уровень здоровья", Config.ESP_Animals, function(val)
+    TabVisuals:CreateToggle("ESP Животных / Пациентов", "Подсвечивает всех пациентов и койки через стены", Config.ESP_Patients, function(val)
+        Config.ESP_Patients = val
         Config.ESP_Animals = val
     end)
     TabVisuals:CreateToggle("ESP NPC", "Подсвечивает персонал, продавцов и докторов", Config.ESP_NPCs, function(val)
@@ -1795,11 +1839,11 @@ local function RunAverlikHub()
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🩺 УМНЫЙ ЦИКЛ ОБРАБОТКИ ПАЦИЕНТОВ (1 ЗА РАЗ, БЕЗ СПАМА)
+    -- 🩺 ПОИСК И АВТО-ТП К БОЛЬНЫМ ПАЦИЕНТАМ
     -- ══════════════════════════════════════════════════════════════════════════
     local isHandlingPatient = false
 
-    local function GetNextBestTarget()
+    local function GetNextPatientTarget()
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return nil, nil end
@@ -1808,33 +1852,20 @@ local function RunAverlikHub()
         local now = tick()
 
         for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and obj.Enabled then
-                -- Проверка кулдауна на этот объект (не спамить один и тот же объект чаще 4 сек)
+            if IsPatientMedicalPrompt(obj) then
                 if not DebounceMap[obj] or (now - DebounceMap[obj]) > 4 then
-                    local act = string.lower(tostring(obj.ActionText or ""))
-                    local objT = string.lower(tostring(obj.ObjectText or ""))
-                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
                     local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
-
                     if pPart then
-                        local isHeal = SafeFind(act, "heal") or SafeFind(act, "treat") or SafeFind(act, "cure") or SafeFind(act, "med") or SafeFind(act, "help") or SafeFind(act, "diag") or SafeFind(act, "exam") or SafeFind(act, "inj") or SafeFind(objT, "heal") or SafeFind(objT, "patient") or SafeFind(objT, "animal") or SafeFind(pName, "patient") or SafeFind(pName, "bed") or SafeFind(pName, "cage")
-                        local isFeed = SafeFind(act, "feed") or SafeFind(act, "food") or SafeFind(act, "water") or SafeFind(objT, "feed")
-                        local isCare = SafeFind(act, "groom") or SafeFind(act, "wash") or SafeFind(act, "care") or SafeFind(act, "pet") or SafeFind(act, "brush")
-                        local isClean = SafeFind(act, "clean") or SafeFind(act, "sweep") or SafeFind(act, "bath") or SafeFind(objT, "clean") or SafeFind(objT, "trash")
+                        local dist = (root.Position - pPart.Position).Magnitude
+                        local hum = obj.Parent:FindFirstChild("Humanoid") or (obj.Parent.Parent and obj.Parent.Parent:FindFirstChild("Humanoid"))
+                        local hp = hum and hum.Health or 100
 
-                        if (Config.AutoHeal and isHeal) or (Config.AutoFeed and isFeed) or (Config.AutoCare and isCare) or (Config.AutoClean and isClean) then
-                            local dist = (root.Position - pPart.Position).Magnitude
-                            local hum = obj.Parent:FindFirstChild("Humanoid") or (obj.Parent.Parent and obj.Parent.Parent:FindFirstChild("Humanoid"))
-                            local hp = hum and hum.Health or 100
-
-                            table.insert(candidates, {
-                                Prompt = obj,
-                                Part = pPart,
-                                Distance = dist,
-                                Health = hp,
-                                Hold = obj.HoldDuration or 0
-                            })
-                        end
+                        table.insert(candidates, {
+                            Prompt = obj,
+                            Part = pPart,
+                            Distance = dist,
+                            Health = hp
+                        })
                     end
                 end
             end
@@ -1842,28 +1873,22 @@ local function RunAverlikHub()
 
         if #candidates == 0 then return nil, nil end
 
-        -- Сортировка по приоритету (низкое здоровье / близкая дистанция)
-        if Config.PriorityHeal then
-            table.sort(candidates, function(a, b)
-                if math.abs(a.Health - b.Health) > 5 then
-                    return a.Health < b.Health
-                end
-                return a.Distance < b.Distance
-            end)
-        else
-            table.sort(candidates, function(a, b)
-                return a.Distance < b.Distance
-            end)
-        end
+        -- Сортировка (сначала критические / ближайшие)
+        table.sort(candidates, function(a, b)
+            if Config.PriorityHeal and math.abs(a.Health - b.Health) > 5 then
+                return a.Health < b.Health
+            end
+            return a.Distance < b.Distance
+        end)
 
         return candidates[1].Prompt, candidates[1].Part
     end
 
     task.spawn(function()
         while true do
-            task.wait(0.15)
-            if (Config.AutoHeal or Config.AutoFeed or Config.AutoCare or Config.AutoClean) and not isHandlingPatient then
-                local bestPrompt, bestPart = GetNextBestTarget()
+            task.wait(0.2)
+            if Config.AutoHeal and not isHandlingPatient then
+                local bestPrompt, bestPart = GetNextPatientTarget()
                 if bestPrompt and bestPart and bestPrompt.Enabled then
                     isHandlingPatient = true
                     DebounceMap[bestPrompt] = tick()
@@ -1872,21 +1897,21 @@ local function RunAverlikHub()
                         local char = LocalPlayer.Character
                         local root = char and char:FindFirstChild("HumanoidRootPart")
                         if root then
-                            -- 1. Аккуратный подход / ТП
+                            -- 1. Телепорт прямо перед пациентом/койкой
                             if Config.AutoHealTeleport then
-                                TeleportTo(bestPart.CFrame * CFrame.new(0, 0, 3))
-                                task.wait(0.12)
+                                TeleportTo(bestPart.CFrame)
+                                task.wait(0.18)
                             end
 
-                            -- 2. Экипировка нужного инструмента
+                            -- 2. Экипировка любого инструмента/лекарства
                             if Config.AutoEquipTools then
-                                EquipToolMatching()
+                                EquipAnyMedicalTool()
                             end
 
-                            -- 3. Выполнение взаимодействия с выдержкой времени HoldDuration
+                            -- 3. Выполнение взаимодействия
                             SafeInteractPrompt(bestPrompt)
-                            
-                            -- 4. Ожидание завершения действия (HoldDuration + настроенная задержка)
+
+                            -- 4. Выдержка времени HoldDuration + задержка
                             local waitTime = math.max(bestPrompt.HoldDuration or 0.3, Config.HealDelay or 0.8)
                             task.wait(waitTime)
                         end
@@ -1898,7 +1923,7 @@ local function RunAverlikHub()
         end
     end)
 
-    -- Второстепенные циклы автоматизации
+    -- Второстепенные циклы
     task.spawn(function()
         while true do
             task.wait(0.5)
@@ -1980,7 +2005,7 @@ local function RunAverlikHub()
         end
     end)
 
-    -- ESP
+    -- ESP Пациентов и Игроков
     local ESP_Folder = Instance.new("Folder")
     ESP_Folder.Name = "Averlik_ESP_Folder"
     ESP_Folder.Parent = GuiParent
@@ -2044,7 +2069,7 @@ local function RunAverlikHub()
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
 
-            if not Config.ESP_Players and not Config.ESP_Animals and not Config.ESP_NPCs and not Config.ESP_Items and not Config.ESP_Quests then
+            if not Config.ESP_Players and not Config.ESP_Animals and not Config.ESP_NPCs and not Config.ESP_Items and not Config.ESP_Quests and not Config.ESP_Patients then
                 ESP_Folder:ClearAllChildren()
                 return
             end
@@ -2061,18 +2086,12 @@ local function RunAverlikHub()
             end
 
             if Config.ESP_Animals or Config.ESP_Patients then
-                for _, model in pairs(Workspace:GetDescendants()) do
-                    if model:IsA("Model") and (model:FindFirstChild("Humanoid") or model:FindFirstChild("Animal") or model:FindFirstChild("Patient")) and model ~= char and not Players:GetPlayerFromCharacter(model) then
-                        local mRoot = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso")
-                        if mRoot and not ESP_Folder:FindFirstChild("ESP_" .. model.Name) then
-                            local hum = model:FindFirstChild("Humanoid")
-                            local hpCol = Color3.fromRGB(80, 255, 120)
-                            if hum and hum.Health < 40 then
-                                hpCol = Color3.fromRGB(255, 75, 75)
-                            elseif hum and hum.Health < 80 then
-                                hpCol = Color3.fromRGB(255, 195, 45)
-                            end
-                            CreateESPBox(mRoot, "🐾 " .. model.Name, hpCol)
+                for _, obj in pairs(Workspace:GetDescendants()) do
+                    if IsPatientMedicalPrompt(obj) then
+                        local pPart = obj.Parent:IsA("BasePart") and obj.Parent or (obj.Parent:IsA("Model") and (obj.Parent.PrimaryPart or obj.Parent:FindFirstChildWhichIsA("BasePart")))
+                        if pPart and not ESP_Folder:FindFirstChild("ESP_Patient_" .. obj.Parent.Name) then
+                            local actText = obj.ActionText ~= "" and obj.ActionText or "Пациент"
+                            CreateESPBox(pPart, "🐾 " .. actText, Color3.fromRGB(80, 255, 140))
                         end
                     end
                 end
