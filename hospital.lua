@@ -1751,47 +1751,121 @@ local function RunAverlikHub()
     -- ══════════════════════════════════════════════════════════════════════════
     local isHospitalRunning = false
 
-    local function GetDiagnosedMedicine()
-        -- 1. Проверка ScreenGui
-        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if pg then
-            for _, g in pairs(pg:GetChildren()) do
-                if g:IsA("ScreenGui") and g.Enabled and g.Name ~= "AverlikHub_MainGui" then
-                    for _, txt in pairs(g:GetDescendants()) do
-                        if (txt:IsA("TextLabel") or txt:IsA("TextBox")) and txt.Visible then
-                            local t = string.lower(txt.Text)
-                            if SafeFind(t, "трав") or SafeFind(t, "herb") then return "Med_Herbs" end
-                            if SafeFind(t, "таблет") or SafeFind(t, "pill") then return "Med_Pills" end
-                            if SafeFind(t, "капл") or SafeFind(t, "drop") then return "Med_Drops" end
-                            if SafeFind(t, "капельниц") or SafeFind(t, "drip") or SafeFind(t, "iv") then return "Med_IVDrip" end
-                            if SafeFind(t, "аптеч") or SafeFind(t, "kit") or SafeFind(t, "aid") then return "Med_FirstAid" end
-                            if SafeFind(t, "термометр") or SafeFind(t, "шприц") or SafeFind(t, "thermometer") then return "Med_Thermometer" end
-                            if SafeFind(t, "сироп") or SafeFind(t, "syrup") then return "Med_Syrup" end
-                            if SafeFind(t, "микстур") or SafeFind(t, "mixture") then return "Med_Mixture" end
-                            if SafeFind(t, "бинт") or SafeFind(t, "band") then return "Med_Bandage" end
-                            if SafeFind(t, "пластыр") or SafeFind(t, "plast") then return "Med_Plaster" end
+    local function MatchMedicineKey(text, img)
+        local t = string.lower(tostring(text or ""))
+        local i = string.lower(tostring(img or ""))
+
+        -- Травы (Herbs)
+        if SafeFind(t, "трав") or SafeFind(t, "растен") or SafeFind(t, "herb") or SafeFind(t, "plant") or SafeFind(t, "leaf") or SafeFind(i, "herb") or SafeFind(i, "plant") or SafeFind(i, "leaf") then
+            return "Med_Herbs"
+        end
+
+        -- Таблетки (Pills)
+        if SafeFind(t, "таблет") or SafeFind(t, "pill") or SafeFind(t, "capsul") or SafeFind(t, "капсул") or SafeFind(i, "pill") then
+            return "Med_Pills"
+        end
+
+        -- Капли (Drops)
+        if SafeFind(t, "капл") or SafeFind(t, "глазн") or SafeFind(t, "drop") or SafeFind(i, "drop") then
+            return "Med_Drops"
+        end
+
+        -- Капельницы (IV Drip)
+        if SafeFind(t, "капельниц") or SafeFind(t, "drip") or SafeFind(t, "iv") or SafeFind(i, "drip") or SafeFind(i, "iv") then
+            return "Med_IVDrip"
+        end
+
+        -- Аптечки (First Aid)
+        if SafeFind(t, "аптеч") or SafeFind(t, "первая помощ") or SafeFind(t, "first aid") or SafeFind(t, "kit") or SafeFind(i, "kit") or SafeFind(i, "aid") then
+            return "Med_FirstAid"
+        end
+
+        -- Термометры / Шприцы (Thermometer / Syringe)
+        if SafeFind(t, "термометр") or SafeFind(t, "шприц") or SafeFind(t, "укол") or SafeFind(t, "градусник") or SafeFind(t, "thermometer") or SafeFind(t, "syringe") or SafeFind(t, "inject") or SafeFind(i, "thermo") or SafeFind(i, "syringe") then
+            return "Med_Thermometer"
+        end
+
+        -- Сиропы (Syrup)
+        if SafeFind(t, "сироп") or SafeFind(t, "syrup") or SafeFind(i, "syrup") then
+            return "Med_Syrup"
+        end
+
+        -- Микстуры (Mixture)
+        if SafeFind(t, "микстур") or SafeFind(t, "mixture") or SafeFind(t, "potion") or SafeFind(i, "mixture") then
+            return "Med_Mixture"
+        end
+
+        -- Бинты (Bandage)
+        if SafeFind(t, "бинт") or SafeFind(t, "перевяз") or SafeFind(t, "bandage") or SafeFind(t, "band") or SafeFind(i, "band") then
+            return "Med_Bandage"
+        end
+
+        -- Пластыри (Plaster)
+        if SafeFind(t, "пластыр") or SafeFind(t, "plaster") or SafeFind(t, "patch") or SafeFind(i, "plaster") or SafeFind(i, "patch") then
+            return "Med_Plaster"
+        end
+
+        return nil
+    end
+
+    local function GetDiagnosedMedicine(wardNum)
+        local devPos = wardNum and GetWardDevicePosition(wardNum) or nil
+        local devVec = devPos and (typeof(devPos) == "CFrame" and devPos.Position or devPos) or nil
+        local bedPos = wardNum and GetWardBedPosition(wardNum) or nil
+        local bedVec = bedPos and (typeof(bedPos) == "CFrame" and bedPos.Position or bedPos) or nil
+
+        -- 1. Проверка SurfaceGui и BillboardGui в Workspace (экран монитора ПК, анализатор, доска над койкой)
+        for _, gui in pairs(Workspace:GetDescendants()) do
+            if gui:IsA("SurfaceGui") or gui:IsA("BillboardGui") then
+                local isNear = true
+                if devVec or bedVec then
+                    local adPart = gui.Adornee or gui.Parent
+                    if adPart and adPart:IsA("BasePart") then
+                        local d1 = devVec and (adPart.Position - devVec).Magnitude or 999
+                        local d2 = bedVec and (adPart.Position - bedVec).Magnitude or 999
+                        if d1 > 30 and d2 > 30 then isNear = false end
+                    end
+                end
+
+                if isNear then
+                    for _, elem in pairs(gui:GetDescendants()) do
+                        if (elem:IsA("TextLabel") or elem:IsA("TextButton") or elem:IsA("TextBox")) and elem.Visible then
+                            local matched = MatchMedicineKey(elem.Text, nil)
+                            if matched then return matched end
+                        elseif elem:IsA("ImageLabel") or elem:IsA("ImageButton") then
+                            local matched = MatchMedicineKey(elem.Name, elem.Image)
+                            if matched then return matched end
                         end
                     end
                 end
             end
         end
 
-        -- 2. Проверка BillboardGui в Workspace
-        for _, bg in pairs(Workspace:GetDescendants()) do
-            if bg:IsA("BillboardGui") and bg.Enabled then
-                for _, txt in pairs(bg:GetDescendants()) do
-                    if txt:IsA("TextLabel") and txt.Visible then
-                        local t = string.lower(txt.Text)
-                        if SafeFind(t, "трав") or SafeFind(t, "herb") then return "Med_Herbs" end
-                        if SafeFind(t, "таблет") or SafeFind(t, "pill") then return "Med_Pills" end
-                        if SafeFind(t, "капл") or SafeFind(t, "drop") then return "Med_Drops" end
-                        if SafeFind(t, "капельниц") or SafeFind(t, "drip") or SafeFind(t, "iv") then return "Med_IVDrip" end
-                        if SafeFind(t, "аптеч") or SafeFind(t, "kit") or SafeFind(t, "aid") then return "Med_FirstAid" end
-                        if SafeFind(t, "термометр") or SafeFind(t, "шприц") or SafeFind(t, "thermometer") then return "Med_Thermometer" end
-                        if SafeFind(t, "сироп") or SafeFind(t, "syrup") then return "Med_Syrup" end
-                        if SafeFind(t, "микстур") or SafeFind(t, "mixture") then return "Med_Mixture" end
-                        if SafeFind(t, "бинт") or SafeFind(t, "band") then return "Med_Bandage" end
-                        if SafeFind(t, "пластыр") or SafeFind(t, "plast") then return "Med_Plaster" end
+        -- 2. Проверка всплывающего UI (PlayerGui)
+        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if pg then
+            for _, g in pairs(pg:GetChildren()) do
+                if g:IsA("ScreenGui") and g.Enabled and g.Name ~= "AverlikHub_MainGui" then
+                    for _, elem in pairs(g:GetDescendants()) do
+                        if (elem:IsA("TextLabel") or elem:IsA("TextButton") or elem:IsA("TextBox")) and elem.Visible then
+                            local matched = MatchMedicineKey(elem.Text, nil)
+                            if matched then return matched end
+                        elseif elem:IsA("ImageLabel") or elem:IsA("ImageButton") then
+                            local matched = MatchMedicineKey(elem.Name, elem.Image)
+                            if matched then return matched end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 3. Глобальный поиск по всем SurfaceGui/BillboardGui в Workspace
+        for _, gui in pairs(Workspace:GetDescendants()) do
+            if (gui:IsA("SurfaceGui") or gui:IsA("BillboardGui")) and gui.Enabled then
+                for _, elem in pairs(gui:GetDescendants()) do
+                    if (elem:IsA("TextLabel") or elem:IsA("TextButton")) and elem.Visible then
+                        local matched = MatchMedicineKey(elem.Text, nil)
+                        if matched then return matched end
                     end
                 end
             end
@@ -1978,26 +2052,33 @@ local function RunAverlikHub()
                 if bp and #bp:GetChildren() > 0 then hasMed = true end
 
                 if not hasMed then
-                    -- Определяем точное лекарство по диагнозу
-                    local reqMedKey = GetDiagnosedMedicine()
-                    local medTarget = reqMedKey and CustomWaypoints[reqMedKey] or CustomWaypoints.Med_Herbs or CustomWaypoints.Med_Pills or CustomWaypoints.Med_Drops or CustomWaypoints.Med_FirstAid
-
-                    if medTarget then
-                        TeleportTo(medTarget)
-                        task.wait(0.35)
+                    -- Читаем диагноз (до 4 попыток с микропаузой)
+                    local reqMedKey = nil
+                    for try = 1, 4 do
+                        reqMedKey = GetDiagnosedMedicine(wardNum)
+                        if reqMedKey then break end
+                        task.wait(0.25)
                     end
 
-                    -- Забираем лекарство со шкафа/полки
-                    local myP = GetMyPosition()
-                    for _, cabObj in pairs(Workspace:GetDescendants()) do
-                        if IsCabinetPrompt(cabObj) then
-                            local cabCF = GetPromptTargetCFrame(cabObj)
-                            if cabCF and myP and (cabCF.Position - myP).Magnitude < 14 then
-                                SafeInteractPrompt(cabObj, 0.4)
-                                task.wait(0.5)
-                                break
+                    if reqMedKey and CustomWaypoints[reqMedKey] then
+                        local medTarget = CustomWaypoints[reqMedKey]
+                        TeleportTo(medTarget)
+                        task.wait(0.35)
+
+                        -- Ищем подсказку именно на этой целевой полке (до 7 studs)
+                        local myP = GetMyPosition()
+                        for _, cabObj in pairs(Workspace:GetDescendants()) do
+                            if IsCabinetPrompt(cabObj) then
+                                local cabCF = GetPromptTargetCFrame(cabObj)
+                                if cabCF and myP and (cabCF.Position - myP).Magnitude < 7.5 then
+                                    SafeInteractPrompt(cabObj, 0.4)
+                                    task.wait(0.5)
+                                    break
+                                end
                             end
                         end
+                    else
+                        print("[Averlik Hub] Диагноз в палате " .. tostring(wardNum) .. " не распознан. Пропуск взятия лекарства во избежание ошибки.")
                     end
                 end
 
