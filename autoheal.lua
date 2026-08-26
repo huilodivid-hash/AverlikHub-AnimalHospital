@@ -1823,6 +1823,76 @@ local function RunAverlikHub()
         return nil
     end
 
+    local function PerformDeskAnalysis(devPos)
+        if not devPos then return end
+        local devVec = typeof(devPos) == "CFrame" and devPos.Position or devPos
+
+        -- ШАГ 2.1: Встаем перед столом со сканером
+        TeleportTo(devPos)
+        task.wait(0.35)
+
+        -- 1-е НАЖАТИЕ: Вставить пробирку в сканер / Запустить анализ
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                local pCF = GetPromptTargetCFrame(obj)
+                if pCF and (pCF.Position - devVec).Magnitude < 18 then
+                    SafeInteractPrompt(obj, 0.4)
+                    task.wait(0.3)
+                    break
+                end
+            elseif obj:IsA("ClickDetector") and obj.Parent then
+                local p = obj.Parent
+                if p:IsA("BasePart") and (p.Position - devVec).Magnitude < 18 then
+                    pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                    task.wait(0.3)
+                    break
+                end
+            end
+        end
+
+        -- Ожидание завершения центрифуги (3.6 сек, пока не появится «Завершено» и «Необходимые действия !»)
+        task.wait(3.6)
+
+        -- 2-е НАЖАТИЕ: Нажать на компьютер («Необходимые действия !» / «Завершено»)
+        for repeatClick = 1, 3 do
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                    local pCF = GetPromptTargetCFrame(obj)
+                    if pCF and (pCF.Position - devVec).Magnitude < 20 then
+                        SafeInteractPrompt(obj, 0.4)
+                        task.wait(0.2)
+                    end
+                elseif obj:IsA("ClickDetector") and obj.Parent then
+                    local p = obj.Parent
+                    if p:IsA("BasePart") and (p.Position - devVec).Magnitude < 20 then
+                        pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                        task.wait(0.2)
+                    end
+                end
+            end
+
+            -- Нажатие на экран компьютера (SurfaceGui / BillboardGui)
+            for _, sg in pairs(Workspace:GetDescendants()) do
+                if (sg:IsA("SurfaceGui") or sg:IsA("BillboardGui")) and sg.Adornee then
+                    local adPart = sg.Adornee:IsA("BasePart") and sg.Adornee or nil
+                    if adPart and (adPart.Position - devVec).Magnitude < 20 then
+                        for _, btn in pairs(sg:GetDescendants()) do
+                            if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
+                                pcall(function()
+                                    if firesignal then
+                                        firesignal(btn.MouseButton1Click)
+                                        firesignal(btn.Activated)
+                                    end
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+            task.wait(0.3)
+        end
+    end
+
     local function ProcessHospitalCycle()
         -- 0. Авто-регистрация на ресепшене
         if Config.AutoRegistration then
@@ -1870,45 +1940,9 @@ local function RunAverlikHub()
                     SafeInteractPrompt(patientPrompt, 0.4)
                     task.wait(1.2) -- Время взятия анализа ДНК
 
-                    -- ШАГ 2: Перенос в сканер/центрифугу в этой же палате
+                    -- ШАГ 2: Перенос в сканер и взаимодействие с компьютером (2 нажатия)
                     if devPos then
-                        TeleportTo(devPos)
-                        task.wait(0.35)
-                    end
-
-                    -- Вставляем ДНК в сканер
-                    local devVec = typeof(devPos) == "CFrame" and devPos.Position or devPos
-                    for _, lObj in pairs(Workspace:GetDescendants()) do
-                        if IsLabMachinePrompt(lObj) then
-                            local lCF = GetPromptTargetCFrame(lObj)
-                            if lCF and devVec and (lCF.Position - devVec).Magnitude < 20 then
-                                TeleportTo(lCF)
-                                task.wait(0.2)
-                                SafeInteractPrompt(lObj, 0.3)
-                                break
-                            end
-                        end
-                    end
-
-                    -- Ожидание работы сканера (3.2 секунды)
-                    task.wait(3.2)
-
-                    -- Взаимодействие с компьютером/результатом анализа
-                    for _, cObj in pairs(Workspace:GetDescendants()) do
-                        if cObj:IsA("ProximityPrompt") and cObj.Enabled and not IsDoorOrTrash(cObj) then
-                            local cCF = GetPromptTargetCFrame(cObj)
-                            if cCF and devVec and (cCF.Position - devVec).Magnitude < 18 then
-                                local act = string.lower(tostring(cObj.ActionText or ""))
-                                local objT = string.lower(tostring(cObj.ObjectText or ""))
-                                if SafeFind(act, "результат") or SafeFind(act, "компьют") or SafeFind(act, "взят") or SafeFind(act, "получит") or SafeFind(act, "рецепт") or SafeFind(objT, "компьют") or SafeFind(act, "анализ") then
-                                    TeleportTo(cCF)
-                                    task.wait(0.2)
-                                    SafeInteractPrompt(cObj, 0.3)
-                                    task.wait(0.5)
-                                    break
-                                end
-                            end
-                        end
+                        PerformDeskAnalysis(devPos)
                     end
                 end
 
