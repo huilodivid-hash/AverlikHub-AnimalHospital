@@ -1,15 +1,14 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (100% BULLETPROOF LOADER)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (100% UNIVERSAL INJECTOR)
     ══════════════════════════════════════════════════════════════════════════════════
-    • Точный дизайн: Averlik Hub (Glassmorphism & Neon Purple #d946ef)
-    • Совместимость: Solara, Wave, Delta, Arceus X, Codex, Fluxus, Synapse, etc.
-    • 100% Гарантия инициализации и отображения на экране
+    • Совместимость: Все эксплоиты (Solara, Wave, Delta, Arceus X, Codex, Fluxus, etc.)
+    • Авто-масштабирование под ПК и Мобильные экраны
+    • Прямая привязка к CoreGui / gethui / PlayerGui с защитой от сброса
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
-local function Main()
-    -- 1. Сервисы
+local function RunAverlikHub()
     local Players = game:GetService("Players")
     local Workspace = game:GetService("Workspace")
     local RunService = game:GetService("RunService")
@@ -20,61 +19,86 @@ local function Main()
     local Lighting = game:GetService("Lighting")
     local VirtualUser = game:GetService("VirtualUser")
 
-    -- 2. Ожидание LocalPlayer
     local LocalPlayer = Players.LocalPlayer
     if not LocalPlayer then
         repeat
-            task.wait(0.1)
+            task.wait(0.05)
             LocalPlayer = Players.LocalPlayer
         until LocalPlayer
     end
 
-    -- 3. Очистка предыдущих версий
+    -- Звуковой сигнал успешного инжекта
     pcall(function()
-        if getgenv and getgenv().AverlikHub_Gui then
-            getgenv().AverlikHub_Gui:Destroy()
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://4590662766"
+        sound.Volume = 0.5
+        sound.Parent = Workspace
+        sound:Play()
+        sound.Ended:Connect(function() sound:Destroy() end)
+    end)
+
+    -- Удаление старого GUI при повторном инжекте
+    pcall(function()
+        if getgenv and getgenv().AverlikHub_Instance then
+            getgenv().AverlikHub_Instance:Destroy()
         end
-        if getgenv and getgenv().AverlikHub_ESP then
-            getgenv().AverlikHub_ESP:Destroy()
+        if getgenv and getgenv().AverlikHub_ESPFolder then
+            getgenv().AverlikHub_ESPFolder:Destroy()
+        end
+        for _, old in pairs(game:GetService("CoreGui"):GetChildren()) do
+            if old.Name == "AverlikHub_MainGui" then old:Destroy() end
         end
         local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if pg and pg:FindFirstChild("AverlikHub_ScreenGui") then
-            pg.AverlikHub_ScreenGui:Destroy()
+        if pg then
+            for _, old in pairs(pg:GetChildren()) do
+                if old.Name == "AverlikHub_MainGui" then old:Destroy() end
+            end
         end
     end)
 
-    -- 4. Получение PlayerGui (гарантированное отображение на всех эксплоитах)
-    local function GetParentGui()
+    -- Определение лучшего родителя для GUI (CoreGui / gethui / PlayerGui)
+    local function GetSafeParent()
+        local parent = nil
+        pcall(function()
+            local cg = game:GetService("CoreGui")
+            local test = Instance.new("Folder")
+            test.Parent = cg
+            test:Destroy()
+            parent = cg
+        end)
+        if parent then return parent end
+
         if gethui then
-            local ok, res = pcall(gethui)
-            if ok and res then return res end
+            local ok, h = pcall(gethui)
+            if ok and h then return h end
         end
+
         local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
         if pg then return pg end
-        return LocalPlayer:WaitForChild("PlayerGui", 10)
+
+        return LocalPlayer:WaitForChild("PlayerGui", 5)
     end
 
-    local TargetParent = GetParentGui()
-    if not TargetParent then
-        warn("[Averlik Hub] Ошибка: Не удалось найти PlayerGui!")
-        return
+    local GuiParent = GetSafeParent()
+    if not GuiParent then
+        GuiParent = LocalPlayer:WaitForChild("PlayerGui")
     end
 
-    -- 5. Создание ScreenGui
-    local MainScreenGui = Instance.new("ScreenGui")
-    MainScreenGui.Name = "AverlikHub_ScreenGui"
-    MainScreenGui.ResetOnSpawn = false
-    MainScreenGui.IgnoreGuiInset = true
-    MainScreenGui.DisplayOrder = 999999
-    MainScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    MainScreenGui.Enabled = true
-    MainScreenGui.Parent = TargetParent
+    -- Создание ScreenGui
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "AverlikHub_MainGui"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.IgnoreGuiInset = true
+    ScreenGui.DisplayOrder = 999999
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.Enabled = true
+    ScreenGui.Parent = GuiParent
 
     if getgenv then
-        getgenv().AverlikHub_Gui = MainScreenGui
+        getgenv().AverlikHub_Instance = ScreenGui
     end
 
-    -- 6. Конфигурация
+    -- Настройки
     local Config = {
         AutoFarm = false,
         AutoCollect = false,
@@ -110,7 +134,7 @@ local function Main()
         Tracers = false,
         FPSBoost = false,
         LowGraphics = false,
-        AccentColor = Color3.fromRGB(219, 70, 237),
+        AccentColor = Color3.fromRGB(219, 70, 237), -- Неоново-пурпурный #db46ed
         BackgroundColor = Color3.fromRGB(16, 16, 20),
         SidebarColor = Color3.fromRGB(13, 13, 16),
         SelectedConfig = "Default",
@@ -119,13 +143,11 @@ local function Main()
 
     local MemoryConfigs = {}
 
-    -- Безопасный поиск строк
     local function SafeFind(str, query)
         if not str or type(str) ~= "string" or not query then return false end
         return string.find(string.lower(str), string.lower(query), 1, true) ~= nil
     end
 
-    -- 7. Хелперы взаимодействия
     local function SafeInteractPrompt(prompt)
         if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
         pcall(function()
@@ -174,14 +196,14 @@ local function Main()
         end)
     end
 
-    -- 8. Уведомления (Toasts)
+    -- Уведомления (Toasts)
     local ToastContainer = Instance.new("Frame")
     ToastContainer.Name = "ToastContainer"
     ToastContainer.Size = UDim2.new(0, 260, 0, 300)
     ToastContainer.Position = UDim2.new(1, -280, 0, 30)
     ToastContainer.BackgroundTransparency = 1
     ToastContainer.ZIndex = 10000
-    ToastContainer.Parent = MainScreenGui
+    ToastContainer.Parent = ScreenGui
 
     local ToastListLayout = Instance.new("UIListLayout")
     ToastListLayout.Padding = UDim.new(0, 8)
@@ -246,17 +268,18 @@ local function Main()
         end)
     end
 
-    -- 9. Плавающий виджет HUD (слева снизу)
+    -- Плавающий виджет HUD (слева снизу как на фото)
     local FloatingPill = Instance.new("Frame")
     FloatingPill.Name = "FloatingHUD"
     FloatingPill.Size = UDim2.new(0, 165, 0, 46)
-    FloatingPill.Position = UDim2.new(0, 25, 1, -80)
+    FloatingPill.Position = UDim2.new(0, 20, 1, -70)
+    FloatingPill.AnchorPoint = Vector2.new(0, 1)
     FloatingPill.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
     FloatingPill.BorderSizePixel = 0
     FloatingPill.Active = true
     FloatingPill.Visible = true
     FloatingPill.ZIndex = 5000
-    FloatingPill.Parent = MainScreenGui
+    FloatingPill.Parent = ScreenGui
 
     local PillCorner = Instance.new("UICorner")
     PillCorner.CornerRadius = UDim.new(0, 12)
@@ -321,18 +344,23 @@ local function Main()
     PillBtn.ZIndex = 5005
     PillBtn.Parent = FloatingPill
 
-    -- 10. Главное окно (MainWindow)
+    -- Главное окно (MainWindow)
+    local cam = Workspace.CurrentCamera
+    local vpSize = cam and cam.ViewportSize or Vector2.new(1280, 720)
+    local winW = math.clamp(vpSize.X - 40, 320, 660)
+    local winH = math.clamp(vpSize.Y - 60, 280, 430)
+
     local MainWindow = Instance.new("Frame")
     MainWindow.Name = "MainWindow"
     MainWindow.AnchorPoint = Vector2.new(0.5, 0.5)
-    MainWindow.Size = UDim2.new(0, 680, 0, 440)
+    MainWindow.Size = UDim2.new(0, winW, 0, winH)
     MainWindow.Position = UDim2.new(0.5, 0, 0.5, 0)
     MainWindow.BackgroundColor3 = Config.BackgroundColor
     MainWindow.BorderSizePixel = 0
     MainWindow.Active = true
     MainWindow.Visible = true
     MainWindow.ZIndex = 1000
-    MainWindow.Parent = MainScreenGui
+    MainWindow.Parent = ScreenGui
 
     local MainCorner = Instance.new("UICorner")
     MainCorner.CornerRadius = UDim.new(0, 14)
@@ -343,7 +371,7 @@ local function Main()
     MainStroke.Thickness = 1.2
     MainStroke.Parent = MainWindow
 
-    -- Перетаскивание (Drag)
+    -- Dragging
     local function EnableDrag(frame, handle)
         handle = handle or frame
         local dragging, dragInput, dragStart, startPos
@@ -377,10 +405,10 @@ local function Main()
     EnableDrag(MainWindow)
     EnableDrag(FloatingPill)
 
-    -- 11. Сайдбар
+    -- Сайдбар
     local Sidebar = Instance.new("Frame")
     Sidebar.Name = "Sidebar"
-    Sidebar.Size = UDim2.new(0, 170, 1, 0)
+    Sidebar.Size = UDim2.new(0, 160, 1, 0)
     Sidebar.Position = UDim2.new(0, 0, 0, 0)
     Sidebar.BackgroundColor3 = Config.SidebarColor
     Sidebar.BorderSizePixel = 0
@@ -408,14 +436,14 @@ local function Main()
     SidebarDivider.Parent = Sidebar
 
     local BrandFrame = Instance.new("Frame")
-    BrandFrame.Size = UDim2.new(1, 0, 0, 60)
+    BrandFrame.Size = UDim2.new(1, 0, 0, 56)
     BrandFrame.BackgroundTransparency = 1
     BrandFrame.ZIndex = 1002
     BrandFrame.Parent = Sidebar
 
     local BrandLogo = Instance.new("Frame")
-    BrandLogo.Size = UDim2.new(0, 34, 0, 34)
-    BrandLogo.Position = UDim2.new(0, 12, 0, 13)
+    BrandLogo.Size = UDim2.new(0, 32, 0, 32)
+    BrandLogo.Position = UDim2.new(0, 12, 0, 12)
     BrandLogo.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
     BrandLogo.BorderSizePixel = 0
     BrandLogo.ZIndex = 1003
@@ -428,7 +456,7 @@ local function Main()
     local BrandLogoLetter = Instance.new("TextLabel")
     BrandLogoLetter.Text = "A"
     BrandLogoLetter.Font = Enum.Font.GothamBold
-    BrandLogoLetter.TextSize = 18
+    BrandLogoLetter.TextSize = 17
     BrandLogoLetter.TextColor3 = Config.AccentColor
     BrandLogoLetter.Size = UDim2.new(1, 0, 1, 0)
     BrandLogoLetter.BackgroundTransparency = 1
@@ -440,8 +468,8 @@ local function Main()
     BrandTitle.Font = Enum.Font.GothamBold
     BrandTitle.TextSize = 13
     BrandTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    BrandTitle.Position = UDim2.new(0, 54, 0, 13)
-    BrandTitle.Size = UDim2.new(1, -60, 0, 16)
+    BrandTitle.Position = UDim2.new(0, 50, 0, 11)
+    BrandTitle.Size = UDim2.new(1, -55, 0, 16)
     BrandTitle.BackgroundTransparency = 1
     BrandTitle.TextXAlignment = Enum.TextXAlignment.Left
     BrandTitle.ZIndex = 1003
@@ -450,10 +478,10 @@ local function Main()
     local BrandSub = Instance.new("TextLabel")
     BrandSub.Text = "Animal Hospital"
     BrandSub.Font = Enum.Font.Gotham
-    BrandSub.TextSize = 11
+    BrandSub.TextSize = 10
     BrandSub.TextColor3 = Color3.fromRGB(140, 140, 155)
-    BrandSub.Position = UDim2.new(0, 54, 0, 30)
-    BrandSub.Size = UDim2.new(1, -60, 0, 14)
+    BrandSub.Position = UDim2.new(0, 50, 0, 27)
+    BrandSub.Size = UDim2.new(1, -55, 0, 14)
     BrandSub.BackgroundTransparency = 1
     BrandSub.TextXAlignment = Enum.TextXAlignment.Left
     BrandSub.ZIndex = 1003
@@ -461,8 +489,8 @@ local function Main()
 
     local TabListContainer = Instance.new("ScrollingFrame")
     TabListContainer.Name = "TabList"
-    TabListContainer.Size = UDim2.new(1, -14, 1, -135)
-    TabListContainer.Position = UDim2.new(0, 7, 0, 62)
+    TabListContainer.Size = UDim2.new(1, -14, 1, -125)
+    TabListContainer.Position = UDim2.new(0, 7, 0, 58)
     TabListContainer.BackgroundTransparency = 1
     TabListContainer.BorderSizePixel = 0
     TabListContainer.ScrollBarThickness = 2
@@ -479,8 +507,8 @@ local function Main()
 
     local SidebarFooter = Instance.new("Frame")
     SidebarFooter.Name = "Footer"
-    SidebarFooter.Size = UDim2.new(1, -14, 0, 54)
-    SidebarFooter.Position = UDim2.new(0, 7, 1, -60)
+    SidebarFooter.Size = UDim2.new(1, -14, 0, 50)
+    SidebarFooter.Position = UDim2.new(0, 7, 1, -56)
     SidebarFooter.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     SidebarFooter.BorderSizePixel = 0
     SidebarFooter.ZIndex = 1003
@@ -498,9 +526,9 @@ local function Main()
     local DiscordLabel = Instance.new("TextLabel")
     DiscordLabel.Text = "discord.gg/bJFF653nK"
     DiscordLabel.Font = Enum.Font.GothamBold
-    DiscordLabel.TextSize = 11
+    DiscordLabel.TextSize = 10
     DiscordLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    DiscordLabel.Position = UDim2.new(0, 0, 0, 8)
+    DiscordLabel.Position = UDim2.new(0, 0, 0, 6)
     DiscordLabel.Size = UDim2.new(1, 0, 0, 16)
     DiscordLabel.BackgroundTransparency = 1
     DiscordLabel.ZIndex = 1004
@@ -512,24 +540,24 @@ local function Main()
     FooterSub.Font = Enum.Font.Gotham
     FooterSub.TextSize = 10
     FooterSub.TextColor3 = Color3.fromRGB(140, 140, 155)
-    FooterSub.Position = UDim2.new(0, 0, 0, 26)
+    FooterSub.Position = UDim2.new(0, 0, 0, 24)
     FooterSub.Size = UDim2.new(1, 0, 0, 16)
     FooterSub.BackgroundTransparency = 1
     FooterSub.ZIndex = 1004
     FooterSub.Parent = SidebarFooter
 
-    -- 12. Правая контентная часть
+    -- Правая часть (Контент)
     local ContentArea = Instance.new("Frame")
     ContentArea.Name = "ContentArea"
-    ContentArea.Size = UDim2.new(1, -170, 1, 0)
-    ContentArea.Position = UDim2.new(0, 170, 0, 0)
+    ContentArea.Size = UDim2.new(1, -160, 1, 0)
+    ContentArea.Position = UDim2.new(0, 160, 0, 0)
     ContentArea.BackgroundTransparency = 1
     ContentArea.ZIndex = 1001
     ContentArea.Parent = MainWindow
 
     local ContentHeader = Instance.new("Frame")
     ContentHeader.Name = "Header"
-    ContentHeader.Size = UDim2.new(1, 0, 0, 60)
+    ContentHeader.Size = UDim2.new(1, 0, 0, 56)
     ContentHeader.Position = UDim2.new(0, 0, 0, 0)
     ContentHeader.BackgroundTransparency = 1
     ContentHeader.ZIndex = 1002
@@ -539,10 +567,10 @@ local function Main()
     HeaderTitle.Name = "Title"
     HeaderTitle.Text = "Авто фарм"
     HeaderTitle.Font = Enum.Font.GothamBold
-    HeaderTitle.TextSize = 17
+    HeaderTitle.TextSize = 16
     HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    HeaderTitle.Position = UDim2.new(0, 18, 0, 12)
-    HeaderTitle.Size = UDim2.new(0, 220, 0, 20)
+    HeaderTitle.Position = UDim2.new(0, 16, 0, 10)
+    HeaderTitle.Size = UDim2.new(0, 200, 0, 18)
     HeaderTitle.BackgroundTransparency = 1
     HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
     HeaderTitle.ZIndex = 1003
@@ -552,10 +580,10 @@ local function Main()
     HeaderSub.Name = "Subtitle"
     HeaderSub.Text = "Автоматизация больницы и заработка"
     HeaderSub.Font = Enum.Font.Gotham
-    HeaderSub.TextSize = 11
+    HeaderSub.TextSize = 10
     HeaderSub.TextColor3 = Color3.fromRGB(140, 140, 155)
-    HeaderSub.Position = UDim2.new(0, 18, 0, 33)
-    HeaderSub.Size = UDim2.new(0, 260, 0, 14)
+    HeaderSub.Position = UDim2.new(0, 16, 0, 29)
+    HeaderSub.Size = UDim2.new(0, 230, 0, 14)
     HeaderSub.BackgroundTransparency = 1
     HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
     HeaderSub.ZIndex = 1003
@@ -563,8 +591,8 @@ local function Main()
 
     local SearchBoxContainer = Instance.new("Frame")
     SearchBoxContainer.Name = "SearchContainer"
-    SearchBoxContainer.Size = UDim2.new(0, 150, 0, 30)
-    SearchBoxContainer.Position = UDim2.new(1, -195, 0, 15)
+    SearchBoxContainer.Size = UDim2.new(0, 130, 0, 28)
+    SearchBoxContainer.Position = UDim2.new(1, -170, 0, 14)
     SearchBoxContainer.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     SearchBoxContainer.BorderSizePixel = 0
     SearchBoxContainer.ZIndex = 1003
@@ -587,8 +615,8 @@ local function Main()
     SearchInput.Font = Enum.Font.Gotham
     SearchInput.TextSize = 11
     SearchInput.TextColor3 = Color3.fromRGB(240, 240, 250)
-    SearchInput.Size = UDim2.new(1, -16, 1, 0)
-    SearchInput.Position = UDim2.new(0, 10, 0, 0)
+    SearchInput.Size = UDim2.new(1, -14, 1, 0)
+    SearchInput.Position = UDim2.new(0, 8, 0, 0)
     SearchInput.BackgroundTransparency = 1
     SearchInput.TextXAlignment = Enum.TextXAlignment.Left
     SearchInput.ClearTextOnFocus = false
@@ -597,13 +625,13 @@ local function Main()
 
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Name = "CloseBtn"
-    CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-    CloseBtn.Position = UDim2.new(1, -38, 0, 15)
+    CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+    CloseBtn.Position = UDim2.new(1, -34, 0, 14)
     CloseBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
     CloseBtn.BorderSizePixel = 0
     CloseBtn.Text = "✕"
     CloseBtn.Font = Enum.Font.GothamBold
-    CloseBtn.TextSize = 13
+    CloseBtn.TextSize = 12
     CloseBtn.TextColor3 = Color3.fromRGB(180, 180, 195)
     CloseBtn.ZIndex = 1003
     CloseBtn.Parent = ContentHeader
@@ -611,11 +639,6 @@ local function Main()
     local CloseCorner = Instance.new("UICorner")
     CloseCorner.CornerRadius = UDim.new(0, 8)
     CloseCorner.Parent = CloseBtn
-
-    local CloseStroke = Instance.new("UIStroke")
-    CloseStroke.Color = Color3.fromRGB(34, 34, 44)
-    CloseStroke.Thickness = 1
-    CloseStroke.Parent = CloseBtn
 
     local function ToggleGUI()
         MainWindow.Visible = not MainWindow.Visible
@@ -636,20 +659,20 @@ local function Main()
 
     local PagesHolder = Instance.new("Frame")
     PagesHolder.Name = "PagesHolder"
-    PagesHolder.Size = UDim2.new(1, 0, 1, -60)
-    PagesHolder.Position = UDim2.new(0, 0, 0, 60)
+    PagesHolder.Size = UDim2.new(1, 0, 1, -56)
+    PagesHolder.Position = UDim2.new(0, 0, 0, 56)
     PagesHolder.BackgroundTransparency = 1
     PagesHolder.ZIndex = 1002
     PagesHolder.Parent = ContentArea
 
-    -- 13. UI Builder
+    -- UI Builder
     local Tabs = {}
     local CurrentTab = nil
 
     local function CreateTab(name, icon, subtitle, layoutOrder)
         local tabButton = Instance.new("TextButton")
         tabButton.Name = "Tab_" .. name
-        tabButton.Size = UDim2.new(1, 0, 0, 34)
+        tabButton.Size = UDim2.new(1, 0, 0, 32)
         tabButton.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
         tabButton.BackgroundTransparency = 1
         tabButton.BorderSizePixel = 0
@@ -666,10 +689,10 @@ local function Main()
         iconLabel.Name = "Icon"
         iconLabel.Text = icon or "•"
         iconLabel.Font = Enum.Font.GothamBold
-        iconLabel.TextSize = 13
+        iconLabel.TextSize = 12
         iconLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
-        iconLabel.Position = UDim2.new(0, 10, 0, 0)
-        iconLabel.Size = UDim2.new(0, 20, 1, 0)
+        iconLabel.Position = UDim2.new(0, 8, 0, 0)
+        iconLabel.Size = UDim2.new(0, 18, 1, 0)
         iconLabel.BackgroundTransparency = 1
         iconLabel.ZIndex = 1005
         iconLabel.Parent = tabButton
@@ -678,10 +701,10 @@ local function Main()
         nameLabel.Name = "Label"
         nameLabel.Text = name
         nameLabel.Font = Enum.Font.GothamMedium
-        nameLabel.TextSize = 12
+        nameLabel.TextSize = 11
         nameLabel.TextColor3 = Color3.fromRGB(160, 160, 175)
-        nameLabel.Position = UDim2.new(0, 36, 0, 0)
-        nameLabel.Size = UDim2.new(1, -40, 1, 0)
+        nameLabel.Position = UDim2.new(0, 32, 0, 0)
+        nameLabel.Size = UDim2.new(1, -36, 1, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.ZIndex = 1005
@@ -689,8 +712,8 @@ local function Main()
 
         local pageScroll = Instance.new("ScrollingFrame")
         pageScroll.Name = "Page_" .. name
-        pageScroll.Size = UDim2.new(1, -26, 1, -12)
-        pageScroll.Position = UDim2.new(0, 13, 0, 0)
+        pageScroll.Size = UDim2.new(1, -20, 1, -10)
+        pageScroll.Position = UDim2.new(0, 10, 0, 0)
         pageScroll.BackgroundTransparency = 1
         pageScroll.BorderSizePixel = 0
         pageScroll.ScrollBarThickness = 3
@@ -702,7 +725,7 @@ local function Main()
         pageScroll.Parent = PagesHolder
 
         local pageLayout = Instance.new("UIListLayout")
-        pageLayout.Padding = UDim.new(0, 7)
+        pageLayout.Padding = UDim.new(0, 6)
         pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
         pageLayout.Parent = pageScroll
 
@@ -741,7 +764,7 @@ local function Main()
         function tabObj:CreateSection(sectionTitle)
             local secFrame = Instance.new("Frame")
             secFrame.Name = "Sec_" .. sectionTitle
-            secFrame.Size = UDim2.new(1, 0, 0, 24)
+            secFrame.Size = UDim2.new(1, 0, 0, 22)
             secFrame.BackgroundTransparency = 1
             secFrame.ZIndex = 1004
             secFrame.Parent = pageScroll
@@ -775,7 +798,7 @@ local function Main()
         function tabObj:CreateToggle(title, description, defaultValue, callback)
             local toggleCard = Instance.new("Frame")
             toggleCard.Name = "Toggle_" .. title
-            toggleCard.Size = UDim2.new(1, 0, 0, 44)
+            toggleCard.Size = UDim2.new(1, 0, 0, 42)
             toggleCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
             toggleCard.BorderSizePixel = 0
             toggleCard.ZIndex = 1004
@@ -793,10 +816,10 @@ local function Main()
             local tLabel = Instance.new("TextLabel")
             tLabel.Text = title
             tLabel.Font = Enum.Font.GothamMedium
-            tLabel.TextSize = 12
+            tLabel.TextSize = 11
             tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
-            tLabel.Position = UDim2.new(0, 12, 0, 6)
-            tLabel.Size = UDim2.new(1, -65, 0, 16)
+            tLabel.Position = UDim2.new(0, 10, 0, 5)
+            tLabel.Size = UDim2.new(1, -60, 0, 16)
             tLabel.BackgroundTransparency = 1
             tLabel.TextXAlignment = Enum.TextXAlignment.Left
             tLabel.ZIndex = 1005
@@ -805,18 +828,18 @@ local function Main()
             local dLabel = Instance.new("TextLabel")
             dLabel.Text = description or ""
             dLabel.Font = Enum.Font.Gotham
-            dLabel.TextSize = 10
+            dLabel.TextSize = 9
             dLabel.TextColor3 = Color3.fromRGB(120, 120, 135)
-            dLabel.Position = UDim2.new(0, 12, 0, 23)
-            dLabel.Size = UDim2.new(1, -65, 0, 14)
+            dLabel.Position = UDim2.new(0, 10, 0, 22)
+            dLabel.Size = UDim2.new(1, -60, 0, 14)
             dLabel.BackgroundTransparency = 1
             dLabel.TextXAlignment = Enum.TextXAlignment.Left
             dLabel.ZIndex = 1005
             dLabel.Parent = toggleCard
 
             local switch = Instance.new("Frame")
-            switch.Size = UDim2.new(0, 38, 0, 20)
-            switch.Position = UDim2.new(1, -48, 0.5, -10)
+            switch.Size = UDim2.new(0, 36, 0, 18)
+            switch.Position = UDim2.new(1, -44, 0.5, -9)
             switch.BackgroundColor3 = defaultValue and Config.AccentColor or Color3.fromRGB(40, 40, 52)
             switch.BorderSizePixel = 0
             switch.ZIndex = 1005
@@ -827,14 +850,14 @@ local function Main()
             swCorner.Parent = switch
 
             local knob = Instance.new("Frame")
-            knob.Size = UDim2.new(0, 14, 0, 14)
-            knob.Position = defaultValue and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+            knob.Size = UDim2.new(0, 12, 0, 12)
+            knob.Position = defaultValue and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)
             knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             knob.BorderSizePixel = 0
             knob.ZIndex = 1006
             knob.Parent = switch
 
-            local knobCorner = Instance.new("UICorner")
+            local knCorner = Instance.new("UICorner")
             knCorner.CornerRadius = UDim.new(1, 0)
             knCorner.Parent = knob
 
@@ -849,7 +872,7 @@ local function Main()
 
             local function SetState(val)
                 state = val
-                local targetPos = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+                local targetPos = state and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)
                 local targetColor = state and Config.AccentColor or Color3.fromRGB(40, 40, 52)
 
                 pcall(function()
@@ -868,12 +891,12 @@ local function Main()
         function tabObj:CreateButton(title, isPrimary, callback)
             local btnCard = Instance.new("TextButton")
             btnCard.Name = "Btn_" .. title
-            btnCard.Size = UDim2.new(1, 0, 0, 36)
+            btnCard.Size = UDim2.new(1, 0, 0, 34)
             btnCard.BackgroundColor3 = isPrimary and Config.AccentColor or Color3.fromRGB(32, 32, 42)
             btnCard.BorderSizePixel = 0
             btnCard.Text = title
             btnCard.Font = Enum.Font.GothamBold
-            btnCard.TextSize = 12
+            btnCard.TextSize = 11
             btnCard.TextColor3 = Color3.fromRGB(255, 255, 255)
             btnCard.AutoButtonColor = false
             btnCard.ZIndex = 1004
@@ -904,9 +927,9 @@ local function Main()
 
             btnCard.MouseButton1Click:Connect(function()
                 pcall(function()
-                    TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, -4, 0, 34)}):Play()
+                    TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, -4, 0, 32)}):Play()
                     task.wait(0.08)
-                    TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, 0, 0, 36)}):Play()
+                    TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, 0, 0, 34)}):Play()
                 end)
                 if callback then callback() end
             end)
@@ -918,7 +941,7 @@ local function Main()
         function tabObj:CreateSlider(title, min, max, defaultVal, callback)
             local sliderCard = Instance.new("Frame")
             sliderCard.Name = "Slider_" .. title
-            sliderCard.Size = UDim2.new(1, 0, 0, 50)
+            sliderCard.Size = UDim2.new(1, 0, 0, 46)
             sliderCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
             sliderCard.BorderSizePixel = 0
             sliderCard.ZIndex = 1004
@@ -936,10 +959,10 @@ local function Main()
             local tLabel = Instance.new("TextLabel")
             tLabel.Text = title
             tLabel.Font = Enum.Font.GothamMedium
-            tLabel.TextSize = 12
+            tLabel.TextSize = 11
             tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
-            tLabel.Position = UDim2.new(0, 12, 0, 7)
-            tLabel.Size = UDim2.new(1, -85, 0, 16)
+            tLabel.Position = UDim2.new(0, 10, 0, 6)
+            tLabel.Size = UDim2.new(1, -70, 0, 14)
             tLabel.BackgroundTransparency = 1
             tLabel.TextXAlignment = Enum.TextXAlignment.Left
             tLabel.ZIndex = 1005
@@ -948,18 +971,18 @@ local function Main()
             local valLabel = Instance.new("TextLabel")
             valLabel.Text = tostring(defaultVal)
             valLabel.Font = Enum.Font.GothamBold
-            valLabel.TextSize = 12
+            valLabel.TextSize = 11
             valLabel.TextColor3 = Config.AccentColor
-            valLabel.Position = UDim2.new(1, -65, 0, 7)
-            valLabel.Size = UDim2.new(0, 55, 0, 16)
+            valLabel.Position = UDim2.new(1, -55, 0, 6)
+            valLabel.Size = UDim2.new(0, 45, 0, 14)
             valLabel.BackgroundTransparency = 1
             valLabel.TextXAlignment = Enum.TextXAlignment.Right
             valLabel.ZIndex = 1005
             valLabel.Parent = sliderCard
 
             local track = Instance.new("Frame")
-            track.Size = UDim2.new(1, -24, 0, 6)
-            track.Position = UDim2.new(0, 12, 0, 32)
+            track.Size = UDim2.new(1, -20, 0, 5)
+            track.Position = UDim2.new(0, 10, 0, 28)
             track.BackgroundColor3 = Color3.fromRGB(34, 34, 46)
             track.BorderSizePixel = 0
             track.ZIndex = 1005
@@ -982,8 +1005,8 @@ local function Main()
             fCorner.Parent = fill
 
             local knob = Instance.new("Frame")
-            knob.Size = UDim2.new(0, 12, 0, 12)
-            knob.Position = UDim2.new(1, -6, 0.5, -6)
+            knob.Size = UDim2.new(0, 11, 0, 11)
+            knob.Position = UDim2.new(1, -5, 0.5, -5)
             knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             knob.BorderSizePixel = 0
             knob.ZIndex = 1007
@@ -1028,7 +1051,7 @@ local function Main()
         function tabObj:CreateDropdown(title, items, defaultItem, callback)
             local dropCard = Instance.new("Frame")
             dropCard.Name = "Dropdown_" .. title
-            dropCard.Size = UDim2.new(1, 0, 0, 40)
+            dropCard.Size = UDim2.new(1, 0, 0, 38)
             dropCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
             dropCard.BorderSizePixel = 0
             dropCard.ClipsDescendants = false
@@ -1047,23 +1070,23 @@ local function Main()
             local tLabel = Instance.new("TextLabel")
             tLabel.Text = title
             tLabel.Font = Enum.Font.GothamMedium
-            tLabel.TextSize = 12
+            tLabel.TextSize = 11
             tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
-            tLabel.Position = UDim2.new(0, 12, 0, 0)
-            tLabel.Size = UDim2.new(0.5, 0, 0, 40)
+            tLabel.Position = UDim2.new(0, 10, 0, 0)
+            tLabel.Size = UDim2.new(0.48, 0, 1, 0)
             tLabel.BackgroundTransparency = 1
             tLabel.TextXAlignment = Enum.TextXAlignment.Left
             tLabel.ZIndex = 1005
             tLabel.Parent = dropCard
 
             local selBtn = Instance.new("TextButton")
-            selBtn.Size = UDim2.new(0.48, -10, 0, 26)
-            selBtn.Position = UDim2.new(0.52, 0, 0.5, -13)
+            selBtn.Size = UDim2.new(0.5, -10, 0, 24)
+            selBtn.Position = UDim2.new(0.5, 0, 0.5, -12)
             selBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 34)
             selBtn.BorderSizePixel = 0
-            selBtn.Text = (defaultItem or "Select a config...") .. "  ▼"
+            selBtn.Text = (defaultItem or "Select...") .. "  ▼"
             selBtn.Font = Enum.Font.Gotham
-            selBtn.TextSize = 11
+            selBtn.TextSize = 10
             selBtn.TextColor3 = Color3.fromRGB(200, 200, 215)
             selBtn.ZIndex = 1005
             selBtn.Parent = dropCard
@@ -1073,7 +1096,7 @@ local function Main()
             selCorner.Parent = selBtn
 
             local listFrame = Instance.new("ScrollingFrame")
-            listFrame.Size = UDim2.new(1, 0, 0, 110)
+            listFrame.Size = UDim2.new(1, 0, 0, 100)
             listFrame.Position = UDim2.new(0, 0, 1, 4)
             listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
             listFrame.BorderSizePixel = 0
@@ -1103,13 +1126,13 @@ local function Main()
                 end
                 for _, itm in ipairs(newItems) do
                     local itemBtn = Instance.new("TextButton")
-                    itemBtn.Size = UDim2.new(1, 0, 0, 24)
+                    itemBtn.Size = UDim2.new(1, 0, 0, 22)
                     itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
                     itemBtn.BackgroundTransparency = 0.5
                     itemBtn.BorderSizePixel = 0
                     itemBtn.Text = tostring(itm)
                     itemBtn.Font = Enum.Font.Gotham
-                    itemBtn.TextSize = 11
+                    itemBtn.TextSize = 10
                     itemBtn.TextColor3 = Color3.fromRGB(230, 230, 240)
                     itemBtn.ZIndex = 2501
                     itemBtn.Parent = listFrame
@@ -1135,7 +1158,7 @@ local function Main()
         function tabObj:CreateInput(title, placeholder, defaultVal, callback)
             local inputCard = Instance.new("Frame")
             inputCard.Name = "Input_" .. title
-            inputCard.Size = UDim2.new(1, 0, 0, 40)
+            inputCard.Size = UDim2.new(1, 0, 0, 38)
             inputCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
             inputCard.BorderSizePixel = 0
             inputCard.ZIndex = 1004
@@ -1157,8 +1180,8 @@ local function Main()
             tb.TextSize = 11
             tb.TextColor3 = Color3.fromRGB(240, 240, 250)
             tb.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
-            tb.Size = UDim2.new(1, -24, 1, 0)
-            tb.Position = UDim2.new(0, 12, 0, 0)
+            tb.Size = UDim2.new(1, -20, 1, 0)
+            tb.Position = UDim2.new(0, 10, 0, 0)
             tb.BackgroundTransparency = 1
             tb.TextXAlignment = Enum.TextXAlignment.Left
             tb.ClearTextOnFocus = false
@@ -1189,7 +1212,7 @@ local function Main()
         end
     end)
 
-    -- 14. Создание вкладок
+    -- Вкладки
     local TabAutoFarm  = CreateTab("Авто фарм", "💲", "Автоматизация больницы и заработка", 1)
     local TabHospital  = CreateTab("Больница", "🩺", "Управление пациентами, уход и лечение", 2)
     local TabQuests    = CreateTab("Задания", "📜", "Автовыполнение и квесты", 3)
@@ -1789,8 +1812,10 @@ local function Main()
     -- ESP
     local ESP_Folder = Instance.new("Folder")
     ESP_Folder.Name = "Averlik_ESP_Folder"
-    ESP_Folder.Parent = TargetParent
-    getgenv().AverlikHub_ESP = ESP_Folder
+    ESP_Folder.Parent = GuiParent
+    if getgenv then
+        getgenv().AverlikHub_ESPFolder = ESP_Folder
+    end
 
     local function CreateESPBox(adornee, name, color)
         if not adornee then return end
@@ -1909,11 +1934,11 @@ local function Main()
 
     SendNotification("Averlik Hub", "Animal Hospital загружен! Нажмите RightControl или виджет.", 4)
     print("========================================")
-    print("[Averlik Hub] GUI успешно отображен на экране!")
+    print("[Averlik Hub] GUI успешно запущен и отображен на экране!")
     print("========================================")
 end
 
-local ok, err = pcall(Main)
+local ok, err = pcall(RunAverlikHub)
 if not ok then
-    warn("[Averlik Hub Critical Error]: " .. tostring(err))
+    warn("[Averlik Hub Error]:", err)
 end
