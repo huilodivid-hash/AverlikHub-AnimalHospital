@@ -1,14 +1,14 @@
 --[[
     ══════════════════════════════════════════════════════════════════════════════════
-    👑 AVERLIK HUB - ANIMAL HOSPITAL (SPECIAL ROOM 7 & ALL WARDS UPDATE)
+    👑 AVERLIK HUB - ANIMAL HOSPITAL (PERFECT 5-STEP HOSPITAL AUTO-CYCLE)
     ══════════════════════════════════════════════════════════════════════════════════
-    • Точный дизайн: Averlik Hub (Glassmorphism & Neon Purple #d946ef)
-    • Совместимость: 100% Все эксплоиты (Solara, Wave, Delta, Arceus X, Codex, etc.)
-    • Отдельный модуль: ПАЛАТА 7 (Реанимация / Операционная / Мини-игра сердца)
-        - Авто-прохождение сканирования сердца (Автоклик по точкам)
-        - Авто-капельница и аптечка
-        - Прямой телепорт к койке и аппарату ЭКГ
-        - Телепорты во все палаты (1, 2, 3, 4, 5, 6, 7)
+    • 100% Реализация процесса из видео (Палаты 1 - 5 + Палата 7):
+        1. Взятие анализа ДНК на койке у больного ([E] Взять анализ ДНК)
+        2. Загрузка в центрифугу / лабораторный компьютер ([E] Провести анализ)
+        3. Ожидание завершения анализа (Завершено / 100%)
+        4. Забор нужного лекарства из шкафа в коридоре ([E] Травы / Сироп / Аптечка)
+        5. Возврат к койке с лекарством в руках и лечение ([E] Лечить)
+        6. Регистрация на ресепшене и авто-кофе для рассудка
     ══════════════════════════════════════════════════════════════════════════════════
 --]]
 
@@ -22,8 +22,6 @@ local function RunAverlikHub()
     local TeleportService = game:GetService("TeleportService")
     local Lighting = game:GetService("Lighting")
     local VirtualUser = game:GetService("VirtualUser")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local GuiService = game:GetService("GuiService")
 
     local LocalPlayer = Players.LocalPlayer
     if not LocalPlayer then
@@ -114,29 +112,22 @@ local function RunAverlikHub()
         AutoUpgrade = false,
         AutoFixSabotages = false,
 
-        -- Больница Общее
-        AutoHeal = false,
-        AutoHealTeleport = true,
-        AutoTakeMedicine = true,
-        AutoScanner = true,
-        AutoEquipTools = true,
-        PriorityHeal = true,
-        HealDelay = 0.8,
-        ESP_Patients = false,
-        ESP_Cabinets = false,
+        -- Больница: Полный цикл видео (Палаты 1 - 5)
+        AutoHospitalCycle = false,     -- Пошаговый цикл из видео
+        AutoRegistration = true,      -- Авто-регистрация на ресепшене
+        SmoothSpeed = true,           -- Плавная надежная скорость без резких сбоев
+        StepDelay = 0.5,              -- Задержка между шагами
 
         -- Палата 7 (Реанимация / ICU)
         Room7_AutoCycle = false,
         Room7_AutoHeartGame = true,
         Room7_AutoIVDrip = true,
-        Room7_AutoScan = true,
 
         -- Задания
         AutoAcceptQuests = false,
         AutoQuest = false,
         AutoCompleteQuest = false,
         AutoClaimRewards = false,
-        ESP_Quests = false,
 
         -- Игрок
         WalkSpeed = 16,
@@ -145,16 +136,14 @@ local function RunAverlikHub()
         JumpPowerEnabled = false,
         NoClip = false,
         AntiAFK = true,
-        InfiniteSanity = false,
+        InfiniteSanity = true,        -- Авто-кофе при низком рассудке
         InfiniteJump = false,
 
         -- Visuals
+        ESP_Patients = false,
+        ESP_Cabinets = false,
         ESP_Players = false,
-        ESP_Animals = false,
-        ESP_NPCs = false,
-        ESP_Items = false,
         ShowDistance = true,
-        Tracers = false,
 
         -- Misc
         FPSBoost = false,
@@ -175,7 +164,7 @@ local function RunAverlikHub()
         return string.find(string.lower(str), string.lower(query), 1, true) ~= nil
     end
 
-    -- Проверка на двери и мусор
+    -- Фильтр дверей и мусора
     local function IsDoorOrTrash(prompt)
         if not prompt or not prompt:IsA("ProximityPrompt") then return true end
         local act = string.lower(tostring(prompt.ActionText or ""))
@@ -187,92 +176,7 @@ local function RunAverlikHub()
         return false
     end
 
-    -- Промпт на койке/пациенте
-    local function IsBedPatientPrompt(prompt)
-        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
-        if IsDoorOrTrash(prompt) then return false end
-
-        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
-        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
-        local ggName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Parent and prompt.Parent.Parent.Parent.Name or ""))
-
-        if SafeFind(pName, "shelf") or SafeFind(pName, "cabinet") or SafeFind(pName, "шкаф") or SafeFind(pName, "полк") or SafeFind(gName, "shelf") or SafeFind(gName, "cabinet") or SafeFind(gName, "шкаф") then
-            return false
-        end
-
-        local act = string.lower(tostring(prompt.ActionText or ""))
-        if SafeFind(act, "анализ") or SafeFind(act, "днк") or SafeFind(act, "dna") or SafeFind(act, "test") or SafeFind(act, "капельниц") or SafeFind(act, "укол") or SafeFind(act, "лекарств") then
-            return true
-        end
-
-        if SafeFind(pName, "bed") or SafeFind(pName, "patient") or SafeFind(pName, "rabbit") or SafeFind(pName, "cat") or SafeFind(pName, "dog") or SafeFind(pName, "койк") or SafeFind(pName, "кроват") or SafeFind(gName, "bed") or SafeFind(gName, "patient") or SafeFind(ggName, "bed") then
-            return true
-        end
-
-        return false
-    end
-
-    -- Промпт в шкафу с медикаментами
-    local function IsMedicineCabinetPrompt(prompt)
-        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
-        if IsDoorOrTrash(prompt) then return false end
-
-        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
-        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
-
-        if SafeFind(pName, "shelf") or SafeFind(pName, "cabinet") or SafeFind(pName, "шкаф") or SafeFind(pName, "полк") or SafeFind(gName, "shelf") or SafeFind(gName, "cabinet") or SafeFind(gName, "шкаф") or SafeFind(gName, "pharmacy") then
-            return true
-        end
-
-        local act = string.lower(tostring(prompt.ActionText or ""))
-        local medWords = {"сироп", "травы", "аптечка", "таблетк", "пластыр", "бинт", "капельниц", "шприц", "syrup", "herbs", "kit", "pill", "bandage", "drip"}
-        for _, m in ipairs(medWords) do
-            if SafeFind(act, m) and not SafeFind(pName, "bed") then
-                return true
-            end
-        end
-
-        return false
-    end
-
-    -- Промпт аппарата ЭКГ / Сердца в палате 7
-    local function IsRoom7HeartMonitorPrompt(prompt)
-        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
-        local act = string.lower(tostring(prompt.ActionText or ""))
-        local objT = string.lower(tostring(prompt.ObjectText or ""))
-        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
-        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
-
-        if SafeFind(act, "сердц") or SafeFind(act, "heart") or SafeFind(act, "экг") or SafeFind(act, "действие") or SafeFind(act, "монитор") or SafeFind(objT, "сердц") or SafeFind(objT, "монитор") or SafeFind(pName, "monitor") or SafeFind(pName, "ecg") or SafeFind(pName, "heart") or SafeFind(gName, "monitor") then
-            return true
-        end
-        return false
-    end
-
-    -- Сканер анализов
-    local function IsLabScannerPrompt(prompt)
-        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
-        local act = string.lower(tostring(prompt.ActionText or ""))
-        local objT = string.lower(tostring(prompt.ObjectText or ""))
-        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
-        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
-
-        if SafeFind(act, "сканир") or SafeFind(act, "scan") or SafeFind(act, "анализ") or SafeFind(act, "компьют") or SafeFind(act, "computer") or SafeFind(objT, "компьют") or SafeFind(pName, "scan") or SafeFind(pName, "pc") or SafeFind(pName, "lab") or SafeFind(gName, "table") or SafeFind(gName, "desk") then
-            return true
-        end
-        return false
-    end
-
-    -- Кофе
-    local function IsCoffeePrompt(prompt)
-        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
-        local act = string.lower(tostring(prompt.ActionText or ""))
-        local objT = string.lower(tostring(prompt.ObjectText or ""))
-        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
-        return SafeFind(act, "coffee") or SafeFind(act, "кофе") or SafeFind(objT, "кофе") or SafeFind(objT, "рассудок") or SafeFind(pName, "coffee")
-    end
-
-    -- CFrame точки
+    -- CFrame точки для любого объекта
     local function GetPromptTargetCFrame(prompt)
         if not prompt then return nil end
         local parent = prompt.Parent
@@ -293,8 +197,47 @@ local function RunAverlikHub()
         return nil
     end
 
-    -- Экипировка любого медицинского инструмента
-    local function EquipAnyMedicalTool(preferredName)
+    -- Телепорт персонажа со сбросом физики
+    local function TeleportTo(cf)
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChild("Humanoid")
+            if root then
+                if hum then
+                    hum.Sit = false
+                    hum.PlatformStand = false
+                end
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+                if typeof(cf) == "Vector3" then
+                    root.CFrame = CFrame.new(cf + Vector3.new(0, 3, 0))
+                elseif typeof(cf) == "CFrame" then
+                    root.CFrame = cf + Vector3.new(0, 3, 0)
+                end
+            end
+        end)
+    end
+
+    -- Взаимодействие с ProximityPrompt (с удержанием)
+    local function SafeInteractPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
+        local holdTime = prompt.HoldDuration or 0
+        pcall(function()
+            if fireproximityprompt then
+                fireproximityprompt(prompt, holdTime)
+            else
+                prompt:InputHoldBegin()
+                task.wait(holdTime > 0 and (holdTime + 0.1) or 0.15)
+                prompt:InputHoldEnd()
+            end
+        end)
+        return true
+    end
+
+    -- Экипировка нужного инструмента из рюкзака
+    local function EquipMedicalTool(preferredName)
         pcall(function()
             local bp = LocalPlayer:FindFirstChild("Backpack")
             local char = LocalPlayer.Character
@@ -324,127 +267,123 @@ local function RunAverlikHub()
 
             if targetTool then
                 hum:EquipTool(targetTool)
-                task.wait(0.06)
+                task.wait(0.1)
                 pcall(function() targetTool:Activate() end)
             end
         end)
     end
 
-    -- Взаимодействие с ProximityPrompt
-    local function SafeInteractPrompt(prompt)
-        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled then return false end
-        local holdTime = prompt.HoldDuration or 0
-        pcall(function()
-            if fireproximityprompt then
-                fireproximityprompt(prompt, holdTime)
-            else
-                prompt:InputHoldBegin()
-                task.wait(holdTime > 0 and (holdTime + 0.05) or 0.1)
-                prompt:InputHoldEnd()
-            end
-        end)
-        return true
-    end
-
-    -- Телепорт
-    local function TeleportTo(cf)
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            local root = char:FindFirstChild("HumanoidRootPart")
-            local hum = char:FindFirstChild("Humanoid")
-            if root then
-                if hum then
-                    hum.Sit = false
-                    hum.PlatformStand = false
-                end
-                root.AssemblyLinearVelocity = Vector3.zero
-                root.AssemblyAngularVelocity = Vector3.zero
-                if typeof(cf) == "Vector3" then
-                    root.CFrame = CFrame.new(cf + Vector3.new(0, 3, 0))
-                elseif typeof(cf) == "CFrame" then
-                    root.CFrame = cf + Vector3.new(0, 3, 0)
-                end
-            end
-        end)
-    end
-
-    -- Поиск координат палат (1-7)
-    local function FindWardCFrame(wardNumber)
+    -- Поиск моделей палат (1-7)
+    local function FindWardModel(wardNumber)
         local query = "палата " .. tostring(wardNumber)
         local queryEng = "room " .. tostring(wardNumber)
         local queryNum = tostring(wardNumber)
 
         for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("Model") or obj:IsA("BasePart") then
+            if obj:IsA("Model") then
                 local oName = string.lower(obj.Name)
                 if oName == query or oName == queryEng or (SafeFind(oName, "room") and SafeFind(oName, queryNum)) or (SafeFind(oName, "палат") and SafeFind(oName, queryNum)) then
-                    local bed = obj:FindFirstChild("Bed", true) or obj:FindFirstChild("HospitalBed", true) or obj:FindFirstChildWhichIsA("BasePart", true)
-                    if bed then
-                        return bed:IsA("Model") and (bed.PrimaryPart and bed.PrimaryPart.CFrame or bed:GetBoundingBox()) or bed.CFrame
-                    end
+                    return obj
                 end
             end
         end
-
-        -- Если палата 7: ищем по оборудованию реанимации (операционные лампы, монитор)
-        if wardNumber == 7 then
-            for _, obj in pairs(Workspace:GetDescendants()) do
-                if obj:IsA("Model") and (SafeFind(obj.Name, "7") or SafeFind(obj.Name, "icu") or SafeFind(obj.Name, "operat") or SafeFind(obj.Name, "reanim")) then
-                    local pPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-                    if pPart then return pPart.CFrame end
-                end
-            end
-        end
-
         return nil
     end
 
-    -- ══════════════════════════════════════════════════════════════════════════
-    -- ⚡ АВТО-ПРОХОЖДЕНИЕ МИНИ-ИГРЫ СЕРДЦА (ПАЛАТА 7)
-    -- ══════════════════════════════════════════════════════════════════════════
+    -- Поиск CFrame койки палаты
+    local function FindWardBedCFrame(wardNumber)
+        local wardModel = FindWardModel(wardNumber)
+        if wardModel then
+            local bed = wardModel:FindFirstChild("Bed", true) or wardModel:FindFirstChild("HospitalBed", true) or wardModel:FindFirstChild("Mattress", true)
+            if bed then
+                return bed:IsA("Model") and (bed.PrimaryPart and bed.PrimaryPart.CFrame or bed:GetBoundingBox()) or bed.CFrame
+            end
+            local anyPart = wardModel:FindFirstChildWhichIsA("BasePart", true)
+            if anyPart then return anyPart.CFrame end
+        end
+        return nil
+    end
+
+    -- Определение: промпт взятия ДНК на койке
+    local function IsDNAPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled or IsDoorOrTrash(prompt) then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        return SafeFind(act, "анализ") or SafeFind(act, "днк") or SafeFind(act, "dna") or SafeFind(act, "sample")
+    end
+
+    -- Определение: промпт центрифуги/сканера анализов
+    local function IsLabMachinePrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled or IsDoorOrTrash(prompt) then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local objT = string.lower(tostring(prompt.ObjectText or ""))
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        return SafeFind(act, "провест") or SafeFind(act, "сканир") or SafeFind(act, "scan") or SafeFind(act, "встав") or SafeFind(objT, "компьют") or SafeFind(pName, "scan") or SafeFind(pName, "pc") or SafeFind(pName, "lab")
+    end
+
+    -- Определение: промпт шкафа с лекарствами в коридоре
+    local function IsCabinetPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled or IsDoorOrTrash(prompt) then return false end
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        local gName = string.lower(tostring(prompt.Parent and prompt.Parent.Parent and prompt.Parent.Parent.Name or ""))
+        if SafeFind(pName, "shelf") or SafeFind(pName, "cabinet") or SafeFind(pName, "шкаф") or SafeFind(pName, "полк") or SafeFind(gName, "shelf") or SafeFind(gName, "cabinet") or SafeFind(gName, "шкаф") then
+            return true
+        end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local medWords = {"травы", "сироп", "аптечка", "таблетк", "пластыр", "бинт", "капельниц", "шприц", "herbs", "syrup", "kit", "pill"}
+        for _, m in ipairs(medWords) do
+            if SafeFind(act, m) and not SafeFind(pName, "bed") and not SafeFind(pName, "patient") then
+                return true
+            end
+        end
+        return false
+    end
+
+    -- Определение: промпт лечения больного на койке
+    local function IsHealPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled or IsDoorOrTrash(prompt) then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        return SafeFind(act, "лечит") or SafeFind(act, "heal") or SafeFind(act, "дать") or SafeFind(act, "give") or SafeFind(act, "укол")
+    end
+
+    -- Ресепшен (Регистрация)
+    local function IsReceptionPrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled or IsDoorOrTrash(prompt) then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local objT = string.lower(tostring(prompt.ObjectText or ""))
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        return SafeFind(act, "регистр") or SafeFind(act, "звонок") or SafeFind(act, "bell") or SafeFind(objT, "регистр") or SafeFind(pName, "reception") or SafeFind(pName, "bell")
+    end
+
+    -- Кофе (Рассудок)
+    local function IsCoffeePrompt(prompt)
+        if not prompt or not prompt:IsA("ProximityPrompt") or not prompt.Enabled or IsDoorOrTrash(prompt) then return false end
+        local act = string.lower(tostring(prompt.ActionText or ""))
+        local objT = string.lower(tostring(prompt.ObjectText or ""))
+        local pName = string.lower(tostring(prompt.Parent and prompt.Parent.Name or ""))
+        return SafeFind(act, "coffee") or SafeFind(act, "кофе") or SafeFind(objT, "кофе") or SafeFind(objT, "рассудок") or SafeFind(pName, "coffee")
+    end
+
+    -- Решение мини-игры сердца (Палата 7)
     local function SolveHeartMinigame()
         local solved = false
         pcall(function()
             local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
             if not pg then return end
-
-            -- Поиск всех интерактивных кнопок мини-игры на экране игрока
             for _, gui in pairs(pg:GetChildren()) do
                 if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "AverlikHub_MainGui" then
                     for _, btn in pairs(gui:GetDescendants()) do
-                        if btn:IsA("ImageButton") or btn:IsA("TextButton") then
-                            if btn.Visible and btn.Active then
-                                local bName = string.lower(btn.Name)
-                                -- Иконки руки, клика, точки сердца
-                                if SafeFind(bName, "click") or SafeFind(bName, "hand") or SafeFind(bName, "tap") or SafeFind(bName, "target") or SafeFind(bName, "point") or SafeFind(bName, "heart") then
-                                    pcall(function()
-                                        for i = 1, 3 do
-                                            if firesignal then
-                                                firesignal(btn.MouseButton1Click)
-                                                firesignal(btn.Activated)
-                                            end
-                                        end
-                                    end)
-                                    solved = true
-                                end
+                        if (btn:IsA("ImageButton") or btn:IsA("TextButton")) and btn.Visible and btn.Active then
+                            local bName = string.lower(btn.Name)
+                            if SafeFind(bName, "click") or SafeFind(bName, "hand") or SafeFind(bName, "tap") or SafeFind(bName, "target") or SafeFind(bName, "point") or SafeFind(bName, "heart") then
+                                pcall(function()
+                                    if firesignal then
+                                        firesignal(btn.MouseButton1Click)
+                                        firesignal(btn.Activated)
+                                    end
+                                end)
+                                solved = true
                             end
                         end
-                    end
-                end
-            end
-
-            -- Также проверяем 3D-кнопки (ClickDetector / SurfaceGui)
-            for _, obj in pairs(Workspace:GetDescendants()) do
-                if obj:IsA("ClickDetector") and obj.MaxActivationDistance > 0 then
-                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
-                    if SafeFind(pName, "heart") or SafeFind(pName, "point") or SafeFind(pName, "tap") or SafeFind(pName, "screen") then
-                        pcall(function()
-                            if fireclickdetector then
-                                fireclickdetector(obj)
-                            end
-                        end)
-                        solved = true
                     end
                 end
             end
@@ -820,7 +759,7 @@ local function RunAverlikHub()
 
     local HeaderTitle = Instance.new("TextLabel")
     HeaderTitle.Name = "Title"
-    HeaderTitle.Text = "Авто фарм"
+    HeaderTitle.Text = "Больница"
     HeaderTitle.Font = Enum.Font.GothamBold
     HeaderTitle.TextSize = 16
     HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -833,7 +772,7 @@ local function RunAverlikHub()
 
     local HeaderSub = Instance.new("TextLabel")
     HeaderSub.Name = "Subtitle"
-    HeaderSub.Text = "Автоматизация больницы и заработка"
+    HeaderSub.Text = "Полный цикл видео: Палаты 1 - 5"
     HeaderSub.Font = Enum.Font.Gotham
     HeaderSub.TextSize = 10
     HeaderSub.TextColor3 = Color3.fromRGB(140, 140, 155)
@@ -843,40 +782,6 @@ local function RunAverlikHub()
     HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
     HeaderSub.ZIndex = 1003
     HeaderSub.Parent = ContentHeader
-
-    local SearchBoxContainer = Instance.new("Frame")
-    SearchBoxContainer.Name = "SearchContainer"
-    SearchBoxContainer.Size = UDim2.new(0, 130, 0, 28)
-    SearchBoxContainer.Position = UDim2.new(1, -170, 0, 14)
-    SearchBoxContainer.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-    SearchBoxContainer.BorderSizePixel = 0
-    SearchBoxContainer.ZIndex = 1003
-    SearchBoxContainer.Parent = ContentHeader
-
-    local SearchCorner = Instance.new("UICorner")
-    SearchCorner.CornerRadius = UDim.new(0, 8)
-    SearchCorner.Parent = SearchBoxContainer
-
-    local SearchStroke = Instance.new("UIStroke")
-    SearchStroke.Color = Color3.fromRGB(30, 30, 40)
-    SearchStroke.Thickness = 1
-    SearchStroke.Parent = SearchBoxContainer
-
-    local SearchInput = Instance.new("TextBox")
-    SearchInput.Name = "Input"
-    SearchInput.PlaceholderText = "Поиск..."
-    SearchInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
-    SearchInput.Text = ""
-    SearchInput.Font = Enum.Font.Gotham
-    SearchInput.TextSize = 11
-    SearchInput.TextColor3 = Color3.fromRGB(240, 240, 250)
-    SearchInput.Size = UDim2.new(1, -14, 1, 0)
-    SearchInput.Position = UDim2.new(0, 8, 0, 0)
-    SearchInput.BackgroundTransparency = 1
-    SearchInput.TextXAlignment = Enum.TextXAlignment.Left
-    SearchInput.ClearTextOnFocus = false
-    SearchInput.ZIndex = 1004
-    SearchInput.Parent = SearchBoxContainer
 
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Name = "CloseBtn"
@@ -1166,20 +1071,6 @@ local function RunAverlikHub()
             stroke.Thickness = 1
             stroke.Parent = btnCard
 
-            btnCard.MouseEnter:Connect(function()
-                local hoverColor = isPrimary and Color3.fromRGB(235, 90, 255) or Color3.fromRGB(42, 42, 54)
-                pcall(function()
-                    TweenService:Create(btnCard, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}):Play()
-                end)
-            end)
-
-            btnCard.MouseLeave:Connect(function()
-                local baseColor = isPrimary and Config.AccentColor or Color3.fromRGB(32, 32, 42)
-                pcall(function()
-                    TweenService:Create(btnCard, TweenInfo.new(0.15), {BackgroundColor3 = baseColor}):Play()
-                end)
-            end)
-
             btnCard.MouseButton1Click:Connect(function()
                 pcall(function()
                     TweenService:Create(btnCard, TweenInfo.new(0.08), {Size = UDim2.new(1, -4, 0, 32)}):Play()
@@ -1304,242 +1195,45 @@ local function RunAverlikHub()
             table.insert(tabObj.Elements, {Type = "Slider", Title = title, Card = sliderCard})
         end
 
-        function tabObj:CreateDropdown(title, items, defaultItem, callback)
-            local dropCard = Instance.new("Frame")
-            dropCard.Name = "Dropdown_" .. title
-            dropCard.Size = UDim2.new(1, 0, 0, 38)
-            dropCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
-            dropCard.BorderSizePixel = 0
-            dropCard.ClipsDescendants = false
-            dropCard.ZIndex = 1004
-            dropCard.Parent = pageScroll
-
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 8)
-            corner.Parent = dropCard
-
-            local stroke = Instance.new("UIStroke")
-            stroke.Color = Color3.fromRGB(28, 28, 38)
-            stroke.Thickness = 1
-            stroke.Parent = dropCard
-
-            local tLabel = Instance.new("TextLabel")
-            tLabel.Text = title
-            tLabel.Font = Enum.Font.GothamMedium
-            tLabel.TextSize = 11
-            tLabel.TextColor3 = Color3.fromRGB(240, 240, 250)
-            tLabel.Position = UDim2.new(0, 10, 0, 0)
-            tLabel.Size = UDim2.new(0.48, 0, 1, 0)
-            tLabel.BackgroundTransparency = 1
-            tLabel.TextXAlignment = Enum.TextXAlignment.Left
-            tLabel.ZIndex = 1005
-            tLabel.Parent = dropCard
-
-            local selBtn = Instance.new("TextButton")
-            selBtn.Size = UDim2.new(0.5, -10, 0, 24)
-            selBtn.Position = UDim2.new(0.5, 0, 0.5, -12)
-            selBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 34)
-            selBtn.BorderSizePixel = 0
-            selBtn.Text = (defaultItem or "Select...") .. "  ▼"
-            selBtn.Font = Enum.Font.Gotham
-            selBtn.TextSize = 10
-            selBtn.TextColor3 = Color3.fromRGB(200, 200, 215)
-            selBtn.ZIndex = 1005
-            selBtn.Parent = dropCard
-
-            local selCorner = Instance.new("UICorner")
-            selCorner.CornerRadius = UDim.new(0, 6)
-            selCorner.Parent = selBtn
-
-            local listFrame = Instance.new("ScrollingFrame")
-            listFrame.Size = UDim2.new(1, 0, 0, 100)
-            listFrame.Position = UDim2.new(0, 0, 1, 4)
-            listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
-            listFrame.BorderSizePixel = 0
-            listFrame.ScrollBarThickness = 2
-            listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-            listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-            listFrame.Visible = false
-            listFrame.ZIndex = 2500
-            listFrame.Parent = selBtn
-
-            local listCorner = Instance.new("UICorner")
-            listCorner.CornerRadius = UDim.new(0, 6)
-            listCorner.Parent = listFrame
-
-            local listStroke = Instance.new("UIStroke")
-            listStroke.Color = Color3.fromRGB(42, 42, 54)
-            listStroke.Thickness = 1
-            listStroke.Parent = listFrame
-
-            local listLayout = Instance.new("UIListLayout")
-            listLayout.Padding = UDim.new(0, 2)
-            listLayout.Parent = listFrame
-
-            local function RefreshItems(newItems)
-                for _, c in pairs(listFrame:GetChildren()) do
-                    if c:IsA("TextButton") then c:Destroy() end
-                end
-                for _, itm in ipairs(newItems) do
-                    local itemBtn = Instance.new("TextButton")
-                    itemBtn.Size = UDim2.new(1, 0, 0, 22)
-                    itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
-                    itemBtn.BackgroundTransparency = 0.5
-                    itemBtn.BorderSizePixel = 0
-                    itemBtn.Text = tostring(itm)
-                    itemBtn.Font = Enum.Font.Gotham
-                    itemBtn.TextSize = 10
-                    itemBtn.TextColor3 = Color3.fromRGB(230, 230, 240)
-                    itemBtn.ZIndex = 2501
-                    itemBtn.Parent = listFrame
-
-                    itemBtn.MouseButton1Click:Connect(function()
-                        selBtn.Text = tostring(itm) .. "  ▼"
-                        listFrame.Visible = false
-                        if callback then callback(itm) end
-                    end)
-                end
-            end
-
-            RefreshItems(items)
-
-            selBtn.MouseButton1Click:Connect(function()
-                listFrame.Visible = not listFrame.Visible
-            end)
-
-            table.insert(tabObj.Elements, {Type = "Dropdown", Title = title, Card = dropCard, Refresh = RefreshItems})
-            return {Refresh = RefreshItems}
-        end
-
-        function tabObj:CreateInput(title, placeholder, defaultVal, callback)
-            local inputCard = Instance.new("Frame")
-            inputCard.Name = "Input_" .. title
-            inputCard.Size = UDim2.new(1, 0, 0, 38)
-            inputCard.BackgroundColor3 = Color3.fromRGB(19, 19, 25)
-            inputCard.BorderSizePixel = 0
-            inputCard.ZIndex = 1004
-            inputCard.Parent = pageScroll
-
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 8)
-            corner.Parent = inputCard
-
-            local stroke = Instance.new("UIStroke")
-            stroke.Color = Color3.fromRGB(28, 28, 38)
-            stroke.Thickness = 1
-            stroke.Parent = inputCard
-
-            local tb = Instance.new("TextBox")
-            tb.PlaceholderText = placeholder or title
-            tb.Text = defaultVal or ""
-            tb.Font = Enum.Font.Gotham
-            tb.TextSize = 11
-            tb.TextColor3 = Color3.fromRGB(240, 240, 250)
-            tb.PlaceholderColor3 = Color3.fromRGB(100, 100, 115)
-            tb.Size = UDim2.new(1, -20, 1, 0)
-            tb.Position = UDim2.new(0, 10, 0, 0)
-            tb.BackgroundTransparency = 1
-            tb.TextXAlignment = Enum.TextXAlignment.Left
-            tb.ClearTextOnFocus = false
-            tb.ZIndex = 1005
-            tb.Parent = inputCard
-
-            tb.FocusLost:Connect(function()
-                if callback then callback(tb.Text) end
-            end)
-
-            table.insert(tabObj.Elements, {Type = "Input", Title = title, Card = inputCard, TextBox = tb})
-            return tb
-        end
-
         return tabObj
     end
 
-    SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
-        local query = string.lower(SearchInput.Text)
-        if not CurrentTab then return end
-
-        for _, el in pairs(CurrentTab.Elements) do
-            if query == "" or SafeFind(el.Title, query) then
-                el.Card.Visible = true
-            else
-                el.Card.Visible = false
-            end
-        end
-    end)
-
     -- Вкладки
-    local TabAutoFarm  = CreateTab("Авто фарм", "💲", "Автоматизация больницы и заработка", 1)
-    local TabHospital  = CreateTab("Больница", "🩺", "Управление пациентами, уход и лечение", 2)
-    local TabRoom7     = CreateTab("Палата 7", "⚡", "Реанимация, ЭКГ сердца и капельница", 3)
-    local TabQuests    = CreateTab("Задания", "📜", "Автовыполнение и квесты", 4)
-    local TabTeleports = CreateTab("Телепорты", "🚀", "Мгновенное перемещение по палатам 1-7", 5)
-    local TabPlayer    = CreateTab("Игрок", "👤", "Модификаторы скорости, прыжка и рассудка", 6)
-    local TabVisuals   = CreateTab("Visuals", "👁️", "ESP подсветка, дистанция и трейсеры", 7)
-    local TabMisc      = CreateTab("Misc", "📄", "Сервер, FPS Boost и настройки графики", 8)
-    local TabSettings  = CreateTab("Settings", "⚙️", "Interface and theme", 9)
+    local TabHospital  = CreateTab("Больница", "🩺", "Авто-цикл: Палаты 1 - 5 (Как на видео)", 1)
+    local TabRoom7     = CreateTab("Палата 7", "⚡", "Реанимация, ЭКГ сердца и капельница", 2)
+    local TabTeleports = CreateTab("Телепорты", "🚀", "Мгновенное перемещение по палатам 1-7", 3)
+    local TabAutoFarm  = CreateTab("Авто фарм", "💲", "Автоматизация больницы и заработка", 4)
+    local TabPlayer    = CreateTab("Игрок", "👤", "Модификаторы скорости, прыжка и рассудка", 5)
+    local TabVisuals   = CreateTab("Visuals", "👁️", "ESP подсветка, дистанция и трейсеры", 6)
+    local TabMisc      = CreateTab("Misc", "📄", "Сервер, FPS Boost и настройки графики", 7)
+    local TabSettings  = CreateTab("Settings", "⚙️", "Конфигурация и интерфейс", 8)
 
-    -- 1. Авто фарм
-    TabAutoFarm:CreateSection("Основной заработок")
-    TabAutoFarm:CreateToggle("Автофарм", "Автоматически выполняет основные действия для заработка валюты", Config.AutoFarm, function(val)
-        Config.AutoFarm = val
-        SendNotification("Автофарм", val and "Автофарм запущен" or "Автофарм остановлен", 2)
+    -- 1. БОЛЬНИЦА (ПАЛАТЫ 1 - 5 ПОЛНЫЙ ЦИКЛ ВИДЕО)
+    TabHospital:CreateSection("Авто-прохождение палат 1 - 5 (Полный цикл видео)")
+    TabHospital:CreateToggle("Авто-цикл больницы (Палаты 1-5)", "Проходит все 5 шагов: ДНК ➔ Сканер ➔ Аптека ➔ Лечение", Config.AutoHospitalCycle, function(val)
+        Config.AutoHospitalCycle = val
+        SendNotification("Больница", val and "Авто-цикл больницы запущен!" or "Авто-цикл выключен", 3)
     end)
-    TabAutoFarm:CreateToggle("Автосбор", "Автоматически собирает доступные награды, монеты и дропы", Config.AutoCollect, function(val)
-        Config.AutoCollect = val
+    TabHospital:CreateToggle("Авто-регистрация (Ресепшен)", "Автоматически регистрирует посетителей на входе", Config.AutoRegistration, function(val)
+        Config.AutoRegistration = val
     end)
-    TabAutoFarm:CreateToggle("Автовзаимодействие", "Автоматически активирует нужные объекты и NPC в радиусе", Config.AutoInteract, function(val)
-        Config.AutoInteract = val
-    end)
-    TabAutoFarm:CreateSection("Торговля и развитие")
-    TabAutoFarm:CreateToggle("Автопродажа", "Автоматически продаёт накопленные ресурсы и вылеченных животных", Config.AutoSell, function(val)
-        Config.AutoSell = val
-    end)
-    TabAutoFarm:CreateToggle("Автопокупка", "Автоматически покупает необходимые предметы и медикаменты", Config.AutoBuy, function(val)
-        Config.AutoBuy = val
-    end)
-    TabAutoFarm:CreateToggle("Автоулучшение", "Автоматически приобретает доступные улучшения больницы", Config.AutoUpgrade, function(val)
-        Config.AutoUpgrade = val
-    end)
-    TabAutoFarm:CreateToggle("Автоустранение саботажей", "Автоматически чинит поломки, протечки и тушит пожары", Config.AutoFixSabotages, function(val)
-        Config.AutoFixSabotages = val
-    end)
-
-    -- 2. Больница
-    TabHospital:CreateSection("Автоматизация лечения (Палаты 1-6)")
-    TabHospital:CreateToggle("Автолечение (Full Auto)", "Полный цикл: анализ ДНК -> сканер -> аптека -> лечение", Config.AutoHeal, function(val)
-        Config.AutoHeal = val
-        SendNotification("Больница", val and "Автолечение запущено!" or "Автолечение выключено", 2)
-    end)
-    TabHospital:CreateSlider("Задержка лечения (сек)", 0.2, 3.0, Config.HealDelay, function(val)
-        Config.HealDelay = val
-    end)
-    TabHospital:CreateToggle("Авто-ТП к больным", "Телепортирует прямо на койку больного в палате", Config.AutoHealTeleport, function(val)
-        Config.AutoHealTeleport = val
-    end)
-    TabHospital:CreateToggle("Авто-взятие медикаментов", "Автоматически забирает нужные лекарства со шкафа в коридоре", Config.AutoTakeMedicine, function(val)
-        Config.AutoTakeMedicine = val
-    end)
-    TabHospital:CreateToggle("Авто-сканирование анализов", "Автоматически кладет пробирку с анализом в ПК-сканер", Config.AutoScanner, function(val)
-        Config.AutoScanner = val
-    end)
-    TabHospital:CreateToggle("Авто-экипировка лекарств", "Автоматически достает нужные лекарства из рюкзака", Config.AutoEquipTools, function(val)
-        Config.AutoEquipTools = val
+    TabHospital:CreateSlider("Задержка между действиями (сек)", 0.2, 2.0, Config.StepDelay, function(val)
+        Config.StepDelay = val
     end)
 
     TabHospital:CreateSection("Быстрые действия")
-    TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить инвентарь 4/4)", true, function()
+    TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить слоты)", true, function()
         task.spawn(function()
             local count = 0
             for _, obj in pairs(Workspace:GetDescendants()) do
-                if IsMedicineCabinetPrompt(obj) then
+                if IsCabinetPrompt(obj) then
                     local targetCF = GetPromptTargetCFrame(obj)
                     if targetCF then
                         TeleportTo(targetCF)
-                        task.wait(0.15)
+                        task.wait(0.2)
                         SafeInteractPrompt(obj)
                         count = count + 1
-                        task.wait(0.25)
+                        task.wait(0.3)
                         if count >= 4 then break end
                     end
                 end
@@ -1547,22 +1241,21 @@ local function RunAverlikHub()
             SendNotification("Аптека", "Взято лекарств: " .. tostring(count), 2)
         end)
     end)
-    TabHospital:CreateButton("Сдать анализы в сканер сейчас", false, function()
+    TabHospital:CreateButton("Сдать анализ в сканер сейчас", false, function()
         task.spawn(function()
             for _, obj in pairs(Workspace:GetDescendants()) do
-                if IsLabScannerPrompt(obj) then
+                if IsLabMachinePrompt(obj) then
                     local targetCF = GetPromptTargetCFrame(obj)
                     if targetCF then
                         TeleportTo(targetCF)
-                        task.wait(0.15)
-                        SafeInteractPrompt(obj)
                         task.wait(0.2)
-                        SendNotification("Сканер", "Анализ загружен в компьютер!", 2)
+                        SafeInteractPrompt(obj)
+                        SendNotification("Лаборатория", "Анализ загружен в центрифугу!", 2)
                         return
                     end
                 end
             end
-            SendNotification("Сканер", "Сканер не найден рядом", 2)
+            SendNotification("Лаборатория", "Сканер не найден", 2)
         end)
     end)
     TabHospital:CreateButton("Выпить кофе (Восстановить рассудок)", false, function()
@@ -1572,7 +1265,7 @@ local function RunAverlikHub()
                     local targetCF = GetPromptTargetCFrame(obj)
                     if targetCF then
                         TeleportTo(targetCF)
-                        task.wait(0.15)
+                        task.wait(0.2)
                         SafeInteractPrompt(obj)
                         SendNotification("Рассудок", "Кофе выпит! Рассудок восстановлен.", 2)
                         return
@@ -1583,9 +1276,9 @@ local function RunAverlikHub()
         end)
     end)
 
-    -- 3. ПАЛАТА 7 (РЕАНИМАЦИЯ / ОПЕРАЦИОННАЯ)
+    -- 2. ПАЛАТА 7 (РЕАНИМАЦИЯ)
     TabRoom7:CreateSection("Реанимация Палаты 7")
-    TabRoom7:CreateToggle("Авто-цикл: Палата 7", "Полный автофарм реанимации (ЭКГ + Капельница + Аптечка)", Config.Room7_AutoCycle, function(val)
+    TabRoom7:CreateToggle("Авто-цикл: Палата 7", "Полный цикл реанимации (ЭКГ + Капельница + Аптечка)", Config.Room7_AutoCycle, function(val)
         Config.Room7_AutoCycle = val
         SendNotification("Палата 7", val and "Авто-цикл палаты 7 активен!" or "Авто-цикл остановлен", 2)
     end)
@@ -1595,141 +1288,63 @@ local function RunAverlikHub()
     TabRoom7:CreateToggle("Авто-капельница и лечение", "Берет капельницу/аптечку и ставит больному кролику", Config.Room7_AutoIVDrip, function(val)
         Config.Room7_AutoIVDrip = val
     end)
-
-    TabRoom7:CreateSection("Быстрые действия Палаты 7")
-    TabRoom7:CreateButton("Телепорт в Палату 7 (Койка пациента)", true, function()
-        local cf = FindWardCFrame(7)
-        if cf then
-            TeleportTo(cf)
-            SendNotification("Палата 7", "Перемещен к койке реанимации!", 2)
-        else
-            SendNotification("Палата 7", "Ищем координаты палаты 7...", 2)
-        end
-    end)
     TabRoom7:CreateButton("Пройти мини-игру сердца сейчас (Мгновенно)", true, function()
         local solved = SolveHeartMinigame()
         SendNotification("Мини-игра", solved and "Точки сердца успешно нажаты!" or "Экран мини-игры пока не открыт", 2)
     end)
-    TabRoom7:CreateButton("Взять Капельницу / Аптечку со шкафа", false, function()
-        task.spawn(function()
-            for _, obj in pairs(Workspace:GetDescendants()) do
-                if IsMedicineCabinetPrompt(obj) then
-                    local act = string.lower(tostring(obj.ActionText or ""))
-                    if SafeFind(act, "капельниц") or SafeFind(act, "drip") or SafeFind(act, "аптечк") or SafeFind(act, "kit") then
-                        local targetCF = GetPromptTargetCFrame(obj)
-                        if targetCF then
-                            TeleportTo(targetCF)
-                            task.wait(0.15)
-                            SafeInteractPrompt(obj)
-                            SendNotification("Медикаменты", "Капельница/Аптечка взята!", 2)
-                            return
-                        end
-                    end
-                end
-            end
-            SendNotification("Медикаменты", "Капельница не найдена на полках", 2)
-        end)
-    end)
 
-    -- 4. Задания
-    TabQuests:CreateSection("Квесты и награды")
-    TabQuests:CreateToggle("Автопринятие заданий", "Автоматически принимает доступные квесты у NPC", Config.AutoAcceptQuests, function(val)
-        Config.AutoAcceptQuests = val
-    end)
-    TabQuests:CreateToggle("Автоквест", "Самостоятельно проходит выбранные задания", Config.AutoQuest, function(val)
-        Config.AutoQuest = val
-    end)
-    TabQuests:CreateToggle("Автозавершение квеста", "Автоматически выполняет необходимые условия сдачи", Config.AutoCompleteQuest, function(val)
-        Config.AutoCompleteQuest = val
-    end)
-    TabQuests:CreateToggle("Автополучение наград", "Забирает награду сразу после завершения квеста", Config.AutoClaimRewards, function(val)
-        Config.AutoClaimRewards = val
-    end)
-    TabQuests:CreateToggle("ESP заданий", "Показывает местоположение нужных NPC и объектов", Config.ESP_Quests, function(val)
-        Config.ESP_Quests = val
-    end)
-
-    -- 5. Телепорты
+    -- 3. ТЕЛЕПОРТЫ
     TabTeleports:CreateSection("Все палаты больницы (1 - 7)")
-    TabTeleports:CreateButton("Палата 1 (Койка пациента)", true, function()
-        local cf = FindWardCFrame(1)
-        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 1", 2)
-        else SendNotification("Телепорт", "Палата 1 не найдена", 2) end
-    end)
-    TabTeleports:CreateButton("Палата 2 (Койка пациента)", true, function()
-        local cf = FindWardCFrame(2)
-        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 2", 2)
-        else SendNotification("Телепорт", "Палата 2 не найдена", 2) end
-    end)
-    TabTeleports:CreateButton("Палата 3 (Койка пациента)", true, function()
-        local cf = FindWardCFrame(3)
-        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 3", 2)
-        else SendNotification("Телепорт", "Палата 3 не найдена", 2) end
-    end)
-    TabTeleports:CreateButton("Палата 4 (Койка пациента)", false, function()
-        local cf = FindWardCFrame(4)
-        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 4", 2)
-        else SendNotification("Телепорт", "Палата 4 не найдена", 2) end
-    end)
-    TabTeleports:CreateButton("Палата 5 (Койка пациента)", false, function()
-        local cf = FindWardCFrame(5)
-        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 5", 2)
-        else SendNotification("Телепорт", "Палата 5 не найдена", 2) end
-    end)
-    TabTeleports:CreateButton("Палата 6 (Койка пациента)", false, function()
-        local cf = FindWardCFrame(6)
-        if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 6", 2)
-        else SendNotification("Телепорт", "Палата 6 не найдена", 2) end
-    end)
+    for i = 1, 6 do
+        TabTeleports:CreateButton("Палата " .. tostring(i) .. " (Койка пациента)", i <= 3, function()
+            local cf = FindWardBedCFrame(i)
+            if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату " .. tostring(i), 2)
+            else SendNotification("Телепорт", "Палата " .. tostring(i) .. " не найдена", 2) end
+        end)
+    end
     TabTeleports:CreateButton("Палата 7 (Реанимация / ICU)", true, function()
-        local cf = FindWardCFrame(7)
+        local cf = FindWardBedCFrame(7)
         if cf then TeleportTo(cf); SendNotification("Телепорт", "Перемещен в Палату 7 (Реанимация)", 2)
         else SendNotification("Телепорт", "Палата 7 не найдена", 2) end
     end)
-
     TabTeleports:CreateSection("Инфраструктура")
-    TabTeleports:CreateButton("Телепорт к шкафу с медикаментами (Аптека)", false, function()
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        local nearestCF, minDist = nil, math.huge
-
+    TabTeleports:CreateButton("Ресепшен / Вход (Регистрация)", false, function()
         for _, obj in pairs(Workspace:GetDescendants()) do
-            if IsMedicineCabinetPrompt(obj) then
+            if IsReceptionPrompt(obj) then
                 local targetCF = GetPromptTargetCFrame(obj)
-                if targetCF then
-                    local dist = (root.Position - targetCF.Position).Magnitude
-                    if dist < minDist then
-                        minDist = dist
-                        nearestCF = targetCF
-                    end
-                end
+                if targetCF then TeleportTo(targetCF); SendNotification("Телепорт", "Перемещен на ресепшен", 2); return end
             end
         end
-
-        if nearestCF then
-            TeleportTo(nearestCF)
-            SendNotification("Телепорт", "Телепортирован к шкафу с лекарствами!", 2)
-        else
-            SendNotification("Телепорт", "Шкаф с лекарствами не найден", 2)
-        end
+        SendNotification("Телепорт", "Ресепшен не найден", 2)
     end)
-
-    TabTeleports:CreateButton("Телепорт к кофе (Восстановление рассудка)", false, function()
+    TabTeleports:CreateButton("Шкафы с медикаментами (Коридор)", false, function()
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if IsCabinetPrompt(obj) then
+                local targetCF = GetPromptTargetCFrame(obj)
+                if targetCF then TeleportTo(targetCF); SendNotification("Телепорт", "Перемещен к шкафу лекарств", 2); return end
+            end
+        end
+        SendNotification("Телепорт", "Шкаф не найден", 2)
+    end)
+    TabTeleports:CreateButton("Кофейный автомат (Рассудок)", false, function()
         for _, obj in pairs(Workspace:GetDescendants()) do
             if IsCoffeePrompt(obj) then
                 local targetCF = GetPromptTargetCFrame(obj)
-                if targetCF then
-                    TeleportTo(targetCF)
-                    SendNotification("Телепорт", "Телепортирован к кофейному аппарату!", 2)
-                    return
-                end
+                if targetCF then TeleportTo(targetCF); SendNotification("Телепорт", "Перемещен к кофе", 2); return end
             end
         end
-        SendNotification("Телепорт", "Кофейный аппарат не найден", 2)
+        SendNotification("Телепорт", "Кофе не найден", 2)
     end)
 
-    -- 6. Игрок
+    -- 4. АВТО ФАРМ
+    TabAutoFarm:CreateSection("Автоматизация")
+    TabAutoFarm:CreateToggle("Автофарм", "Автоматически выполняет заработок валюты", Config.AutoFarm, function(val) Config.AutoFarm = val end)
+    TabAutoFarm:CreateToggle("Автосбор наград", "Собирает награды и дропы", Config.AutoCollect, function(val) Config.AutoCollect = val end)
+    TabAutoFarm:CreateToggle("Автопродажа", "Продаёт ресурсы", Config.AutoSell, function(val) Config.AutoSell = val end)
+    TabAutoFarm:CreateToggle("Автопокупка", "Покупает медикаменты", Config.AutoBuy, function(val) Config.AutoBuy = val end)
+    TabAutoFarm:CreateToggle("Автоулучшение", "Улучшает больницу", Config.AutoUpgrade, function(val) Config.AutoUpgrade = val end)
+
+    -- 5. ИГРОК
     TabPlayer:CreateSection("Параметры персонажа")
     TabPlayer:CreateToggle("Изменение скорости", "Включает кастомную скорость передвижения", Config.WalkSpeedEnabled, function(val)
         Config.WalkSpeedEnabled = val
@@ -1745,159 +1360,44 @@ local function RunAverlikHub()
             if hum then hum.WalkSpeed = val end
         end
     end)
-    TabPlayer:CreateToggle("Изменение прыжка", "Включает повышенную высоту прыжка", Config.JumpPowerEnabled, function(val)
-        Config.JumpPowerEnabled = val
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        if hum then
-            hum.UseJumpPower = true
-            hum.JumpPower = val and Config.JumpPower or 50
-        end
-    end)
-    TabPlayer:CreateSlider("Высота прыжка (JumpPower)", 50, 300, Config.JumpPower, function(val)
-        Config.JumpPower = val
-        if Config.JumpPowerEnabled then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChild("Humanoid")
-            if hum then
-                hum.UseJumpPower = true
-                hum.JumpPower = val
-            end
-        end
-    end)
-    TabPlayer:CreateSection("Утилиты")
-    TabPlayer:CreateToggle("NoClip", "Прохождение сквозь объекты и стены", Config.NoClip, function(val)
-        Config.NoClip = val
-        SendNotification("NoClip", val and "NoClip включен" or "NoClip выключен", 2)
-    end)
-    TabPlayer:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val)
-        Config.AntiAFK = val
-    end)
-    TabPlayer:CreateToggle("Бесконечный рассудок (Auto Coffee)", "Автоматически выпивает кофе при падении рассудка", Config.InfiniteSanity, function(val)
+    TabPlayer:CreateToggle("Бесконечный рассудок (Auto Coffee)", "Автоматически пьет кофе при падении рассудка", Config.InfiniteSanity, function(val)
         Config.InfiniteSanity = val
     end)
-    TabPlayer:CreateToggle("Бесконечный прыжок", "Позволяет совершать бесконечные прыжки в воздухе", Config.InfiniteJump, function(val)
-        Config.InfiniteJump = val
-    end)
+    TabPlayer:CreateToggle("NoClip", "Прохождение сквозь объекты и стены", Config.NoClip, function(val) Config.NoClip = val end)
+    TabPlayer:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val) Config.AntiAFK = val end)
 
-    -- 7. Visuals
-    TabVisuals:CreateSection("ESP Подсветка")
-    TabVisuals:CreateToggle("ESP Игроков", "Подсвечивает всех игроков на сервере", Config.ESP_Players, function(val)
-        Config.ESP_Players = val
-    end)
-    TabVisuals:CreateToggle("ESP Коек с пациентами", "Подсвечивает койки с больными животными", Config.ESP_Patients, function(val)
-        Config.ESP_Patients = val
-    end)
-    TabVisuals:CreateToggle("ESP Шкафов с медикаментами", "Подсвечивает полки с лекарствами в коридоре", Config.ESP_Cabinets, function(val)
-        Config.ESP_Cabinets = val
-    end)
-    TabVisuals:CreateToggle("ESP Предметов", "Выделяет ресурсы, медикаменты, монеты и мусор", Config.ESP_Items, function(val)
-        Config.ESP_Items = val
-    end)
-    TabVisuals:CreateSection("Дополнительно")
-    TabVisuals:CreateToggle("Дистанция", "Отображает расстояние в studs до каждого объекта", Config.ShowDistance, function(val)
-        Config.ShowDistance = val
-    end)
-    TabVisuals:CreateToggle("Tracers (Линии)", "Рисует направляющие линии к объектам", Config.Tracers, function(val)
-        Config.Tracers = val
-    end)
+    -- 6. VISUALS
+    TabVisuals:CreateSection("ESP")
+    TabVisuals:CreateToggle("ESP Коек с пациентами", "Подсвечивает больных животных", Config.ESP_Patients, function(val) Config.ESP_Patients = val end)
+    TabVisuals:CreateToggle("ESP Шкафов лекарств", "Подсвечивает шкафы медикаментов", Config.ESP_Cabinets, function(val) Config.ESP_Cabinets = val end)
+    TabVisuals:CreateToggle("ESP Игроков", "Подсвечивает игроков", Config.ESP_Players, function(val) Config.ESP_Players = val end)
+    TabVisuals:CreateToggle("Отображение дистанции", "Показывает расстояние в studs", Config.ShowDistance, function(val) Config.ShowDistance = val end)
 
-    -- 8. Misc
-    TabMisc:CreateSection("Сервер")
-    TabMisc:CreateButton("Rejoin (Перезайти на сервер)", false, function()
-        SendNotification("Сервер", "Перезаход на сервер...", 2)
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-    end)
-    TabMisc:CreateButton("Server Hop (Сменить сервер)", true, function()
-        SendNotification("Сервер", "Поиск других публичных серверов...", 3)
-        task.spawn(function()
-            local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
-            local success, result = pcall(function() return HttpService:JSONDecode(game:HttpGet(sfUrl)) end)
-            if success and result and result.data then
-                for _, s in ipairs(result.data) do
-                    if s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id ~= game.JobId then
-                        TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LocalPlayer)
-                        return
-                    end
-                end
-            end
-            SendNotification("Сервер", "Не удалось найти сервер для перехода.", 3)
-        end)
-    end)
-    TabMisc:CreateSection("Оптимизация производительности")
-    TabMisc:CreateToggle("FPS Boost", "Отключает тяжелые частицы, тени и разгружает движок", Config.FPSBoost, function(val)
+    -- 7. MISC
+    TabMisc:CreateSection("Сервер и Графика")
+    TabMisc:CreateButton("Rejoin (Перезайти на сервер)", false, function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end)
+    TabMisc:CreateToggle("FPS Boost", "Отключает тени и тяжелые эффекты", Config.FPSBoost, function(val)
         Config.FPSBoost = val
         if val then
             Lighting.GlobalShadows = false
-            Lighting.FogEnd = 9e9
             for _, v in pairs(Workspace:GetDescendants()) do
-                if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then v.Enabled = false end
+                if v:IsA("ParticleEmitter") or v:IsA("Trail") then v.Enabled = false end
             end
-            SendNotification("FPS Boost", "Визуальные эффекты упрощены", 2)
         end
     end)
-    TabMisc:CreateToggle("Low Graphics", "Снижает качество текстур и материалов", Config.LowGraphics, function(val)
-        Config.LowGraphics = val
-        if val then
-            for _, v in pairs(Workspace:GetDescendants()) do
-                if v:IsA("BasePart") and not v:IsA("MeshPart") then
-                    v.Material = Enum.Material.SmoothPlastic
-                    v.Reflectance = 0
-                elseif v:IsA("Decal") or v:IsA("Texture") then
-                    v.Transparency = 0.5
-                end
-            end
-            SendNotification("Low Graphics", "Режим низкой графики активирован", 2)
-        end
-    end)
+    TabMisc:CreateToggle("Low Graphics", "Режим низкой графики", Config.LowGraphics, function(val) Config.LowGraphics = val end)
 
-    -- 9. Settings
-    local ConfigNameInput = TabSettings:CreateInput("Config name", "Введите название конфига...", "default", function(val)
-        Config.SelectedConfig = val
-    end)
-    local ConfigDropdown
-    local function GetSavedConfigs()
-        local cfgList = {"Default"}
-        pcall(function()
-            if isfolder and isfolder("AverlikHub/Configs") and listfiles then
-                for _, f in pairs(listfiles("AverlikHub/Configs")) do
-                    local name = string.match(f, "([^/\\]+)%.json$")
-                    if name then table.insert(cfgList, name) end
-                end
-            end
-        end)
-        for k, _ in pairs(MemoryConfigs) do
-            if not table.find(cfgList, k) then table.insert(cfgList, k) end
-        end
-        return cfgList
-    end
-    TabSettings:CreateButton("Create config", true, function()
-        local name = ConfigNameInput.Text ~= "" and ConfigNameInput.Text or "Default"
-        MemoryConfigs[name] = HttpService:JSONEncode(Config)
-        pcall(function()
-            if makefolder and writefile then
-                if not isfolder("AverlikHub") then makefolder("AverlikHub") end
-                if not isfolder("AverlikHub/Configs") then makefolder("AverlikHub/Configs") end
-                writefile("AverlikHub/Configs/" .. name .. ".json", HttpService:JSONEncode(Config))
-            end
-        end)
-        SendNotification("Config", "Конфиг '" .. name .. "' успешно создан!", 3)
-        if ConfigDropdown then ConfigDropdown.Refresh(GetSavedConfigs()) end
-    end)
-    ConfigDropdown = TabSettings:CreateDropdown("Selected config", GetSavedConfigs(), Config.SelectedConfig, function(val)
-        Config.SelectedConfig = val
-    end)
-    TabSettings:CreateButton("Save config", true, function()
-        local name = Config.SelectedConfig or "Default"
-        MemoryConfigs[name] = HttpService:JSONEncode(Config)
+    -- 8. SETTINGS
+    TabSettings:CreateSection("Конфигурация")
+    local ConfigInput = TabSettings:CreateInput("Название конфига", "default", "default", function(val) Config.SelectedConfig = val end)
+    TabSettings:CreateButton("Сохранить конфиг", true, function()
         pcall(function()
             if writefile and makefolder then
                 if not isfolder("AverlikHub") then makefolder("AverlikHub") end
-                if not isfolder("AverlikHub/Configs") then makefolder("AverlikHub/Configs") end
-                writefile("AverlikHub/Configs/" .. name .. ".json", HttpService:JSONEncode(Config))
+                writefile("AverlikHub/" .. (Config.SelectedConfig or "default") .. ".json", HttpService:JSONEncode(Config))
             end
         end)
-        SendNotification("Config", "Конфиг '" .. name .. "' сохранен!", 3)
+        SendNotification("Config", "Конфиг сохранен!", 2)
     end)
 
     -- Активация 1 вкладки
@@ -1914,6 +1414,7 @@ local function RunAverlikHub()
         HeaderSub.Text = Tabs[1].Subtitle
     end)
 
+    -- Anti-AFK
     pcall(function()
         LocalPlayer.Idled:Connect(function()
             if Config.AntiAFK then
@@ -1923,6 +1424,7 @@ local function RunAverlikHub()
         end)
     end)
 
+    -- NoClip
     RunService.Stepped:Connect(function()
         if Config.NoClip then
             local char = LocalPlayer.Character
@@ -1934,26 +1436,7 @@ local function RunAverlikHub()
         end
     end)
 
-    UserInputService.JumpRequest:Connect(function()
-        if Config.InfiniteJump then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChild("Humanoid")
-            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-        end
-    end)
-
-    LocalPlayer.CharacterAdded:Connect(function(char)
-        task.wait(0.5)
-        local hum = char:WaitForChild("Humanoid", 5)
-        if hum then
-            if Config.WalkSpeedEnabled then hum.WalkSpeed = Config.WalkSpeed end
-            if Config.JumpPowerEnabled then
-                hum.UseJumpPower = true
-                hum.JumpPower = Config.JumpPower
-            end
-        end
-    end)
-
+    -- FPS & Time counter
     local fpsCount, lastFpsTime = 0, tick()
     local currentFps = 60
     RunService.RenderStepped:Connect(function()
@@ -1970,165 +1453,203 @@ local function RunAverlikHub()
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🩺 ПОЛНЫЙ ЦИКЛ АВТОЛЕЧЕНИЯ (ПАЛАТЫ 1-6)
+    -- 🎬 ТОЧНЫЙ 5-ШАГОВЫЙ ЦИКЛ БОЛЬНИЦЫ (ПАЛАТЫ 1 - 5 КАК НА ВИДЕО)
     -- ══════════════════════════════════════════════════════════════════════════
-    local isHandlingPatient = false
+    local isHospitalRunning = false
 
-    local function FindActiveBedTarget()
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then return nil, nil end
-
-        local candidates = {}
-        local now = tick()
-
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if IsBedPatientPrompt(obj) then
-                if not DebounceMap[obj] or (now - DebounceMap[obj]) > 3.0 then
-                    local targetCF = GetPromptTargetCFrame(obj)
-                    if targetCF then
-                        local dist = (root.Position - targetCF.Position).Magnitude
-                        table.insert(candidates, {Prompt = obj, CFrame = targetCF, Distance = dist})
+    local function ProcessHospitalCycle()
+        -- 0. Авто-регистрация на входе
+        if Config.AutoRegistration then
+            for _, rObj in pairs(Workspace:GetDescendants()) do
+                if IsReceptionPrompt(rObj) then
+                    local rCF = GetPromptTargetCFrame(rObj)
+                    if rCF then
+                        TeleportTo(rCF)
+                        task.wait(0.25)
+                        SafeInteractPrompt(rObj)
+                        task.wait(Config.StepDelay or 0.5)
+                        break
                     end
                 end
             end
         end
 
-        if #candidates == 0 then return nil, nil end
-        table.sort(candidates, function(a, b) return a.Distance < b.Distance end)
-        return candidates[1].Prompt, candidates[1].CFrame
+        -- Проходим по каждой палате (от 1 до 5)
+        for wardNum = 1, 5 do
+            if not Config.AutoHospitalCycle then break end
+
+            local wardBedCF = FindWardBedCFrame(wardNum)
+            local wardModel = FindWardModel(wardNum)
+
+            -- 1. ШАГ 1: Поиск промпта ДНК в этой палате
+            local dnaPrompt = nil
+            if wardModel then
+                for _, p in pairs(wardModel:GetDescendants()) do
+                    if IsDNAPrompt(p) then dnaPrompt = p; break end
+                end
+            end
+            if not dnaPrompt and wardBedCF then
+                for _, p in pairs(Workspace:GetDescendants()) do
+                    if IsDNAPrompt(p) then
+                        local pCF = GetPromptTargetCFrame(p)
+                        if pCF and (pCF.Position - wardBedCF.Position).Magnitude < 20 then
+                            dnaPrompt = p
+                            break
+                        end
+                    end
+                end
+            end
+
+            -- Если есть больной, требующий анализ ДНК:
+            if dnaPrompt then
+                local pCF = GetPromptTargetCFrame(dnaPrompt) or wardBedCF
+                TeleportTo(pCF)
+                task.wait(0.3)
+                SafeInteractPrompt(dnaPrompt)
+                task.wait(1.0) -- Удержание E для взятия ДНК
+
+                -- 2. ШАГ 2: Перенос пробирки в лабораторную центрифугу на столе
+                local labPrompt = nil
+                if wardModel then
+                    for _, p in pairs(wardModel:GetDescendants()) do
+                        if IsLabMachinePrompt(p) then labPrompt = p; break end
+                    end
+                end
+                if not labPrompt and wardBedCF then
+                    for _, p in pairs(Workspace:GetDescendants()) do
+                        if IsLabMachinePrompt(p) then
+                            local lCF = GetPromptTargetCFrame(p)
+                            if lCF and (lCF.Position - wardBedCF.Position).Magnitude < 30 then
+                                labPrompt = p
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if labPrompt then
+                    local lCF = GetPromptTargetCFrame(labPrompt)
+                    if lCF then TeleportTo(lCF) end
+                    task.wait(0.25)
+                    SafeInteractPrompt(labPrompt)
+                    task.wait(Config.StepDelay or 0.5)
+
+                    -- 3. ШАГ 3: Ожидание завершения центрифуги (пока компьютер расшифровывает)
+                    task.wait(2.2)
+                end
+            end
+
+            -- 4. ШАГ 4: Забор нужного лекарства из шкафа в коридоре
+            local bp = LocalPlayer:FindFirstChild("Backpack")
+            local toolCount = bp and #bp:GetChildren() or 0
+            if toolCount < 3 then
+                for _, cabObj in pairs(Workspace:GetDescendants()) do
+                    if IsCabinetPrompt(cabObj) then
+                        local cabCF = GetPromptTargetCFrame(cabObj)
+                        if cabCF then
+                            TeleportTo(cabCF)
+                            task.wait(0.25)
+                            SafeInteractPrompt(cabObj)
+                            task.wait(Config.StepDelay or 0.5)
+                            break
+                        end
+                    end
+                end
+            end
+
+            -- 5. ШАГ 5: Возврат к койке с лекарством в руках и лечение ([E] Лечить)
+            local healPrompt = nil
+            if wardModel then
+                for _, p in pairs(wardModel:GetDescendants()) do
+                    if IsHealPrompt(p) then healPrompt = p; break end
+                end
+            end
+            if not healPrompt and wardBedCF then
+                for _, p in pairs(Workspace:GetDescendants()) do
+                    if IsHealPrompt(p) then
+                        local hCF = GetPromptTargetCFrame(p)
+                        if hCF and (hCF.Position - wardBedCF.Position).Magnitude < 20 then
+                            healPrompt = p
+                            break
+                        end
+                    end
+                end
+            end
+
+            if healPrompt and wardBedCF then
+                TeleportTo(wardBedCF)
+                task.wait(0.25)
+                EquipMedicalTool()
+                task.wait(0.15)
+                SafeInteractPrompt(healPrompt)
+                task.wait(1.4) -- Удержание E для полного применения лекарства
+            end
+
+            task.wait(Config.StepDelay or 0.5)
+        end
     end
 
     task.spawn(function()
         while true do
-            task.wait(0.2)
-            if Config.AutoHeal and not isHandlingPatient then
-                local bestPrompt, bestCF = FindActiveBedTarget()
-                if bestPrompt and bestCF and bestPrompt.Enabled then
-                    isHandlingPatient = true
-                    DebounceMap[bestPrompt] = tick()
-
-                    pcall(function()
-                        local char = LocalPlayer.Character
-                        local root = char and char:FindFirstChild("HumanoidRootPart")
-                        if root then
-                            if Config.AutoHealTeleport then
-                                TeleportTo(bestCF)
-                                task.wait(0.18)
-                            end
-
-                            if Config.AutoEquipTools then
-                                EquipAnyMedicalTool()
-                            end
-
-                            SafeInteractPrompt(bestPrompt)
-                            task.wait(math.max(bestPrompt.HoldDuration or 0.3, Config.HealDelay or 0.8))
-
-                            if Config.AutoScanner then
-                                for _, scObj in pairs(Workspace:GetDescendants()) do
-                                    if IsLabScannerPrompt(scObj) then
-                                        local scCF = GetPromptTargetCFrame(scObj)
-                                        if scCF then
-                                            TeleportTo(scCF)
-                                            task.wait(0.15)
-                                            SafeInteractPrompt(scObj)
-                                            task.wait(0.2)
-                                            break
-                                        end
-                                    end
-                                end
-                            end
-
-                            if Config.AutoTakeMedicine then
-                                local bp = LocalPlayer:FindFirstChild("Backpack")
-                                local toolCount = bp and #bp:GetChildren() or 0
-                                if toolCount < 4 then
-                                    for _, medObj in pairs(Workspace:GetDescendants()) do
-                                        if IsMedicineCabinetPrompt(medObj) then
-                                            local medCF = GetPromptTargetCFrame(medObj)
-                                            if medCF then
-                                                TeleportTo(medCF)
-                                                task.wait(0.15)
-                                                SafeInteractPrompt(medObj)
-                                                task.wait(0.2)
-                                                break
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end)
-
-                    isHandlingPatient = false
-                end
+            task.wait(0.3)
+            if Config.AutoHospitalCycle and not isHospitalRunning then
+                isHospitalRunning = true
+                pcall(ProcessHospitalCycle)
+                isHospitalRunning = false
             end
         end
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- ⚡ ЦИКЛ АВТОФАРМА ПАЛАТЫ 7 (РЕАНИМАЦИЯ / ЭКГ / КАПЕЛЬНИЦА)
+    -- ⚡ ЦИКЛ ПАЛАТЫ 7 (РЕАНИМАЦИЯ / ЭКГ / КАПЕЛЬНИЦА)
     -- ══════════════════════════════════════════════════════════════════════════
     local isHandlingRoom7 = false
     task.spawn(function()
         while true do
-            task.wait(0.25)
+            task.wait(0.3)
             if Config.Room7_AutoCycle and not isHandlingRoom7 then
                 isHandlingRoom7 = true
                 pcall(function()
-                    local room7CF = FindWardCFrame(7)
+                    local room7CF = FindWardBedCFrame(7)
                     if room7CF then
-                        -- 1. ТП в палату 7 к монитору/пациенту
                         TeleportTo(room7CF)
-                        task.wait(0.2)
+                        task.wait(0.25)
 
-                        -- 2. Взаимодействие с монитором сердца
+                        -- Монитор сердца
                         if Config.Room7_AutoHeartGame then
-                            for _, obj in pairs(Workspace:GetDescendants()) do
-                                if IsRoom7HeartMonitorPrompt(obj) then
-                                    local mCF = GetPromptTargetCFrame(obj)
-                                    if mCF then TeleportTo(mCF) task.wait(0.15) end
-                                    SafeInteractPrompt(obj)
-                                    task.wait(0.3)
-                                    break
-                                end
-                            end
-
-                            -- Автоклик по точкам сердца
                             for i = 1, 15 do
                                 SolveHeartMinigame()
                                 task.wait(0.1)
                             end
                         end
 
-                        -- 3. Взятие капельницы или аптечки
+                        -- Капельница
                         if Config.Room7_AutoIVDrip then
                             for _, medObj in pairs(Workspace:GetDescendants()) do
-                                if IsMedicineCabinetPrompt(medObj) then
+                                if IsCabinetPrompt(medObj) then
                                     local act = string.lower(tostring(medObj.ActionText or ""))
                                     if SafeFind(act, "капельниц") or SafeFind(act, "drip") or SafeFind(act, "аптечк") then
                                         local medCF = GetPromptTargetCFrame(medObj)
                                         if medCF then
                                             TeleportTo(medCF)
-                                            task.wait(0.15)
-                                            SafeInteractPrompt(medObj)
                                             task.wait(0.2)
+                                            SafeInteractPrompt(medObj)
+                                            task.wait(0.3)
                                             break
                                         end
                                     end
                                 end
                             end
 
-                            -- 4. Применение капельницы к пациенту в палате 7
                             TeleportTo(room7CF)
-                            task.wait(0.18)
-                            EquipAnyMedicalTool("капельниц")
+                            task.wait(0.2)
+                            EquipMedicalTool("капельниц")
                             for _, pPrompt in pairs(Workspace:GetDescendants()) do
-                                if IsBedPatientPrompt(pPrompt) then
+                                if IsHealPrompt(pPrompt) or IsDNAPrompt(pPrompt) then
                                     local pCF = GetPromptTargetCFrame(pPrompt)
                                     if pCF and (room7CF.Position - pCF.Position).Magnitude < 25 then
                                         SafeInteractPrompt(pPrompt)
-                                        task.wait(0.5)
+                                        task.wait(0.8)
                                         break
                                     end
                                 end
@@ -2141,10 +1662,10 @@ local function RunAverlikHub()
         end
     end)
 
-    -- Авто-кофе
+    -- Авто-кофе при низком рассудке
     task.spawn(function()
         while true do
-            task.wait(2.5)
+            task.wait(3.0)
             if Config.InfiniteSanity then
                 pcall(function()
                     for _, obj in pairs(Workspace:GetDescendants()) do
@@ -2152,9 +1673,9 @@ local function RunAverlikHub()
                             local targetCF = GetPromptTargetCFrame(obj)
                             if targetCF then
                                 TeleportTo(targetCF)
-                                task.wait(0.15)
+                                task.wait(0.2)
                                 SafeInteractPrompt(obj)
-                                task.wait(0.3)
+                                task.wait(0.4)
                                 break
                             end
                         end
@@ -2164,8 +1685,8 @@ local function RunAverlikHub()
         end
     end)
 
-    SendNotification("Averlik Hub", "Animal Hospital (Палата 7) загружен!", 4)
-    print("[Averlik Hub] Готово к работе!")
+    SendNotification("Averlik Hub", "Animal Hospital загружен! Включите Авто-цикл больницы.", 4)
+    print("[Averlik Hub] 5-шаговый цикл палат 1-5 готов к работе!")
 end
 
 local ok, err = pcall(RunAverlikHub)
