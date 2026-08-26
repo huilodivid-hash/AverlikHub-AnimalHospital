@@ -161,11 +161,21 @@ local function RunAverlikHub()
             local data = HttpService:JSONDecode(readfile("AverlikHub/Waypoints.json"))
             if data and type(data) == "table" then
                 for k, v in pairs(data) do
-                    if v and v.x and v.y and v.z then
-                        local vec = Vector3.new(v.x, v.y, v.z)
-                        CustomWaypoints[k] = vec
-                        if string.sub(k, 1, 4) == "Ward" and not string.find(k, "_") then
-                            CustomWaypoints[k .. "_Bed"] = vec
+                    if v then
+                        local cf = nil
+                        if v.components and type(v.components) == "table" and #v.components == 12 then
+                            cf = CFrame.new(unpack(v.components))
+                        elseif v.lookX and v.lookY and v.lookZ and v.x and v.y and v.z then
+                            cf = CFrame.lookAt(Vector3.new(v.x, v.y, v.z), Vector3.new(v.x + v.lookX, v.y + v.lookY, v.z + v.lookZ))
+                        elseif v.x and v.y and v.z then
+                            cf = CFrame.new(v.x, v.y, v.z)
+                        end
+
+                        if cf then
+                            CustomWaypoints[k] = cf
+                            if string.sub(k, 1, 4) == "Ward" and not string.find(k, "_") then
+                                CustomWaypoints[k .. "_Bed"] = cf
+                            end
                         end
                     end
                 end
@@ -249,13 +259,20 @@ local function RunAverlikHub()
                 end
                 root.AssemblyLinearVelocity = Vector3.zero
                 root.AssemblyAngularVelocity = Vector3.zero
-                if typeof(cf) == "Vector3" then
+                if typeof(cf) == "CFrame" then
+                    -- Точно сохраняет угол взгляда и направление персонажа
+                    root.CFrame = cf + Vector3.new(0, 0.2, 0)
+                elseif typeof(cf) == "Vector3" then
                     root.CFrame = CFrame.new(cf + Vector3.new(0, 2.5, 0))
-                elseif typeof(cf) == "CFrame" then
-                    root.CFrame = cf + Vector3.new(0, 2.5, 0)
                 end
             end
         end)
+    end
+
+    local function GetMyCFrame()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        return root and root.CFrame or nil
     end
 
     local function GetMyPosition()
@@ -1437,33 +1454,46 @@ local function RunAverlikHub()
                 if not isfolder("AverlikHub") then makefolder("AverlikHub") end
                 local exportData = {}
                 for k, v in pairs(CustomWaypoints) do
-                    if v then exportData[k] = {x = v.X, y = v.Y, z = v.Z} end
+                    if typeof(v) == "CFrame" then
+                        local look = v.LookVector
+                        exportData[k] = {
+                            x = v.X,
+                            y = v.Y,
+                            z = v.Z,
+                            lookX = look.X,
+                            lookY = look.Y,
+                            lookZ = look.Z,
+                            components = {v:GetComponents()}
+                        }
+                    elseif typeof(v) == "Vector3" then
+                        exportData[k] = {x = v.X, y = v.Y, z = v.Z}
+                    end
                 end
                 writefile("AverlikHub/Waypoints.json", HttpService:JSONEncode(exportData))
             end
         end)
-        SendNotification("Waypoints", "Точки сохранены в памяти и файле!", 3)
+        SendNotification("Waypoints", "Точки и угол взгляда сохранены!", 3)
     end)
 
     local function MakeWaypointRow(keyName, displayName)
         TabWaypoints:CreateDualButton("📍 " .. displayName, "🚀 ТП", function()
-            local pos = GetMyPosition()
-            if pos then
-                CustomWaypoints[keyName] = pos
-                SendNotification("Точка сохранена", displayName .. ": (" .. math.floor(pos.X) .. ", " .. math.floor(pos.Y) .. ", " .. math.floor(pos.Z) .. ")", 2)
+            local cf = GetMyCFrame()
+            if cf then
+                CustomWaypoints[keyName] = cf
+                SendNotification("Точка сохранена", displayName .. " (Позиция и взгляд зафиксированы!)", 2)
             end
         end, function()
-            local pos = CustomWaypoints[keyName]
-            if not pos and string.find(keyName, "Bed") then
+            local cf = CustomWaypoints[keyName]
+            if not cf and string.find(keyName, "Bed") then
                 local num = tonumber(string.match(keyName, "%d+")) or 1
-                pos = GetWardBedPosition(num)
-            elseif not pos and string.find(keyName, "Device") then
+                cf = GetWardBedPosition(num)
+            elseif not cf and string.find(keyName, "Device") then
                 local num = tonumber(string.match(keyName, "%d+")) or 1
-                pos = GetWardDevicePosition(num)
+                cf = GetWardDevicePosition(num)
             end
 
-            if pos then
-                TeleportTo(pos)
+            if cf then
+                TeleportTo(cf)
                 SendNotification("Телепорт", "Перемещен к: " .. displayName, 2)
             else
                 SendNotification("Ошибка", "Сначала подойдите и нажмите '📍 Записать'", 2)
