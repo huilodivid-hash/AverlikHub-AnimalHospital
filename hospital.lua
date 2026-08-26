@@ -423,30 +423,7 @@ local function RunAverlikHub()
         return SafeFind(act, "coffee") or SafeFind(act, "кофе") or SafeFind(objT, "кофе") or SafeFind(objT, "рассудок") or SafeFind(pName, "coffee")
     end
 
-    -- Проверка наличия больного на койке ДО телепортации
-    local function FindWardPatientPrompt(wardNum)
-        local bedPos = GetWardBedPosition(wardNum)
-        if not bedPos then return nil, nil end
-        local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
-
-        for _, p in pairs(Workspace:GetDescendants()) do
-            if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
-                local pCF = GetPromptTargetCFrame(p)
-                if pCF then
-                    local dist = (pCF.Position - bedVec).Magnitude
-                    if dist < 20 then
-                        if IsDNAPrompt(p) then
-                            return p, "DNA"
-                        elseif IsHealPrompt(p) then
-                            return p, "Heal"
-                        end
-                    end
-                end
-            end
-        end
-        return nil, nil
-    end
-
+    -- Проверка активности палаты (есть ли больной на койке, анализ в сканере или задача на ПК)
     local function SolveHeartMinigame()
         local solved = false
         pcall(function()
@@ -1823,11 +1800,43 @@ local function RunAverlikHub()
         return nil
     end
 
+    -- Проверка активности палаты (есть ли больной на койке, анализ в сканере или задача на ПК)
+    local function IsWardActive(wardNum)
+        local bedPos = GetWardBedPosition(wardNum)
+        if not bedPos then return false end
+        local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
+        local devPos = GetWardDevicePosition(wardNum)
+        local devVec = devPos and (typeof(devPos) == "CFrame" and devPos.Position or devPos) or nil
+
+        -- 1. Проверка активных ProximityPrompt возле койки или стола
+        for _, p in pairs(Workspace:GetDescendants()) do
+            if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
+                local pCF = GetPromptTargetCFrame(p)
+                if pCF then
+                    if (pCF.Position - bedVec).Magnitude < 18 then return true end
+                    if devVec and (pCF.Position - devVec).Magnitude < 20 then return true end
+                end
+            end
+        end
+
+        -- 2. Проверка пациента (модели животного) на самой койке
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj ~= LocalPlayer.Character and not obj:IsDescendantOf(LocalPlayer.Character) then
+                local pPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                if pPart and (pPart.Position - bedVec).Magnitude < 8 then
+                    return true
+                end
+            end
+        end
+
+        return false
+    end
+
     local function PerformDeskAnalysis(devPos)
         if not devPos then return end
         local devVec = typeof(devPos) == "CFrame" and devPos.Position or devPos
 
-        -- ШАГ 2.1: Встаем перед столом со сканером
+        -- ШАГ 2.1: Встаем перед сканером (левый аппарат)
         TeleportTo(devPos)
         task.wait(0.35)
 
@@ -1835,14 +1844,14 @@ local function RunAverlikHub()
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
                 local pCF = GetPromptTargetCFrame(obj)
-                if pCF and (pCF.Position - devVec).Magnitude < 18 then
+                if pCF and (pCF.Position - devVec).Magnitude < 16 then
                     SafeInteractPrompt(obj, 0.4)
                     task.wait(0.3)
                     break
                 end
             elseif obj:IsA("ClickDetector") and obj.Parent then
                 local p = obj.Parent
-                if p:IsA("BasePart") and (p.Position - devVec).Magnitude < 18 then
+                if p:IsA("BasePart") and (p.Position - devVec).Magnitude < 16 then
                     pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
                     task.wait(0.3)
                     break
@@ -1850,21 +1859,28 @@ local function RunAverlikHub()
             end
         end
 
-        -- Ожидание завершения центрифуги (3.6 сек, пока не появится «Завершено» и «Необходимые действия !»)
+        -- Ожидание работы центрифуги (3.6 сек)
         task.wait(3.6)
 
-        -- 2-е НАЖАТИЕ: Нажать на компьютер («Необходимые действия !» / «Завершено»)
+        -- ШАГ 2.2: Встаем прямо перед компьютером (сдвиг вправо к монитору и клавиатуре)
+        local pcPos = typeof(devPos) == "CFrame" and (devPos * CFrame.new(2.8, 0, 0)) or (devVec + Vector3.new(2.8, 0, 0))
+        TeleportTo(pcPos)
+        task.wait(0.3)
+
+        local pcVec = typeof(pcPos) == "CFrame" and pcPos.Position or pcPos
+
+        -- 2-е НАЖАТИЕ: Нажать на компьютер («Необходимые действия !»)
         for repeatClick = 1, 3 do
             for _, obj in pairs(Workspace:GetDescendants()) do
                 if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
                     local pCF = GetPromptTargetCFrame(obj)
-                    if pCF and (pCF.Position - devVec).Magnitude < 20 then
+                    if pCF and (pCF.Position - pcVec).Magnitude < 16 then
                         SafeInteractPrompt(obj, 0.4)
                         task.wait(0.2)
                     end
                 elseif obj:IsA("ClickDetector") and obj.Parent then
                     local p = obj.Parent
-                    if p:IsA("BasePart") and (p.Position - devVec).Magnitude < 20 then
+                    if p:IsA("BasePart") and (p.Position - pcVec).Magnitude < 16 then
                         pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
                         task.wait(0.2)
                     end
@@ -1875,7 +1891,7 @@ local function RunAverlikHub()
             for _, sg in pairs(Workspace:GetDescendants()) do
                 if (sg:IsA("SurfaceGui") or sg:IsA("BillboardGui")) and sg.Adornee then
                     local adPart = sg.Adornee:IsA("BasePart") and sg.Adornee or nil
-                    if adPart and (adPart.Position - devVec).Magnitude < 20 then
+                    if adPart and (adPart.Position - pcVec).Magnitude < 16 then
                         for _, btn in pairs(sg:GetDescendants()) do
                             if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
                                 pcall(function()
@@ -1893,13 +1909,16 @@ local function RunAverlikHub()
         end
     end
 
+    local lastReceptionTime = 0
+
     local function ProcessHospitalCycle()
-        -- 0. Авто-регистрация на ресепшене
-        if Config.AutoRegistration then
+        -- 0. Авто-регистрация на ресепшене (только раз в 30 сек, чтобы не перебивать лечение)
+        if Config.AutoRegistration and (tick() - lastReceptionTime > 30) then
+            lastReceptionTime = tick()
             local recPos = CustomWaypoints.Reception
             if recPos then
                 TeleportTo(recPos)
-                task.wait(0.2)
+                task.wait(0.25)
             end
             for _, rObj in pairs(Workspace:GetDescendants()) do
                 if IsReceptionPrompt(rObj) then
@@ -1908,7 +1927,7 @@ local function RunAverlikHub()
                         TeleportTo(rCF)
                         task.wait(0.2)
                         SafeInteractPrompt(rObj, 0.2)
-                        task.wait(Config.StepDelay or 0.5)
+                        task.wait(0.3)
                         break
                     end
                 end
@@ -1922,28 +1941,33 @@ local function RunAverlikHub()
             local bedPos = GetWardBedPosition(wardNum)
             local devPos = GetWardDevicePosition(wardNum)
 
-            if bedPos then
-                -- 🔍 ПРЕДВАРИТЕЛЬНАЯ ПРОВЕРКА: есть ли больной в этой палате?
-                local patientPrompt, promptType = FindWardPatientPrompt(wardNum)
+            if bedPos and IsWardActive(wardNum) then
+                local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
 
-                -- Если больного нет (койка пустая) — пропускаем палату сразу!
-                if not patientPrompt then
-                    continue
+                -- Проверяем Prompts на койке
+                local bedDNA = nil
+                local bedHeal = nil
+                for _, p in pairs(Workspace:GetDescendants()) do
+                    if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
+                        local pCF = GetPromptTargetCFrame(p)
+                        if pCF and (pCF.Position - bedVec).Magnitude < 18 then
+                            if IsDNAPrompt(p) then bedDNA = p end
+                            if IsHealPrompt(p) then bedHeal = p end
+                        end
+                    end
                 end
 
-                -- ШАГ 1: Телепорт к койке пациента
-                TeleportTo(bedPos)
-                task.wait(0.35)
+                -- ШАГ 1: Если пациент ждет взятия анализа ДНК
+                if bedDNA then
+                    TeleportTo(bedPos)
+                    task.wait(0.35)
+                    SafeInteractPrompt(bedDNA, 0.4)
+                    task.wait(1.2)
+                end
 
-                -- Если пациент требует анализа ДНК
-                if promptType == "DNA" or IsDNAPrompt(patientPrompt) then
-                    SafeInteractPrompt(patientPrompt, 0.4)
-                    task.wait(1.2) -- Время взятия анализа ДНК
-
-                    -- ШАГ 2: Перенос в сканер и взаимодействие с компьютером (2 нажатия)
-                    if devPos then
-                        PerformDeskAnalysis(devPos)
-                    end
+                -- ШАГ 2: Перенос в сканер и взаимодействие с компьютером (2 нажатия)
+                if devPos then
+                    PerformDeskAnalysis(devPos)
                 end
 
                 -- ШАГ 3: Проверка лекарства в инвентаре / Поход к полке
