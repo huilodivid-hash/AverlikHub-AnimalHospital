@@ -1444,9 +1444,16 @@ local function RunAverlikHub()
         end)
     end)
 
-    -- 2. ТОЧКИ ТЕЛЕПОРТА (КАСТОМНЫЙ РЕДАКТОР ПАЛАТ И ШКАФОВ)
-    TabWaypoints:CreateSection("💾 Сохранение")
-    TabWaypoints:CreateButton("💾 Сохранить все точки в файл (Waypoints.json)", true, function()
+    -- ══════════════════════════════════════════════════════════════════════════
+    -- 📍 СИСТЕМА 3D ВИЗУАЛИЗАЦИИ И АВТОСОХРАНЕНИЯ WAYPOINTS
+    -- ══════════════════════════════════════════════════════════════════════════
+    local WaypointVisualFolder = Instance.new("Folder")
+    WaypointVisualFolder.Name = "AverlikHub_WaypointVisuals"
+    WaypointVisualFolder.Parent = Workspace
+
+    local ShowWaypointESP = false
+
+    local function SaveWaypointsToFile()
         pcall(function()
             if writefile and makefolder then
                 if not isfolder("AverlikHub") then makefolder("AverlikHub") end
@@ -1470,7 +1477,96 @@ local function RunAverlikHub()
                 writefile("AverlikHub/Waypoints.json", HttpService:JSONEncode(exportData))
             end
         end)
-        SendNotification("Waypoints", "Точки и угол взгляда сохранены!", 3)
+    end
+
+    local function UpdateWaypointVisuals()
+        pcall(function()
+            WaypointVisualFolder:ClearAllChildren()
+            if not ShowWaypointESP then return end
+
+            for key, cf in pairs(CustomWaypoints) do
+                if typeof(cf) == "CFrame" then
+                    local marker = Instance.new("Part")
+                    marker.Name = "Marker_" .. key
+                    marker.Size = Vector3.new(2.4, 0.15, 2.4)
+                    marker.CFrame = cf - Vector3.new(0, 1.8, 0)
+                    marker.Anchored = true
+                    marker.CanCollide = false
+                    marker.Material = Enum.Material.Neon
+                    marker.Color = Config.AccentColor
+                    marker.Transparency = 0.35
+                    marker.Parent = WaypointVisualFolder
+
+                    local mesh = Instance.new("CylinderMesh")
+                    mesh.Scale = Vector3.new(1, 0.2, 1)
+                    mesh.Parent = marker
+
+                    local arrow = Instance.new("Part")
+                    arrow.Name = "Arrow"
+                    arrow.Size = Vector3.new(0.35, 0.16, 1.4)
+                    arrow.CFrame = cf * CFrame.new(0, -1.7, -1.1)
+                    arrow.Anchored = true
+                    arrow.CanCollide = false
+                    arrow.Material = Enum.Material.Neon
+                    arrow.Color = Color3.fromRGB(255, 255, 255)
+                    arrow.Parent = WaypointVisualFolder
+
+                    local bb = Instance.new("BillboardGui")
+                    bb.Size = UDim2.new(0, 150, 0, 28)
+                    bb.StudsOffset = Vector3.new(0, 2.6, 0)
+                    bb.AlwaysOnTop = true
+                    bb.Adornee = marker
+                    bb.Parent = marker
+
+                    local tag = Instance.new("TextLabel")
+                    tag.Size = UDim2.new(1, 0, 1, 0)
+                    tag.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+                    tag.BackgroundTransparency = 0.2
+                    tag.BorderSizePixel = 0
+                    tag.Text = "📍 " .. key
+                    tag.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    tag.Font = Enum.Font.GothamBold
+                    tag.TextSize = 10
+                    tag.Parent = bb
+
+                    local tagCorner = Instance.new("UICorner")
+                    tagCorner.CornerRadius = UDim.new(0, 6)
+                    tagCorner.Parent = tag
+
+                    local tagStroke = Instance.new("UIStroke")
+                    tagStroke.Color = Config.AccentColor
+                    tagStroke.Thickness = 1
+                    tagStroke.Parent = tag
+                end
+            end
+        end)
+    end
+
+    -- 2. ТОЧКИ ТЕЛЕПОРТА (ПОЛНЫЙ РЕДАКТОР WAYPOINTS)
+    TabWaypoints:CreateSection("3D Визуализация и Сохранение")
+    TabWaypoints:CreateToggle("3D Маркеры всех точек в мире (ESP)", "Показывает неоновые круги и метки прямо в игре", ShowWaypointESP, function(val)
+        ShowWaypointESP = val
+        UpdateWaypointVisuals()
+    end)
+    TabWaypoints:CreateButton("💾 Сохранить все точки в файл (Waypoints.json)", true, function()
+        SaveWaypointsToFile()
+        SendNotification("Waypoints", "Точки и ракурсы взгляда успешно сохранены!", 3)
+    end)
+    TabWaypoints:CreateButton("📋 Скопировать координаты в буфер (JSON)", false, function()
+        pcall(function()
+            local exportData = {}
+            for k, v in pairs(CustomWaypoints) do
+                if typeof(v) == "CFrame" then
+                    local look = v.LookVector
+                    exportData[k] = {x = v.X, y = v.Y, z = v.Z, lookX = look.X, lookY = look.Y, lookZ = look.Z, components = {v:GetComponents()}}
+                end
+            end
+            local jsonStr = HttpService:JSONEncode(exportData)
+            if setclipboard then
+                setclipboard(jsonStr)
+                SendNotification("Буфер обмена", "JSON с координатами скопирован!", 2)
+            end
+        end)
     end)
 
     local function MakeWaypointRow(keyName, displayName)
@@ -1478,7 +1574,9 @@ local function RunAverlikHub()
             local cf = GetMyCFrame()
             if cf then
                 CustomWaypoints[keyName] = cf
-                SendNotification("Точка сохранена", displayName .. " (Позиция и взгляд зафиксированы!)", 2)
+                SaveWaypointsToFile()
+                UpdateWaypointVisuals()
+                SendNotification("Точка сохранена", displayName .. "\n(Координаты и направление зафиксированы!)", 2)
             end
         end, function()
             local cf = CustomWaypoints[keyName]
@@ -1499,11 +1597,37 @@ local function RunAverlikHub()
         end)
     end
 
-    -- Настройка для каждой палаты (Койка + Устройство)
+    -- Добавление своей произвольной точки
+    TabWaypoints:CreateSection("➕ Создать свою кастомную точку")
+    local customPointName = "Custom_Point_1"
+    TabWaypoints:CreateInput("Имя новой точки", "Например: Моя_Точка", "Custom_Point_1", function(val)
+        customPointName = val
+    end)
+    TabWaypoints:CreateButton("➕ Записать текущую позицию как новую точку", true, function()
+        local cf = GetMyCFrame()
+        if cf and customPointName and customPointName ~= "" then
+            CustomWaypoints[customPointName] = cf
+            SaveWaypointsToFile()
+            UpdateWaypointVisuals()
+            MakeWaypointRow(customPointName, "Кастом: " .. customPointName)
+            SendNotification("Waypoints", "Создана новая точка: " .. customPointName, 3)
+        end
+    end)
+
+    -- Ресепшен и Инфраструктура
+    TabWaypoints:CreateSection("🏢 Ресепшен (Все шаги)")
+    MakeWaypointRow("Reception", "📋 Стойка ресепшена (Центр)")
+    MakeWaypointRow("Reception_Form", "📝 Планшет / Бланк регистрации")
+    MakeWaypointRow("Reception_Camera", "📷 Камера на штативе (Слева)")
+    MakeWaypointRow("Reception_Printer", "🖨️ Принтер (Справа)")
+    MakeWaypointRow("Reception_Bell", "🔔 Колокольчик вызова")
+    MakeWaypointRow("Coffee", "☕ Кофейный автомат (Рассудок)")
+
+    -- Палаты 1 - 6 (Койка + Сканер + Компьютер)
     for i = 1, 6 do
         TabWaypoints:CreateSection("Палата " .. tostring(i) .. " (Койка + Сканер)")
         MakeWaypointRow("Ward" .. tostring(i) .. "_Bed", "Палата " .. tostring(i) .. ": Койка пациента")
-        MakeWaypointRow("Ward" .. tostring(i) .. "_Device", "Палата " .. tostring(i) .. ": Устройство / Сканер")
+        MakeWaypointRow("Ward" .. tostring(i) .. "_Device", "Палата " .. tostring(i) .. ": Сканер ДНК / Центрифуга")
     end
 
     TabWaypoints:CreateSection("Палата 7 (Реанимация)")
@@ -1530,10 +1654,6 @@ local function RunAverlikHub()
     TabWaypoints:CreateSection("⬜ Серый шкаф (Раздельные полки)")
     MakeWaypointRow("Med_Bandage", "🩹 Бинты (Полка бинтов)")
     MakeWaypointRow("Med_Plaster", "🩹 Пластыри / Инструменты")
-
-    TabWaypoints:CreateSection("🏢 Инфраструктура")
-    MakeWaypointRow("Reception", "📋 Ресепшен (Вход / Регистрация)")
-    MakeWaypointRow("Coffee", "☕ Кофейный автомат (Рассудок)")
 
     -- 3. ПАЛАТА 7 (РЕАНИМАЦИЯ)
     TabRoom7:CreateSection("Реанимация Палаты 7")
