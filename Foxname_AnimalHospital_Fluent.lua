@@ -5,9 +5,12 @@
 -- Deobfuscated & Reconstructed Clean Source Code
 -- ══════════════════════════════════════════════════════════════════════════════════
 
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+local Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/huilodivid-hash/AverlikHub-AnimalHospital/main/fluent.lua"))()
+local SaveManager, InterfaceManager
+pcall(function()
+    SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+    InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+end)
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -670,15 +673,19 @@ task.spawn(function()
 end)
 
 -- Initialize SaveManager & Select First Tab
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("FoxnameHub")
-SaveManager:SetFolder("FoxnameHub/AnimalHospital")
+pcall(function()
+    if SaveManager and InterfaceManager then
+        SaveManager:SetLibrary(Fluent)
+        InterfaceManager:SetLibrary(Fluent)
+        SaveManager:IgnoreThemeSettings()
+        SaveManager:SetIgnoreIndexes({})
+        InterfaceManager:SetFolder("FoxnameHub")
+        SaveManager:SetFolder("FoxnameHub/AnimalHospital")
 
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
+        InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+        SaveManager:BuildConfigSection(Tabs.Settings)
+    end
+end)
 
 Window:SelectTab(1)
 
