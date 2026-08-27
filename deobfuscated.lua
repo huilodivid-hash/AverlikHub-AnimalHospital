@@ -327,165 +327,210 @@ local function ExecuteCheckInCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🩺 8. AUTO TREATMENT (ROOM 6 X-RAY & ALL WARDS)
+-- 🩺 8. AUTO TREATMENT (ROOMS 1-8 FULL MULTI-WARD SYSTEM)
 -- ══════════════════════════════════════════════════════════════════════════
-local function GrabHospitalItem(itemName)
-    local itemsFolder = Workspace:FindFirstChild("Model") and Workspace.Model:FindFirstChild("Items")
-    local targetPP = nil
+local function GetItemPromptDirect(itemName)
+    local lower = string.lower(string.gsub(tostring(itemName), "%s+", ""))
 
+    -- 1. Check Workspace.Model.Items
+    local itemsFolder = Workspace:FindFirstChild("Model") and Workspace.Model:FindFirstChild("Items")
     if itemsFolder then
         for _, itemModel in ipairs(itemsFolder:GetChildren()) do
-            if string.lower(itemModel.Name):find(string.lower(itemName)) then
-                targetPP = itemModel:FindFirstChild("PP")
-                if targetPP then break end
+            local mLower = string.lower(string.gsub(itemModel.Name, "%s+", ""))
+            if mLower == lower or mLower:find(lower) or lower:find(mLower) then
+                local pp = itemModel:FindFirstChild("PP") or itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if pp and pp.Enabled then return pp end
             end
         end
     end
 
-    if not targetPP then
-        for _, prompt in ipairs(Workspace:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                if string.lower(prompt.ActionText or ""):find(string.lower(itemName)) then
-                    targetPP = prompt
-                    break
-                end
+    -- 2. Check Emergency Room 8 Medicine stash
+    local room8Med = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8") and Workspace.Rooms.Emergency.Room8:FindFirstChild("Minigame") and Workspace.Rooms.Emergency.Room8.Minigame:FindFirstChild("Medicine")
+    if room8Med then
+        for _, obj in ipairs(room8Med:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled then
+                local act = string.lower(obj.ActionText or "")
+                if act:find(lower) then return obj end
             end
         end
     end
 
-    if targetPP then
-        Log("AutoTreatment", "Grabbing treatment item", {
-            countBefore = 0,
-            prompt = targetPP:GetFullName(),
-            room = "Room6",
-            targetItem = itemName
-        })
-        TeleportAndFirePrompt(targetPP, Positions[itemName] or GetPromptPartPosition(targetPP), 0.4)
-        task.wait(0.4)
+    -- 3. Check any workspace ProximityPrompt
+    for _, prompt in ipairs(Workspace:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+            local act = string.lower(prompt.ActionText or "")
+            local obj = string.lower(prompt.ObjectText or "")
+            local par = string.lower(prompt.Parent and prompt.Parent.Name or "")
+            if act:find(lower) or obj:find(lower) or par:find(lower) then
+                return prompt
+            end
+        end
     end
+    return nil
 end
 
-local function ProcessRoom6Emergency()
+local function GrabAndEquipMedicine(itemName)
+    local tool = FindToolInInventory(itemName)
+    if not tool then
+        local pp = GetItemPromptDirect(itemName)
+        if pp then
+            Log("AutoTreatment", "Grabbing treatment item", {
+                countBefore = 0,
+                prompt = pp:GetFullName(),
+                targetItem = itemName
+            })
+            local pos = Positions[itemName] or GetPromptPartPosition(pp)
+            TeleportAndFirePrompt(pp, pos, 0.4)
+            task.wait(0.4)
+        else
+            -- Teleport to shelf fallback
+            local shelf = Positions.Ointment
+            if itemName:find("Pill") or itemName:find("Drop") then shelf = Positions.Pills
+            elseif itemName:find("Syrup") then shelf = Positions.CoughSyrup
+            end
+            TeleportPlayer(shelf)
+            task.wait(0.3)
+        end
+    end
+
+    return EquipAndActivateTool(itemName)
+end
+
+local function GetTreatablePatientRooms()
+    local list = {}
     local rooms = Workspace:FindFirstChild("Rooms")
-    local emergency = rooms and rooms:FindFirstChild("Emergency")
-    local room6 = emergency and emergency:FindFirstChild("Room6")
-    if not room6 then return false end
+    if not rooms then return list end
 
-    local minigame = room6:FindFirstChild("Minigame")
-    if not minigame then return false end
+    for _, cat in ipairs({"Emergency", "Medical"}) do
+        local folder = rooms:FindFirstChild(cat)
+        if folder then
+            for _, room in ipairs(folder:GetChildren()) do
+                local minigame = room:FindFirstChild("Minigame")
+                local bed = minigame and minigame:FindFirstChild("Bed")
+                local inBed = bed and bed:FindFirstChild("InBed")
+                local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
+                local xrayPP = minigame and minigame:FindFirstChild("xrayMonitor") and minigame.xrayMonitor:FindFirstChild("PP")
 
-    local xrayPP = minigame:FindFirstChild("xrayMonitor") and minigame.xrayMonitor:FindFirstChild("PP")
-    if xrayPP and xrayPP.Enabled then
-        Log("AutoTreatment", "Found patient for room (or start prompt)", {
-            prompt = xrayPP:GetFullName(),
-            room = "Room6"
-        })
-        Log("AutoTreatment", "Starting patient treatment", {
-            emergency = "true",
-            npc = "Workspace.NPCs.EmergencyPatient",
-            npcPrompt = xrayPP:GetFullName(),
-            room = "Room6"
-        })
-        Log("AutoTreatment", "Waiting for Room6 patient to reach xray area", {
-            npc = "Workspace.NPCs.EmergencyPatient",
-            room = "Room6"
-        })
-
-        -- Process Results
-        local monitorPP2 = minigame:FindFirstChild("Monitor") and minigame.Monitor:FindFirstChild("PP2")
-        if monitorPP2 and monitorPP2.Enabled then
-            Log("AutoTreatment", "Pressing monitor process prompt", {
-                prompt = monitorPP2:GetFullName(),
-                retryLeft = 1,
-                room = "Room6"
-            })
-            TeleportAndFirePrompt(monitorPP2, Positions.Room6_XrayMonitor, 0.4)
-            task.wait(3.0)
-        end
-
-        -- Collect Printed X-Ray
-        local xresultPP = minigame:FindFirstChild("PrintedXRay") and minigame.PrintedXRay:FindFirstChild("PP")
-        if xresultPP and xresultPP.Enabled then
-            Log("AutoTreatment", "Pressing xresult prompt", {
-                prompt = xresultPP:GetFullName(),
-                room = "Room6"
-            })
-            TeleportAndFirePrompt(xresultPP, Positions.Room6_PrintedXRay, 0.4)
-            task.wait(2.0)
-        end
-
-        -- Collect items & administer cure
-        local neededItems = { "Ointment", "Bandages" }
-        Log("AutoTreatment", "Resolved needed treatment items", {
-            neededItems = "{1=Ointment, 2=Bandages}",
-            room = "Room6"
-        })
-
-        for _, item in ipairs(neededItems) do
-            Log("AutoTreatment", "Treatment item loop", {
-                attempt = 1,
-                currentItem = item,
-                isSkinwalker = "false",
-                medicineCount = 0,
-                neededItems = "{1=Ointment, 2=Bandages}",
-                npc = "Workspace.NPCs.EmergencyPatient",
-                room = "Room6",
-                shouldKill = "false"
-            })
-
-            GrabHospitalItem(item)
-            EquipAndActivateTool(item)
-            TeleportPlayer(Positions.Room6_Bed)
-            task.wait(0.5)
-
-            for _, prompt in ipairs(room6:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") and prompt.Enabled and (prompt.ActionText or ""):find("Treat") then
-                    FirePrompt(prompt, 0.5)
-                    task.wait(0.5)
-                    break
+                if (bedPP and bedPP.Enabled) or (xrayPP and xrayPP.Enabled) then
+                    table.insert(list, {
+                        Room = room,
+                        Category = cat,
+                        BedPP = bedPP,
+                        XrayPP = xrayPP,
+                        Minigame = minigame
+                    })
                 end
             end
         end
-        return true
     end
-    return false
+    return list
 end
 
 local function ExecuteTreatmentCycle()
     if not _G.AutoTreatment then return end
-    if ProcessRoom6Emergency() then return end
 
-    local treatedAny = false
-    local rooms = Workspace:FindFirstChild("Rooms")
-    local medical = rooms and rooms:FindFirstChild("Medical")
-    if medical then
-        for _, room in ipairs(medical:GetChildren()) do
-            local bed = room:FindFirstChild("Bed")
-            local patient = bed and bed:FindFirstChildWhichIsA("Model")
-            if patient then
-                -- General treatment cycle for Rooms 1-5
-                local posKey = room.Name .. "_Bed"
-                if Positions[posKey] then
-                    TeleportPlayer(Positions[posKey])
-                    task.wait(0.3)
-                    for _, pp in ipairs(patient:GetDescendants()) do
-                        if pp:IsA("ProximityPrompt") and pp.Enabled then
-                            FirePrompt(pp, 0.4)
-                            treatedAny = true
-                            break
-                        end
+    local treatableRooms = GetTreatablePatientRooms()
+    if #treatableRooms == 0 then
+        Log("AutoTreatment", "No treatable patient found in any room")
+        return
+    end
+
+    for _, rInfo in ipairs(treatableRooms) do
+        if not _G.AutoTreatment then break end
+        local room = rInfo.Room
+        local minigame = rInfo.Minigame
+
+        -- 1. Emergency Room 6 X-Ray Routine
+        if rInfo.XrayPP and rInfo.XrayPP.Enabled then
+            Log("AutoTreatment", "Found patient for room (or start prompt)", {
+                prompt = rInfo.XrayPP:GetFullName(),
+                room = room.Name
+            })
+            Log("AutoTreatment", "Starting patient treatment", {
+                emergency = "true",
+                npc = "Workspace.NPCs.Patient",
+                npcPrompt = rInfo.XrayPP:GetFullName(),
+                room = room.Name
+            })
+
+            TeleportAndFirePrompt(rInfo.XrayPP, nil, 0.4)
+            task.wait(1.5)
+
+            local monitorPP2 = minigame:FindFirstChild("Monitor") and minigame.Monitor:FindFirstChild("PP2")
+            if monitorPP2 and monitorPP2.Enabled then
+                Log("AutoTreatment", "Pressing monitor process prompt", {
+                    prompt = monitorPP2:GetFullName(),
+                    retryLeft = 1,
+                    room = room.Name
+                })
+                TeleportAndFirePrompt(monitorPP2, Positions.Room6_XrayMonitor, 0.4)
+                task.wait(2.5)
+            end
+
+            local xresultPP = minigame:FindFirstChild("PrintedXRay") and minigame.PrintedXRay:FindFirstChild("PP")
+            if xresultPP and xresultPP.Enabled then
+                Log("AutoTreatment", "Pressing xresult prompt", {
+                    prompt = xresultPP:GetFullName(),
+                    room = room.Name
+                })
+                TeleportAndFirePrompt(xresultPP, Positions.Room6_PrintedXRay, 0.4)
+                task.wait(1.5)
+            end
+
+            -- Apply Ointment & Bandages
+            local meds = {"Ointment", "Bandages"}
+            for _, med in ipairs(meds) do
+                GrabAndEquipMedicine(med)
+                task.wait(0.3)
+
+                local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+                local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
+                if bedPP then
+                    TeleportAndFirePrompt(bedPP, Positions.Room6_Bed, 0.5)
+                    task.wait(0.5)
+                end
+            end
+        -- 2. General Medical Rooms 1 - 5 & Room 7
+        elseif rInfo.BedPP and rInfo.BedPP.Enabled then
+            Log("AutoTreatment", "Treating patient in room", {
+                room = room.Name,
+                prompt = rInfo.BedPP:GetFullName()
+            })
+
+            -- Step A: Take DNA / Start Bed Prompt
+            TeleportAndFirePrompt(rInfo.BedPP, nil, 0.4)
+            task.wait(0.5)
+
+            -- Step B: Insert in Device / Scanner if exists
+            local devicePP = nil
+            for _, d in ipairs(room:GetDescendants()) do
+                if d:IsA("ProximityPrompt") and d.Enabled and d ~= rInfo.BedPP then
+                    local act = string.lower(d.ActionText or "")
+                    if act:find("scan") or act:find("insert") or act:find("device") or act:find("анализ") then
+                        devicePP = d
+                        break
                     end
+                end
+            end
+            if devicePP then
+                TeleportAndFirePrompt(devicePP, nil, 0.4)
+                task.wait(1.0)
+            end
+
+            -- Step C: Grab Standard Cure & Apply
+            local commonMeds = {"Bandages", "First Aid Kit", "Pills"}
+            for _, med in ipairs(commonMeds) do
+                GrabAndEquipMedicine(med)
+                task.wait(0.2)
+                if rInfo.BedPP.Enabled then
+                    TeleportAndFirePrompt(rInfo.BedPP, nil, 0.5)
+                    task.wait(0.5)
                 end
             end
         end
     end
-
-    if not treatedAny then
-        Log("AutoTreatment", "No treatable patient found in any room")
-    end
 end
 
--- ══════════════════════════════════════════════════════════════════════════════════
 -- 🧹 9. SLIME CLEANER & CAMERA FIXER
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function CleanSlime()
