@@ -1413,22 +1413,60 @@ local function RunAverlikHub()
     end
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🎛️ ВСЕ 10 ВКЛАДОК AVERLIK HUB + CYRAA HUB PRO
+    -- 🎛️ ВКЛАДКИ AVERLIK HUB (ТОЧНОЕ СООТВЕТСТВИЕ ВСЕМ ФУНКЦИЯМ FOXNAME HUB)
     -- ══════════════════════════════════════════════════════════════════════════
-    local TabHospital  = CreateTab("Авто-Лечение", "🩺", "Палаты 1 - 5: Авто-цикл с защитой от гибели", 1)
-    local TabReception = CreateTab("Ресепшен", "🏢", "Авто-прием посетителей, камера и печать", 2)
-    local TabShelves   = CreateTab("Шкафы", "💊", "Красный, Синий, Зеленый, Желтый, Серый шкафы", 3)
-    local TabESP       = CreateTab("ESP", "👁️", "Пациенты, Аномалии, Скинволкеры, Игроки", 4)
-    local TabServer    = CreateTab("Лобби/Сервер", "🌐", "RE/Quickstart, RE/SkipDialogue, Сервер Хоп", 5)
-    local TabRoom7     = CreateTab("Палата 7", "⚡", "Реанимация, ЭКГ сердца и капельница", 6)
-    local TabWaypoints = CreateTab("Точки ТП", "📍", "3D Неоновые маркеры и 32 точки координат", 7)
-    local TabPlayer    = CreateTab("Игрок", "👤", "Скорость, прыжки, NoClip, Auto Coffee", 8)
-    local TabMisc      = CreateTab("Anti-Lag / FPS", "⚡", "Оптимизация графики и FPS Boost", 9)
-    local TabSettings  = CreateTab("Настройки", "⚙️", "Темы, цвета и сохранение профилей", 10)
+    local TabMain     = CreateTab("Main", "🏠", "Главная панель и быстрый запуск", 1)
+    local TabAuto     = CreateTab("Auto", "💼", "Автоматизация больницы, ресепшена и защиты", 2)
+    local TabTeleport = CreateTab("Teleport", "📍", "Телепорты по палатам 1 - 7, ресепшену и точкам", 3)
+    local TabTool     = CreateTab("Tool", "🧰", "Шкафы: Красный, Синий, Зеленый, Желтый, Серый", 4)
+    local TabVisual   = CreateTab("Visual", "👁️", "ESP Пациентов, Аномалий, Монстров, Игроков", 5)
+    local TabUser     = CreateTab("User", "👤", "Скорость (WalkSpeed), NoClip, Anti-AFK, Рассудок", 6)
+    local TabMisc     = CreateTab("Misc", "📄", "Anti-Lag / FPS Boost, Сервер Хоп, Rejoin", 7)
+    local TabSettings = CreateTab("Settings", "⚙️", "Темы, цвета и сохранение профилей", 8)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🔧 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (CYRAA & AVERLIK)
+    -- 🔧 МОСТ СВЯЗИ С ДВИЖКОМ FOXNAME
     -- ══════════════════════════════════════════════════════════════════════════
+    local function SetFoxnameToggle(queryTitle, targetValue)
+        pcall(function()
+            local genv = getgenv and getgenv() or {}
+            for _, env in pairs({genv, _G, shared}) do
+                if env and env.Fluent and env.Fluent.Options then
+                    for _, opt in pairs(env.Fluent.Options) do
+                        if opt.Title and SafeFind(opt.Title, queryTitle) and opt.SetValue then
+                            opt:SetValue(targetValue)
+                            return true
+                        end
+                    end
+                end
+            end
+
+            local containers = {
+                LocalPlayer:FindFirstChildOfClass("PlayerGui"),
+                pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui") or nil
+            }
+            for _, cont in pairs(containers) do
+                if cont then
+                    for _, obj in pairs(cont:GetDescendants()) do
+                        if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and SafeFind(obj.Text, queryTitle) then
+                            local tf = obj.Parent
+                            if tf then
+                                local btn = tf:FindFirstChildWhichIsA("TextButton") or tf:FindFirstChildWhichIsA("ImageButton") or tf.Parent:FindFirstChildWhichIsA("TextButton")
+                                if btn and getconnections then
+                                    for _, conn in pairs(getconnections(btn.MouseButton1Click or btn.Activated)) do
+                                        conn:Fire()
+                                    end
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        return false
+    end
+
     local function SkipDoctorDialogue()
         pcall(function()
             local rs = game:GetService("ReplicatedStorage")
@@ -1447,8 +1485,6 @@ local function RunAverlikHub()
             if rem and rem:IsA("RemoteEvent") then
                 rem:FireServer()
                 SendNotification("Лобби", "Смена запущена через RE/Quickstart!", 2)
-            else
-                SendNotification("Лобби", "Quickstart RemoteEvent не найден", 2)
             end
         end)
     end
@@ -1460,16 +1496,15 @@ local function RunAverlikHub()
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
                 local act = string.lower(tostring(obj.ActionText or ""))
-                local objT = string.lower(tostring(obj.ObjectText or ""))
                 local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
-                if SafeFind(act, "фото") or SafeFind(act, "снять") or SafeFind(act, "photo") or SafeFind(act, "camera") or SafeFind(pName, "cam") or SafeFind(objT, "камер") then
+                if SafeFind(act, "фото") or SafeFind(act, "снять") or SafeFind(act, "photo") or SafeFind(act, "camera") or SafeFind(pName, "cam") then
                     SafeInteractPrompt(obj, 0.4)
                     SendNotification("Камера", "Снимок сделан!", 2)
                     return true
                 end
             elseif obj:IsA("ClickDetector") and obj.Parent then
                 local pName = string.lower(obj.Parent.Name)
-                if SafeFind(pName, "cam") or SafeFind(pName, "photo") or SafeFind(pName, "камер") then
+                if SafeFind(pName, "cam") or SafeFind(pName, "photo") then
                     pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
                     SendNotification("Камера", "Снимок сделан!", 2)
                     return true
@@ -1499,13 +1534,11 @@ local function RunAverlikHub()
                     end
                 end
                 SendNotification("Шкаф", "Подсказка шкафа не найдена поблизости", 2)
-            else
-                SendNotification("Шкаф", "Точка полки " .. tostring(medKey) .. " не найдена", 2)
             end
         end)
     end
 
-    -- ESP СИСТЕМА (Пациенты, Аномалии, Игроки)
+    -- ESP СИСТЕМА
     local ESP_Storage = { Patients = {}, Anomalies = {}, Players = {} }
 
     local function ClearESPTable(t)
@@ -1652,31 +1685,22 @@ local function RunAverlikHub()
     end
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 1. ВКЛАДКА: АВТО-ЛЕЧЕНИЕ (ПАЛАТЫ 1 - 5)
+    -- 1. ВКЛАДКА: MAIN (ГЛАВНАЯ)
     -- ══════════════════════════════════════════════════════════════════════════
-    TabHospital:CreateSection("Авто-Фарм и Лечение палат 1 - 5")
-    TabHospital:CreateToggle("Авто-цикл больницы (Auto Treatment)", "Полный цикл: ДНК ➔ Сканер ➔ Шкаф ➔ Лечение с защитой", Config.AutoHospitalCycle, function(val)
-        Config.AutoHospitalCycle = val
-        SendNotification("Больница", val and "Авто-лечение запущено!" or "Авто-лечение остановлено", 3)
+    TabMain:CreateSection("Управление игрой и лобби")
+    TabMain:CreateButton("⚡ Быстрый старт смены (RE/Quickstart)", true, function()
+        TriggerQuickstart()
     end)
-    TabHospital:CreateToggle("Авто-поддержание рассудка (Keep Sanity 100%)", "Пьет кофе из автомата при падении рассудка", Config.AutoKeepSanity, function(val)
-        Config.AutoKeepSanity = val
-        SendNotification("Рассудок", val and "Авто-рассудок включен!" or "Авто-рассудок выключен!", 2)
-    end)
-    TabHospital:CreateToggle("Скип диалогов доктора (RE/SetDoctorDialogueSkipped)", "Автоматически пропускает реплики доктора", Config.SkipDoctorDialogue, function(val)
+    TabMain:CreateToggle("Скип диалогов доктора (RE/SetDoctorDialogueSkipped)", "Автоматически пропускает реплики доктора", Config.SkipDoctorDialogue, function(val)
         Config.SkipDoctorDialogue = val
         if val then SkipDoctorDialogue() end
         SendNotification("Диалог", val and "Авто-скип диалогов включен!" or "Авто-скип диалогов выключен!", 2)
     end)
-    TabHospital:CreateSlider("Задержка между шагами (сек)", 0.2, 2.0, Config.StepDelay, function(val)
-        Config.StepDelay = val
+    TabMain:CreateToggle("Авто-поддержание рассудка (Keep Sanity 100%)", "Пьет кофе из автомата при падении рассудка", Config.AutoKeepSanity, function(val)
+        Config.AutoKeepSanity = val
+        SendNotification("Рассудок", val and "Авто-рассудок включен!" or "Авто-рассудок выключен!", 2)
     end)
-    TabHospital:CreateSlider("Ожидание сканера/центрифуги (сек)", 3.0, 12.0, Config.ScannerWaitDelay, function(val)
-        Config.ScannerWaitDelay = val
-    end)
-
-    TabHospital:CreateSection("Быстрые действия")
-    TabHospital:CreateButton("☕ Выпить кофе сейчас (Рассудок на 100%)", true, function()
+    TabMain:CreateButton("☕ Выпить кофе сейчас (Рассудок на 100%)", false, function()
         task.spawn(function()
             local cPos = CustomWaypoints.Coffee
             if cPos then TeleportTo(cPos) end
@@ -1694,7 +1718,109 @@ local function RunAverlikHub()
             SendNotification("Рассудок", "Кофейный аппарат не найден", 2)
         end)
     end)
-    TabHospital:CreateButton("🧹 Очистить руки от неправильных предметов", false, function()
+
+    -- ══════════════════════════════════════════════════════════════════════════
+    -- 2. ВКЛАДКА: AUTO (АВТОМАТИЗАЦИЯ — ТОЧНЫЙ СПИСОК FOXNAME)
+    -- ══════════════════════════════════════════════════════════════════════════
+    TabAuto:CreateSection("Автоматизация процессов")
+    TabAuto:CreateToggle("Auto Check In", "Авто-прием и регистрация клиентов на ресепшене", Config.AutoRegistration, function(val)
+        Config.AutoRegistration = val
+        SetFoxnameToggle("Auto Check In", val)
+        SendNotification("Auto", val and "Auto Check In включен!" or "Auto Check In выключен!", 2)
+    end)
+    TabAuto:CreateToggle("Auto Treatment", "Автоматический цикл лечения пациентов в палатах 1 - 5", Config.AutoHospitalCycle, function(val)
+        Config.AutoHospitalCycle = val
+        SetFoxnameToggle("Auto Treatment", val)
+        SendNotification("Auto", val and "Auto Treatment запущен!" or "Auto Treatment остановлен!", 2)
+    end)
+    TabAuto:CreateToggle("Auto Clean Slime", "Auto clean slime when the slime appears", Config.AutoCleanSlime or false, function(val)
+        Config.AutoCleanSlime = val
+        SetFoxnameToggle("Auto Clean Slime", val)
+        SendNotification("Auto", val and "Auto Clean Slime включен!" or "Auto Clean Slime выключен!", 2)
+    end)
+    TabAuto:CreateToggle("Auto Fix Cam", "Auto press camera fix prompts when cameras break", Config.AutoFixCam or false, function(val)
+        Config.AutoFixCam = val
+        SetFoxnameToggle("Auto Fix Cam", val)
+        SendNotification("Auto", val and "Auto Fix Cam включен!" or "Auto Fix Cam выключен!", 2)
+    end)
+    TabAuto:CreateToggle("Auto Shutter On Anomaly", "Auto Close Shutter when Anomaly/Skinwalker is in the counter", Config.AutoShutterOnAnomaly or false, function(val)
+        Config.AutoShutterOnAnomaly = val
+        SetFoxnameToggle("Auto Shutter On Anomaly", val)
+        SendNotification("Auto", val and "Auto Shutter On Anomaly включен!" or "Auto Shutter On Anomaly выключен!", 2)
+    end)
+    TabAuto:CreateToggle("Auto Kill Anomaly When Treatment", "Авто-ликвидация аномалий во время лечения", Config.AutoKillAnomaly or false, function(val)
+        Config.AutoKillAnomaly = val
+        SetFoxnameToggle("Auto Kill Anomaly", val)
+        SendNotification("Auto", val and "Auto Kill Anomaly включен!" or "Auto Kill Anomaly выключен!", 2)
+    end)
+    TabAuto:CreateToggle("Auto Help Patient", "Автоматическая помощь упавшим/болеющим пациентам", Config.AutoHelpPatient or false, function(val)
+        Config.AutoHelpPatient = val
+        SetFoxnameToggle("Auto Help Patient", val)
+        SendNotification("Auto", val and "Auto Help Patient включен!" or "Auto Help Patient выключен!", 2)
+    end)
+
+    -- ══════════════════════════════════════════════════════════════════════════
+    -- 3. ВКЛАДКА: TELEPORT (ТЕЛЕПОРТЫ)
+    -- ══════════════════════════════════════════════════════════════════════════
+    TabTeleport:CreateSection("Палаты (Койки 1 - 7)")
+    for i = 1, 6 do
+        TabTeleport:CreateButton("Палата " .. tostring(i) .. " (Койка)", i <= 3, function()
+            local pos = GetWardBedPosition(i)
+            if pos then TeleportTo(pos); SendNotification("Телепорт", "Палата " .. tostring(i), 2) end
+        end)
+    end
+    TabTeleport:CreateButton("Палата 7 (Реанимация / ICU)", true, function()
+        local pos = CustomWaypoints.Ward7_Bed or GetWardBedPosition(7)
+        if pos then TeleportTo(pos); SendNotification("Телепорт", "Палата 7 (Реанимация)", 2) end
+    end)
+
+    TabTeleport:CreateSection("Сканеры / Компьютеры (1 - 6)")
+    for i = 1, 6 do
+        TabTeleport:CreateButton("Палата " .. tostring(i) .. " (ПК / Сканер)", false, function()
+            local pos = GetWardDevicePosition(i) or GetWardBedPosition(i)
+            if pos then TeleportTo(pos); SendNotification("Телепорт", "Сканер Палаты " .. tostring(i), 2) end
+        end)
+    end
+
+    TabTeleport:CreateSection("Ресепшен и Главные зоны")
+    TabTeleport:CreateButton("🏢 Стойка Ресепшена", true, function()
+        local pos = CustomWaypoints.Reception
+        if pos then TeleportTo(pos); SendNotification("Телепорт", "Ресепшен", 2) end
+    end)
+    TabTeleport:CreateButton("📷 Фотокамера на штативе", false, function()
+        local pos = CustomWaypoints.Reception_Camera
+        if pos then TeleportTo(pos); SendNotification("Телепорт", "Камера", 2) end
+    end)
+    TabTeleport:CreateButton("🖨️ Принтер талонов", false, function()
+        local pos = CustomWaypoints.Reception_Printer
+        if pos then TeleportTo(pos); SendNotification("Телепорт", "Принтер", 2) end
+    end)
+
+    -- ══════════════════════════════════════════════════════════════════════════
+    -- 4. ВКЛАДКА: TOOL (ШКАФЫ И ИНСТРУМЕНТЫ)
+    -- ══════════════════════════════════════════════════════════════════════════
+    TabTool:CreateSection("🟥 Красный шкаф (Red Shelf)")
+    TabTool:CreateButton("🧰 Взять Аптечку (Medkit / First Aid)", true, function() FastTakeMedicine("Med_FirstAid", "Аптечка") end)
+    TabTool:CreateButton("🌡️ Взять Термометр / Шприц (Thermometer)", false, function() FastTakeMedicine("Med_Thermometer", "Термометр/Шприц") end)
+
+    TabTool:CreateSection("🟦 Синий шкаф (Blue Shelf)")
+    TabTool:CreateButton("💧 Взять Капли для глаз (Drops)", true, function() FastTakeMedicine("Med_Drops", "Капли") end)
+    TabTool:CreateButton("💉 Взять Капельницу (IV Drip)", false, function() FastTakeMedicine("Med_IVDrip", "Капельница") end)
+
+    TabTool:CreateSection("🟩 Зеленый шкаф (Green Shelf)")
+    TabTool:CreateButton("🌿 Взять Травы (Herbs)", true, function() FastTakeMedicine("Med_Herbs", "Травы") end)
+    TabTool:CreateButton("💊 Взять Таблетки (Pills)", false, function() FastTakeMedicine("Med_Pills", "Таблетки") end)
+
+    TabTool:CreateSection("🟨 Желтый шкаф (Yellow Shelf)")
+    TabTool:CreateButton("🍯 Взять Сироп от кашля (Cough Syrup)", true, function() FastTakeMedicine("Med_Syrup", "Сироп от кашля") end)
+    TabTool:CreateButton("🧪 Взять Микстуру (Mixture)", false, function() FastTakeMedicine("Med_Mixture", "Микстура") end)
+
+    TabTool:CreateSection("⬜ Серый шкаф (White / Grey Shelf)")
+    TabTool:CreateButton("🩹 Взять Бинты (Bandage)", true, function() FastTakeMedicine("Med_Bandage", "Бинты") end)
+    TabTool:CreateButton("🩹 Взять Пластыри (Plaster)", false, function() FastTakeMedicine("Med_Plaster", "Пластыри") end)
+
+    TabTool:CreateSection("Управление руками")
+    TabTool:CreateButton("🧹 Очистить руки от неподходящих предметов", false, function()
         pcall(function()
             local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
             if hum then hum:UnequipTools() end
@@ -1703,75 +1829,26 @@ local function RunAverlikHub()
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 2. ВКЛАДКА: РЕСЕПШЕН (RECEPTION & SECRETARY)
+    -- 5. ВКЛАДКА: VISUAL (ВИЗУАЛЫ И ESP)
     -- ══════════════════════════════════════════════════════════════════════════
-    TabReception:CreateSection("Автоматизация Ресепшена")
-    TabReception:CreateToggle("Авто-прием посетителей (Auto Visitor only)", "Автоматически регистрирует всех ожидающих клиентов", Config.AutoRegistration, function(val)
-        Config.AutoRegistration = val
-        SendNotification("Ресепшен", val and "Авто-ресепшен включен!" or "Авто-ресепшен выключен", 2)
-    end)
-    TabReception:CreateToggle("Авто-спуск затвора камеры (Trigger Shutter)", "Автоматически делает фото при приближении к камере", Config.AutoCamera, function(val)
-        Config.AutoCamera = val
-        SendNotification("Камера", val and "Авто-спуск камеры включен!" or "Авто-спуск камеры выключен!", 2)
-    end)
-    TabReception:CreateButton("📋 Принять клиента сейчас (Бланк ➔ Фото ➔ ПК ➔ Печать)", true, function()
-        task.spawn(function()
-            SendNotification("Ресепшен", "Регистрация клиента начата...", 2)
-            ProcessReceptionIntake()
-        end)
-    end)
-    TabReception:CreateButton("📷 Сделать фото на камеру сейчас", false, function()
-        TriggerCameraShutter()
-    end)
-    TabReception:CreateButton("🚀 Телепорт к стойке ресепшена", false, function()
-        local recPos = CustomWaypoints.Reception
-        if recPos then TeleportTo(recPos); SendNotification("Телепорт", "Стойка ресепшена", 2) end
-    end)
-
-    -- ══════════════════════════════════════════════════════════════════════════
-    -- 3. ВКЛАДКА: ШКАФЫ И МЕДИКАМЕНТЫ (SHELVE TELEPORTS)
-    -- ══════════════════════════════════════════════════════════════════════════
-    TabShelves:CreateSection("🟥 Красный шкаф (Red Shelf)")
-    TabShelves:CreateButton("🧰 Взять Аптечку (Medkit / First Aid)", true, function() FastTakeMedicine("Med_FirstAid", "Аптечка") end)
-    TabShelves:CreateButton("🌡️ Взять Термометр / Шприц (Thermometer)", false, function() FastTakeMedicine("Med_Thermometer", "Термометр/Шприц") end)
-
-    TabShelves:CreateSection("🟦 Синий шкаф (Blue Shelf)")
-    TabShelves:CreateButton("💧 Взять Капли для глаз (Drops)", true, function() FastTakeMedicine("Med_Drops", "Капли") end)
-    TabShelves:CreateButton("💉 Взять Капельницу (IV Drip)", false, function() FastTakeMedicine("Med_IVDrip", "Капельница") end)
-
-    TabShelves:CreateSection("🟩 Зеленый шкаф (Green Shelf)")
-    TabShelves:CreateButton("🌿 Взять Травы (Herbs)", true, function() FastTakeMedicine("Med_Herbs", "Травы") end)
-    TabShelves:CreateButton("💊 Взять Таблетки (Pills)", false, function() FastTakeMedicine("Med_Pills", "Таблетки") end)
-
-    TabShelves:CreateSection("🟨 Желтый шкаф (Yellow Shelf)")
-    TabShelves:CreateButton("🍯 Взять Сироп от кашля (Cough Syrup)", true, function() FastTakeMedicine("Med_Syrup", "Сироп от кашля") end)
-    TabShelves:CreateButton("🧪 Взять Микстуру (Mixture)", false, function() FastTakeMedicine("Med_Mixture", "Микстура") end)
-
-    TabShelves:CreateSection("⬜ Серый шкаф (White / Grey Shelf)")
-    TabShelves:CreateButton("🩹 Взять Бинты (Bandage)", true, function() FastTakeMedicine("Med_Bandage", "Бинты") end)
-    TabShelves:CreateButton("🩹 Взять Пластыри (Plaster)", false, function() FastTakeMedicine("Med_Plaster", "Пластыри") end)
-
-    -- ══════════════════════════════════════════════════════════════════════════
-    -- 4. ВКЛАДКА: ESP И ВИЗУАЛИЗАТОРЫ
-    -- ══════════════════════════════════════════════════════════════════════════
-    TabESP:CreateSection("Подсветка объектов (ESP)")
-    TabESP:CreateToggle("ESP Пациентов (Patient ESP / Highlight)", "Зеленая подсветка всех больных животных в палатах", Config.PatientESP, function(val)
+    TabVisual:CreateSection("Подсветка объектов (ESP)")
+    TabVisual:CreateToggle("Patient ESP", "Зеленая подсветка всех больных животных в палатах", Config.PatientESP, function(val)
         Config.PatientESP = val
         UpdatePatientESP(val)
     end)
-    TabESP:CreateToggle("ESP Аномалий и Монстров (Anomaly ESP)", "Яркая красная подсветка скинволкеров и аномалий", Config.AnomalyESP, function(val)
+    TabVisual:CreateToggle("Anomaly / Skinwalker ESP", "Яркая красная подсветка скинволкеров и аномалий", Config.AnomalyESP, function(val)
         Config.AnomalyESP = val
         UpdateAnomalyESP(val)
     end)
-    TabESP:CreateToggle("ESP Игроков (Player ESP)", "Синяя подсветка других врачей и игроков на сервере", Config.PlayerESP, function(val)
+    TabVisual:CreateToggle("Player ESP", "Синяя подсветка других врачей и игроков на сервере", Config.PlayerESP, function(val)
         Config.PlayerESP = val
         UpdatePlayerESP(val)
     end)
-    TabESP:CreateToggle("3D Маркеры точек в мире (Waypoint ESP)", "Неоновые круги и стрелки взгляда сохраненных точек", ShowWaypointESP, function(val)
+    TabVisual:CreateToggle("3D Waypoint ESP", "Неоновые круги и стрелки сохраненных 32 координат", ShowWaypointESP, function(val)
         ShowWaypointESP = val
         UpdateWaypointVisuals()
     end)
-    TabESP:CreateButton("🔄 Обновить и перезапустить все ESP", false, function()
+    TabVisual:CreateButton("🔄 Обновить и перезапустить все ESP", false, function()
         UpdatePatientESP(Config.PatientESP)
         UpdateAnomalyESP(Config.AnomalyESP)
         UpdatePlayerESP(Config.PlayerESP)
@@ -1780,122 +1857,16 @@ local function RunAverlikHub()
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 5. ВКЛАДКА: ЛОББИ И СЕРВЕР (LOBBY & SERVER)
+    -- 6. ВКЛАДКА: USER (ИГРОК)
     -- ══════════════════════════════════════════════════════════════════════════
-    TabServer:CreateSection("Сетевые функции")
-    TabServer:CreateButton("⚡ Быстрый старт смены (RE/Quickstart)", true, function()
-        TriggerQuickstart()
-    end)
-    TabServer:CreateButton("⏩ Скипнуть диалоги доктора (RE/SetDoctorDialogueSkipped)", false, function()
-        SkipDoctorDialogue()
-    end)
-    TabServer:CreateButton("🌐 Hop to Least Players (На самый пустой сервер)", true, function()
-        HopToLeastPlayersServer()
-    end)
-    TabServer:CreateButton("🎲 Случайный Сервер Хоп", false, function()
-        ServerHop(false)
-    end)
-    TabServer:CreateButton("🔄 Rejoin (Перезайти на этот же сервер)", false, function()
-        pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end)
-    end)
-
-    TabServer:CreateSection("Внешние движки")
-    TabServer:CreateButton("🔥 Запустить FN Animal Hospital Engine", false, function()
-        task.spawn(function()
-            SendNotification("Движок", "Запуск FN Animal Hospital в фоне...", 3)
-            pcall(function()
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/caomod2077/Script/refs/heads/main/FN_AnimalHospital.lua"))()
-            end)
-        end)
-    end)
-    TabServer:CreateButton("💎 Запустить Cyraa Hub Engine", false, function()
-        task.spawn(function()
-            SendNotification("Движок", "Запуск Cyraa Hub в фоне...", 3)
-            pcall(function()
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/LynX99-9/komtolmmek2/refs/heads/main/Animal%20Hospital"))()
-            end)
-        end)
-    end)
-
-    -- ══════════════════════════════════════════════════════════════════════════
-    -- 6. ВКЛАДКА: ПАЛАТА 7 (РЕАНИМАЦИЯ / ICU)
-    -- ══════════════════════════════════════════════════════════════════════════
-    TabRoom7:CreateSection("Реанимация Палаты 7")
-    TabRoom7:CreateToggle("Авто-цикл: Палата 7", "Полный цикл реанимации (ЭКГ + Капельница + Аптечка)", Config.Room7_AutoCycle, function(val)
-        Config.Room7_AutoCycle = val
-        SendNotification("Палата 7", val and "Авто-цикл палаты 7 активен!" or "Авто-цикл остановлен", 2)
-    end)
-    TabRoom7:CreateToggle("Авто-решение мини-игры ЭКГ", "Автоматически кликает по точкам сердца на мониторе", Config.Room7_AutoHeartGame, function(val)
-        Config.Room7_AutoHeartGame = val
-    end)
-    TabRoom7:CreateToggle("Авто-капельница и лечение", "Берет капельницу/аптечку и ставит больному кролику", Config.Room7_AutoIVDrip, function(val)
-        Config.Room7_AutoIVDrip = val
-    end)
-    TabRoom7:CreateButton("Пройти мини-игру сердца сейчас (Мгновенно)", true, function()
-        local solved = SolveHeartMinigame()
-        SendNotification("Мини-игра", solved and "Точки сердца успешно нажаты!" or "Экран мини-игры пока не открыт", 2)
-    end)
-
-    -- ══════════════════════════════════════════════════════════════════════════
-    -- 7. ВКЛАДКА: ТОЧКИ ТЕЛЕПОРТА (WAYPOINTS)
-    -- ══════════════════════════════════════════════════════════════════════════
-    TabWaypoints:CreateSection("3D Визуализация и Сохранение")
-    TabWaypoints:CreateToggle("3D Маркеры всех точек в мире (ESP)", "Показывает неоновые круги, названия и стрелки взгляда прямо в игре", ShowWaypointESP, function(val)
-        ShowWaypointESP = val
-        UpdateWaypointVisuals()
-    end)
-    TabWaypoints:CreateButton("💾 Сохранить все 32 точки в файл (Waypoints.json)", true, function()
-        SaveWaypointsToFile()
-        SendNotification("Waypoints", "Все 32 точки и углы взгляда сохранены!", 3)
-    end)
-    TabWaypoints:CreateButton("📋 Скопировать координаты в буфер (JSON)", false, function()
-        pcall(function()
-            local exportData = {}
-            for k, v in pairs(CustomWaypoints) do
-                if typeof(v) == "CFrame" then
-                    local look = v.LookVector
-                    exportData[k] = {x = v.X, y = v.Y, z = v.Z, lookX = look.X, lookY = look.Y, lookZ = look.Z, components = {v:GetComponents()}}
-                end
-            end
-            local jsonStr = HttpService:JSONEncode(exportData)
-            if setclipboard then
-                setclipboard(jsonStr)
-                SendNotification("Буфер обмена", "JSON с координатами скопирован в буфер!", 2)
-            end
-        end)
-    end)
-
-    TabWaypoints:CreateSection("➕ Создать свою новую точку")
-    local customPointName = "Custom_Point_1"
-    TabWaypoints:CreateInput("Имя новой точки", "Например: Моя_Точка", "Custom_Point_1", function(val)
-        customPointName = val
-    end)
-    TabWaypoints:CreateButton("➕ Записать текущую позицию как новую точку", true, function()
-        local cf = GetMyCFrame()
-        if cf and customPointName and customPointName ~= "" then
-            CustomWaypoints[customPointName] = cf
-            SaveWaypointsToFile()
-            UpdateWaypointVisuals()
-            SendNotification("Waypoints", "Создана и сохранена точка: " .. customPointName, 3)
-        end
-    end)
-
-    TabWaypoints:CreateSection("✅ Зафиксированные точки")
-    TabWaypoints:CreateButton("📊 Все 32 основные точки зафиксированы и активны", false, function()
-        SendNotification("Статус", "Палаты 1-5, Палата 7, Ресепшен и 10 полок лекарств готовы к работе!", 3)
-    end)
-
-    -- ══════════════════════════════════════════════════════════════════════════
-    -- 8. ВКЛАДКА: ИГРОК (PLAYER)
-    -- ══════════════════════════════════════════════════════════════════════════
-    TabPlayer:CreateSection("Параметры персонажа")
-    TabPlayer:CreateToggle("Изменение скорости", "Включает кастомную скорость передвижения", Config.WalkSpeedEnabled, function(val)
+    TabUser:CreateSection("Параметры персонажа")
+    TabUser:CreateToggle("Изменение скорости (WalkSpeed)", "Включает кастомную скорость передвижения", Config.WalkSpeedEnabled, function(val)
         Config.WalkSpeedEnabled = val
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChild("Humanoid")
         if hum then hum.WalkSpeed = val and Config.WalkSpeed or 16 end
     end)
-    TabPlayer:CreateSlider("Скорость (WalkSpeed)", 16, 250, Config.WalkSpeed or 16, function(val)
+    TabUser:CreateSlider("Скорость (WalkSpeed)", 16, 250, Config.WalkSpeed or 16, function(val)
         Config.WalkSpeed = val
         if Config.WalkSpeedEnabled then
             local char = LocalPlayer.Character
@@ -1903,14 +1874,14 @@ local function RunAverlikHub()
             if hum then hum.WalkSpeed = val end
         end
     end)
-    TabPlayer:CreateToggle("NoClip", "Прохождение сквозь объекты и стены", Config.NoClip, function(val) Config.NoClip = val end)
-    TabPlayer:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val) Config.AntiAFK = val end)
+    TabUser:CreateToggle("NoClip", "Прохождение сквозь объекты и стены", Config.NoClip, function(val) Config.NoClip = val end)
+    TabUser:CreateToggle("Anti AFK", "Предотвращает кик за неактивность", Config.AntiAFK, function(val) Config.AntiAFK = val end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 9. ВКЛАДКА: ОПТИМИЗАЦИЯ И FPS BOOST (ANTI-LAG)
+    -- 7. ВКЛАДКА: MISC (РАЗНОЕ И ОПТИМИЗАЦИЯ)
     -- ══════════════════════════════════════════════════════════════════════════
-    TabMisc:CreateSection("Anti-Lag & Оптимизация графики")
-    TabMisc:CreateToggle("Anti-Lag / FPS Boost", "Отключает тени, частицы, волны воды и тяжелые эффекты", Config.FPSBoost or false, function(val)
+    TabMisc:CreateSection("Оптимизация графики")
+    TabMisc:CreateToggle("Anti-Lag / FPS Boost", "Отключает тени, частицы, волны воды и тяжелые эффекты", Config.FPSBoost, function(val)
         Config.FPSBoost = val
         ApplyAntiLag(val)
     end)
@@ -1918,8 +1889,19 @@ local function RunAverlikHub()
         ApplyAntiLag(true)
     end)
 
+    TabMisc:CreateSection("Управление сервером")
+    TabMisc:CreateButton("🌐 Hop to Least Players (На самый пустой сервер)", true, function()
+        HopToLeastPlayersServer()
+    end)
+    TabMisc:CreateButton("🎲 Случайный Сервер Хоп", false, function()
+        ServerHop(false)
+    end)
+    TabMisc:CreateButton("🔄 Rejoin (Перезайти на этот же сервер)", false, function()
+        pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end)
+    end)
+
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 10. ВКЛАДКА: НАСТРОЙКИ (SETTINGS)
+    -- 8. ВКЛАДКА: SETTINGS (НАСТРОЙКИ)
     -- ══════════════════════════════════════════════════════════════════════════
     TabSettings:CreateSection("Конфигурация")
     pcall(function()
@@ -1935,6 +1917,10 @@ local function RunAverlikHub()
             end
         end)
         SendNotification("Config", "Конфиг сохранен!", 2)
+    end)
+    TabSettings:CreateButton("💾 Сохранить все 32 точки (Waypoints.json)", false, function()
+        SaveWaypointsToFile()
+        SendNotification("Waypoints", "32 точки сохранены!", 2)
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
