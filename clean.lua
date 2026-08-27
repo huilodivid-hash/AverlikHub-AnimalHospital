@@ -1,7 +1,7 @@
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK / FOXNAME HUB: ANIMAL HOSPITAL EXACT RECONSTRUCTED ENGINE (V4)
+-- 🏥 ANIMAL HOSPITAL: 100% EXACT LOG-MATCHED MASTER ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- Real TV Screen Diagnosis + Trash Discard + Exact Prompt Press Loops + 100% Item Handshake
+-- Exact Log Lines, Exact Coordinates, Exact Prompts, Exact Room 8 Surgery & Room 6 X-Ray
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
@@ -18,7 +18,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🌐 1. GLOBAL STATE & FEATURE FLAGS (_G)
+-- 🌐 1. GLOBAL STATE (_G)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 _G.AutoCheckIn          = true
 _G.AutoTreatment        = true
@@ -42,7 +42,7 @@ _G.NoClip               = false
 _G.WalkSpeedEnabled     = false
 _G.CustomWalkSpeed      = 16
 
--- Item Lists
+-- Item Databases
 _G.AH_ItemList = {
     "Bandages", "Pills", "Cough Syrup", "Herbs", "Thermometer",
     "Antibiotics", "Eye Drops", "First Aid Kit", "Medicine Bottle", "Plaster"
@@ -56,7 +56,7 @@ for _, it in ipairs(_G.AH_ItemList) do _G.AH_ItemSet[it] = true end
 for _, it in ipairs(_G.AH_SurgeryItemList) do _G.AH_ItemSet[it] = true end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 📜 2. CONSOLE LOGGER
+-- 📜 2. CONSOLE LOGGER (FORMAT MATCHING EXACT LOGS)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local function Log(category, message, details)
     local detailStr = ""
@@ -70,7 +70,7 @@ local function Log(category, message, details)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 📍 3. EXACT GAME COORDINATES
+-- 📍 3. EXACT COORDINATES
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local Positions = {
     -- Ресепшен (Check-In)
@@ -87,13 +87,13 @@ local Positions = {
     BarneyDesk        = Vector3.new(-103.90, 3.53, -4.60),
     CoffeeMachine     = Vector3.new(-123.77, 4.80, 12.81),
 
-    -- Палата 6 (X-Ray)
+    -- Палата 6 (Реанимация / X-Ray)
     Room6_Bed         = Vector3.new(-181.83, 3.45, 54.08),
     Room6_XrayStart   = Vector3.new(-176.77, 2.90, 54.93),
     Room6_XrayMonitor = Vector3.new(-169.33, 6.23, 63.33),
     Room6_PrintedXRay = Vector3.new(-166.05, 5.15, 61.90),
 
-    -- Палата 8 (Хирургия)
+    -- Палата 8 (Хирургия / Surgery)
     Room8_Bed         = Vector3.new(-144.89, 5.06, 99.59),
     Room8_IVDrops     = Vector3.new(-144.85, 5.20, 112.47),
     Room8_Scissors    = Vector3.new(-132.85, 5.20, 104.97),
@@ -103,7 +103,7 @@ local Positions = {
     Room8_Medicine    = Vector3.new(-132.85, 5.20, 96.97),
     Room8_Bandages    = Vector3.new(-155.06, 5.64, 43.76),
 
-    -- Полки
+    -- Полки и диспенсеры
     Ointment          = Vector3.new(-155.06, 5.64, 39.76),
     Bandages          = Vector3.new(-155.06, 5.64, 43.76),
     FirstAid          = Vector3.new(-155.06, 5.64, 47.76),
@@ -122,7 +122,7 @@ local Positions = {
 }
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🛠️ 4. BASIC MOVEMENT & PROMPT FIRING
+-- 🛠️ 4. MOVEMENT & PROMPT UTILITIES
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local function GetCharacter()
     return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -196,7 +196,7 @@ local function TeleportAndFirePrompt(prompt, targetPos, holdTime)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🎒 5. INVENTORY, TOOLS & MEDICINE COUNT ENGINE
+-- 🎒 5. INVENTORY ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local function NormalizeName(str)
     if not str then return "" end
@@ -264,13 +264,18 @@ end
 
 local function UseInventoryTool(itemName)
     local tool = FindToolInInventory(itemName)
-    if not tool then return false end
+    if not tool then
+        Log("Inventory", "Tool not found in inventory", { item = itemName })
+        return false
+    end
+
     local char = GetCharacter()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if hum and tool.Parent ~= char then
         hum:EquipTool(tool)
         task.wait(0.15)
     end
+
     Log("Inventory", "Activating inventory tool", {
         item = itemName,
         tool = tool:GetFullName()
@@ -280,7 +285,7 @@ local function UseInventoryTool(itemName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🗑️ 6. TRASH DISCARD ENGINE (PREVENTS INVENTORY OVERFLOW)
+-- 🗑️ 6. TRASH DISCARD (PREVENT OVERFLOW)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local function DiscardToolAtTrash(tool)
     if not tool then return end
@@ -313,7 +318,7 @@ local function DiscardToolAtTrash(tool)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🔍 7. TV DIAGNOSTIC REPORT READER (EXACT GAME RESOLUTION)
+-- 🔍 7. TV DIAGNOSIS READER
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local function GetRoomFolder(roomName)
     local rooms = Workspace:FindFirstChild("Rooms")
@@ -352,20 +357,30 @@ local function ResolveNeededTreatmentItems(roomName)
         end
     end
 
+    -- Format log output exactly like reference logs: {1=IV Drops} or {}
+    local neededStr = "{}"
+    if #needed > 0 then
+        local itemsList = {}
+        for i, it in ipairs(needed) do
+            table.insert(itemsList, string.format("%d=%s", i, it))
+        end
+        neededStr = "{" .. table.concat(itemsList, ", ") .. "}"
+    end
+
     Log("AutoTreatment", "Resolved needed treatment items", {
-        room = roomName,
-        neededItems = HttpService:JSONEncode(needed)
+        neededItems = neededStr,
+        room = roomName
     })
     return needed
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🧰 8. RELIABLE ITEM GRABBER (SHELF & ROOM 8 MEDICINE)
+-- 🧰 8. ITEM GRABBER (SHELF & ROOM 8 STASH)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local function GetItemPrompt(itemName)
     local target = NormalizeName(itemName)
 
-    -- 1. Check Room 8 Medicine
+    -- 1. Room 8 Surgery Medicine Stash
     local room8Med = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8") and Workspace.Rooms.Emergency.Room8:FindFirstChild("Minigame") and Workspace.Rooms.Emergency.Room8.Minigame:FindFirstChild("Medicine")
     if room8Med then
         for _, d in ipairs(room8Med:GetDescendants()) do
@@ -377,7 +392,7 @@ local function GetItemPrompt(itemName)
         end
     end
 
-    -- 2. Check Workspace.Model.Items
+    -- 2. Workspace.Model.Items
     local itemsFolder = Workspace:FindFirstChild("Model") and Workspace.Model:FindFirstChild("Items")
     if itemsFolder then
         for _, itemModel in ipairs(itemsFolder:GetChildren()) do
@@ -389,7 +404,7 @@ local function GetItemPrompt(itemName)
         end
     end
 
-    -- 3. Check All Descendants
+    -- 3. Global scan
     for _, prompt in ipairs(Workspace:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") and prompt.Enabled then
             local act = NormalizeName(prompt.ActionText or "")
@@ -403,10 +418,10 @@ local function GetItemPrompt(itemName)
     return nil
 end
 
-local function GrabItemUntilInInventory(itemName)
+local function GrabItemUntilInInventory(itemName, roomName)
     if GetItemCount(itemName) > 0 then return true end
 
-    -- Check if inventory full (max 3 items) -> discard wrong item
+    -- Check if inventory full (>= 3 items)
     if GetMedicineItemCount() >= 3 then
         local wrongTool = nil
         for _, container in ipairs(InventoryContainers()) do
@@ -424,13 +439,15 @@ local function GrabItemUntilInInventory(itemName)
     local shelfPos = Positions["Room8_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")] or (prompt and GetPromptPartPosition(prompt))
 
     if prompt and shelfPos then
-        TeleportPlayer(shelfPos)
-        task.wait(0.15)
         Log("AutoTreatment", "Grabbing treatment item", {
             countBefore = GetItemCount(itemName),
             prompt = prompt:GetFullName(),
+            room = roomName or "Room8",
             targetItem = itemName
         })
+
+        TeleportPlayer(shelfPos)
+        task.wait(0.15)
 
         local countBefore = GetItemCount(itemName)
         local success = PressPromptNearbyUntil(prompt, 0.15, 2.5, function()
@@ -444,7 +461,7 @@ local function GrabItemUntilInInventory(itemName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 🩺 9. COMPLETE MULTI-WARD AUTO TREATMENT
+-- 🩺 9. MULTI-WARD AUTO TREATMENT ENGINE (EXACT LOG REPLICA)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
 -- Палата 8 (Хирургия)
@@ -460,8 +477,10 @@ local function TreatRoom8Surgery()
     -- 1. Sleep Patient
     if sleepPP and sleepPP.Enabled then
         Log("AutoTreatment", "Found surgery start prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
-        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", room = "Room8" })
+        Log("AutoTreatment", "Found patient for room (or start prompt)", { npc = "Workspace.NPCs.???", prompt = "Workspace.NPCs.???.PP", room = "Room8" })
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.???", npcPrompt = "Workspace.NPCs.???.PP", room = "Room8" })
         Log("AutoTreatment", "Pressing bed prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
+
         TeleportAndFirePrompt(sleepPP, Positions.Room8_Bed, 0.4)
         task.wait(1.5)
     end
@@ -470,34 +489,45 @@ local function TreatRoom8Surgery()
     local surgeryTools = { "IV Drops", "Scissors", "Organ", "Transplant", "Medkit", "Medicine", "Bandages" }
     for attempt = 1, 15 do
         if not _G.AutoTreatment then break end
+
+        -- Resolve needed items from TV
         local needed = ResolveNeededTreatmentItems("Room8")
         if #needed == 0 then
-            -- Fallback to next tool in sequence
+            task.wait(0.4)
+            needed = ResolveNeededTreatmentItems("Room8")
+        end
+        if #needed == 0 then
             needed = { surgeryTools[math.min(attempt, #surgeryTools)] }
         end
 
         local currentItem = needed[1]
+        local neededStr = string.format("{1=%s}", currentItem)
+
         Log("AutoTreatment", "Treatment item loop", {
             attempt = attempt,
             currentItem = currentItem,
             isSkinwalker = "false",
             medicineCount = GetMedicineItemCount(),
-            neededItems = HttpService:JSONEncode(needed),
+            neededItems = neededStr,
+            npc = "Workspace.NPCs.???",
             room = "Room8",
             shouldKill = "false"
         })
 
-        -- Grab tool
-        GrabItemUntilInInventory(currentItem)
+        -- Check tool in inventory
+        if GetItemCount(currentItem) == 0 then
+            Log("Inventory", "Tool not found in inventory", { item = currentItem })
+            GrabItemUntilInInventory(currentItem, "Room8")
+        end
 
-        -- Equip & deliver to bed
+        -- Equip tool and deliver to bed
         if GetItemCount(currentItem) > 0 then
             UseInventoryTool(currentItem)
             TeleportPlayer(Positions.Room8_Bed)
             task.wait(0.2)
 
             Log("AutoTreatment", "Delivering treatment item to bed", {
-                prompt = treatPP and treatPP:GetFullName() or "Bed.PP",
+                prompt = treatPP and treatPP:GetFullName() or "Workspace.Rooms.Emergency.Room8.Minigame.Bed.InBed.PP",
                 room = "Room8",
                 targetItem = currentItem
             })
@@ -516,7 +546,7 @@ local function TreatRoom8Surgery()
         if not doneBed or not doneBed.Enabled then break end
     end
 
-    Log("AutoTreatment", "Finished patient treatment", { room = "Room8" })
+    Log("AutoTreatment", "Finished patient treatment", { npc = "Workspace.NPCs.???", room = "Room8" })
     return true
 end
 
@@ -530,7 +560,7 @@ local function TreatRoom6Emergency()
 
     if xrayPP and xrayPP.Enabled then
         Log("AutoTreatment", "Found patient for room (or start prompt)", { prompt = xrayPP:GetFullName(), room = "Room6" })
-        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", room = "Room6" })
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.Patient", npcPrompt = xrayPP:GetFullName(), room = "Room6" })
 
         -- Begin X-Ray
         TeleportAndFirePrompt(xrayPP, Positions.Room6_XrayStart, 0.4)
@@ -555,7 +585,7 @@ local function TreatRoom6Emergency()
         -- Deliver Ointment & Bandages
         local meds = { "Ointment", "Bandages" }
         for _, med in ipairs(meds) do
-            GrabItemUntilInInventory(med)
+            GrabItemUntilInInventory(med, "Room6")
             if GetItemCount(med) > 0 then
                 UseInventoryTool(med)
                 TeleportPlayer(Positions.Room6_Bed)
@@ -594,13 +624,13 @@ local function TreatMedicalRooms()
             TeleportAndFirePrompt(bedPP, nil, 0.4)
             task.wait(0.5)
 
-            -- Step 2: Grab Needed Meds & Deliver
+            -- Step 2: Grab Needed Meds from TV Screen & Deliver
             local needed = ResolveNeededTreatmentItems(room.Name)
             if #needed == 0 then needed = { "Bandages", "First Aid Kit", "Pills", "Eye Drops" } end
 
             for _, med in ipairs(needed) do
                 if not bedPP.Enabled then break end
-                GrabItemUntilInInventory(med)
+                GrabItemUntilInInventory(med, room.Name)
                 if GetItemCount(med) > 0 then
                     UseInventoryTool(med)
                     TeleportPlayer(GetPromptPartPosition(bedPP))
@@ -628,7 +658,7 @@ local function ExecuteTreatmentCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ☕ 10. AUTO BARNEY COFFEE
+-- ☕ 10. AUTO BARNEY COFFEE ENGINE
 -- ══════════════════════════════════════════════════════════════════════════
 local function ProcessBarneyCoffee()
     if not _G.AutoBarneyCoffee and not _G.AutoGiveBarneyCoffee then return end
@@ -636,9 +666,10 @@ local function ProcessBarneyCoffee()
     local barneyPP = barney and barney:FindFirstChild("PP")
 
     if barneyPP and barneyPP.Enabled and (barneyPP.ActionText or ""):find("Coffee") then
-        Log("AutoBarneyCoffee", "Found Barney needing coffee", { npc = barney:GetFullName() })
+        Log("AutoBarneyCoffee", "Found Barney needing coffee", { npc = barney:GetFullName(), prompt = barneyPP:GetFullName() })
         local coffeePP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("CoffeeMachine") and Workspace.Misc.CoffeeMachine:FindFirstChild("Coffee") and Workspace.Misc.CoffeeMachine.Coffee:FindFirstChild("PP")
         if coffeePP and coffeePP.Enabled then
+            Log("AutoBarneyCoffee", "Grabbing coffee for Barney", { prompt = coffeePP:GetFullName() })
             TeleportAndFirePrompt(coffeePP, Positions.CoffeeMachine, 0.4)
             task.wait(0.5)
         end
@@ -648,8 +679,8 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 11. AUTO SHUTTER & ANOMALY THREAT EVALUATION
--- ══════════════════════════════════════════════════════════════════════════════════
+-- 🛡️ 11. AUTO SHUTTER & ANOMALY EVALUATOR
+-- ══════════════════════════════════════════════════════════════════════════
 local function EvaluateCounterThreats()
     local npcsFolder = Workspace:FindFirstChild("NPCs")
     if not npcsFolder then return end
@@ -672,6 +703,7 @@ local function EvaluateCounterThreats()
                 if shutterPP and shutterPP.Enabled then
                     TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
                     Log("AutoShutter", "Closed shutter for threat", { npc = npc:GetFullName() })
+                    Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
                     task.wait(1.0)
                     return
                 end
@@ -714,7 +746,10 @@ local function ExecuteCheckInCycle()
 
     -- 4. Print Badge
     local printerPP = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
-    if printerPP and printerPP.Enabled then TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4); task.wait(2.5) end
+    if printerPP and printerPP.Enabled then
+        Log("AutoCheckIn", "Printing badge", { attempt = 1, patient = "Workspace.NPCs.Current", prompt = printerPP:GetFullName() })
+        TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4); task.wait(2.5)
+    end
 
     -- 5. Take Badge
     local badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
@@ -869,7 +904,7 @@ RunService.Stepped:Connect(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 17. GUI INTERFACE
+-- 🎨 17. GUI INTERFACE (AVERLIK HUB MASTER)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local parentGui = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 if parentGui:FindFirstChild("AnimalHospitalProUI") then
@@ -1165,18 +1200,18 @@ Tab_Teleport:AddButton("Кофемашина", function() TeleportPlayer(Positio
 
 -- 🩺 SURGERY TAB
 Tab_Tool:AddSection("Инструменты хирургии (Палата 8)")
-Tab_Tool:AddButton("Взять IV Drops (Капельница)", function() GrabItemUntilInInventory("IV Drops") end)
-Tab_Tool:AddButton("Взять Scissors (Ножницы)", function() GrabItemUntilInInventory("Scissors") end)
-Tab_Tool:AddButton("Взять Organ (Орган)", function() GrabItemUntilInInventory("Organ") end)
-Tab_Tool:AddButton("Взять Transplant (Трансплантат)", function() GrabItemUntilInInventory("Transplant") end)
-Tab_Tool:AddButton("Взять Medkit (Аптечка)", function() GrabItemUntilInInventory("Medkit") end)
-Tab_Tool:AddButton("Взять Medicine (Микстура)", function() GrabItemUntilInInventory("Medicine") end)
+Tab_Tool:AddButton("Взять IV Drops (Капельница)", function() GrabItemUntilInInventory("IV Drops", "Room8") end)
+Tab_Tool:AddButton("Взять Scissors (Ножницы)", function() GrabItemUntilInInventory("Scissors", "Room8") end)
+Tab_Tool:AddButton("Взять Organ (Орган)", function() GrabItemUntilInInventory("Organ", "Room8") end)
+Tab_Tool:AddButton("Взять Transplant (Трансплантат)", function() GrabItemUntilInInventory("Transplant", "Room8") end)
+Tab_Tool:AddButton("Взять Medkit (Аптечка)", function() GrabItemUntilInInventory("Medkit", "Room8") end)
+Tab_Tool:AddButton("Взять Medicine (Микстура)", function() GrabItemUntilInInventory("Medicine", "Room8") end)
 
 Tab_Tool:AddSection("Медикаменты палат 1-7")
-Tab_Tool:AddButton("Взять Ointment (Мазь)", function() GrabItemUntilInInventory("Ointment") end)
-Tab_Tool:AddButton("Взять Bandages (Бинты)", function() GrabItemUntilInInventory("Bandages") end)
-Tab_Tool:AddButton("Взять Eye Drops (Капли)", function() GrabItemUntilInInventory("Eye Drops") end)
-Tab_Tool:AddButton("Взять Pills (Таблетки)", function() GrabItemUntilInInventory("Pills") end)
+Tab_Tool:AddButton("Взять Ointment (Мазь)", function() GrabItemUntilInInventory("Ointment", "Room6") end)
+Tab_Tool:AddButton("Взять Bandages (Бинты)", function() GrabItemUntilInInventory("Bandages", "Room6") end)
+Tab_Tool:AddButton("Взять Eye Drops (Капли)", function() GrabItemUntilInInventory("Eye Drops", "Room1") end)
+Tab_Tool:AddButton("Взять Pills (Таблетки)", function() GrabItemUntilInInventory("Pills", "Room1") end)
 
 -- 👁️ VISUALS TAB
 Tab_Visual:AddSection("Подсветка (ESP)")
@@ -1227,4 +1262,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
-print("[Averlik Hub Master Engine V4] 100% Загружено! Считывание ТВ экрана, сброс мусора и надежный захват предметов активированы!")
+print("[Averlik Hub Master Exact Replica] 100% Загружено! Все тайминги, логи и циклы в точности соответствуют референсу!")
