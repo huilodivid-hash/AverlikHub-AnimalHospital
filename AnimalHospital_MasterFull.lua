@@ -73,27 +73,28 @@ end
 -- 📍 3. EXACT COORDINATES
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local Positions = {
-    -- Ресепшен (Check-In)
+    -- Reception (Check-In)
     ShutterButton     = Vector3.new(-113.20, 5.65, -1.60),
-    CheckInForm       = Vector3.new(-103.95, 6.10, -2.60),
-    CheckInCamera     = Vector3.new(-108.57, 7.65, -2.93),
+    CheckInForm       = Vector3.new(-103.91, 3.41, -0.40),
+    CheckInCamera     = Vector3.new(-108.80, 3.41, -0.38),
     CheckInPC         = Vector3.new(-97.68, 7.77, -2.50),
-    CheckInPrinter    = Vector3.new(-96.86, 6.58, 1.26),
+    CheckInPrinter    = Vector3.new(-99.54, 3.41, 0.10),
     PrintedBadge      = Vector3.new(-98.25, 6.51, 1.26),
     CounterTalk       = Vector3.new(-103.90, 4.89, -7.10),
     AskToLeave        = Vector3.new(-92.60, 3.49, 5.60),
+    Reception         = Vector3.new(-108.72, 3.41, 10.20),
 
-    -- Доктор Барни и Кофемашина
+    -- Barney & Coffee Machine
     BarneyDesk        = Vector3.new(-103.90, 3.53, -4.60),
-    CoffeeMachine     = Vector3.new(-123.77, 4.80, 12.81),
+    CoffeeMachine     = Vector3.new(-123.82, 7.93, 10.22),
 
-    -- Палата 6 (Реанимация / X-Ray)
+    -- Emergency Room 6 (X-Ray)
     Room6_Bed         = Vector3.new(-181.83, 3.45, 54.08),
     Room6_XrayStart   = Vector3.new(-176.77, 2.90, 54.93),
     Room6_XrayMonitor = Vector3.new(-169.33, 6.23, 63.33),
     Room6_PrintedXRay = Vector3.new(-166.05, 5.15, 61.90),
 
-    -- Палата 8 (Хирургия / Surgery)
+    -- Emergency Room 8 (Surgery)
     Room8_Bed         = Vector3.new(-144.89, 5.06, 99.59),
     Room8_IVDrops     = Vector3.new(-144.85, 5.20, 112.47),
     Room8_Scissors    = Vector3.new(-132.85, 5.20, 104.97),
@@ -103,21 +104,42 @@ local Positions = {
     Room8_Medicine    = Vector3.new(-132.85, 5.20, 96.97),
     Room8_Bandages    = Vector3.new(-155.06, 5.64, 43.76),
 
-    -- Полки и диспенсеры
-    Ointment          = Vector3.new(-155.06, 5.64, 39.76),
-    Bandages          = Vector3.new(-155.06, 5.64, 43.76),
-    FirstAid          = Vector3.new(-155.06, 5.64, 47.76),
-    EyeDrops          = Vector3.new(-148.00, 5.64, 39.76),
-    Pills             = Vector3.new(-148.00, 5.64, 43.76),
-    CoughSyrup        = Vector3.new(-148.00, 5.64, 47.76),
+    -- Medical Wards 1 to 5 & 7 (Exact Waypoints)
+    Ward1_Bed         = Vector3.new(-168.42, 5.81, -41.04),
+    Ward1_Device      = Vector3.new(-177.66, 3.46, -44.22),
+    Ward2_Bed         = Vector3.new(-121.24, 5.81, -59.50),
+    Ward2_Device      = Vector3.new(-111.46, 3.46, -56.71),
+    Ward3_Bed         = Vector3.new(-168.08, 5.81, -80.10),
+    Ward3_Device      = Vector3.new(-177.98, 3.46, -83.59),
+    Ward4_Bed         = Vector3.new(-121.16, 5.81, -99.06),
+    Ward4_Device      = Vector3.new(-111.04, 3.46, -94.01),
+    Ward5_Bed         = Vector3.new(-154.06, 5.81, -114.70),
+    Ward5_Device      = Vector3.new(-150.89, 3.46, -124.02),
+    Ward7_Bed         = Vector3.new(-105.48, 5.87, 52.00),
+    Ward7_Device      = Vector3.new(-106.38, 3.46, 58.44),
 
-    -- Палаты 1 - 5 & 7
-    Room1_Bed         = Vector3.new(-38.5, 3.2, -18.2),
-    Room2_Bed         = Vector3.new(-38.5, 3.2, 5.4),
-    Room3_Bed         = Vector3.new(-38.5, 3.2, 29.1),
-    Room4_Bed         = Vector3.new(38.5, 3.2, -18.2),
-    Room5_Bed         = Vector3.new(38.5, 3.2, 5.4),
-    Room7_ICU         = Vector3.new(0.0, 3.2, 65.0),
+    -- Medicine Dispensers & Shelves (Exact Waypoints)
+    Med_Drops         = Vector3.new(-152.79, 3.46, -56.10),
+    Med_IVDrip        = Vector3.new(-152.75, 3.46, -60.70),
+    Med_FirstAid      = Vector3.new(-152.64, 3.46, -67.75),
+    Med_Thermometer   = Vector3.new(-152.41, 3.46, -72.61),
+    Med_Bandage       = Vector3.new(-152.82, 3.46, -79.31),
+    Med_Plaster       = Vector3.new(-152.53, 3.46, -84.23),
+    Med_Herbs         = Vector3.new(-137.12, 3.46, -57.82),
+    Med_Pills         = Vector3.new(-137.03, 3.46, -63.56),
+    Med_Mixture       = Vector3.new(-136.84, 3.46, -78.43),
+    Med_Syrup         = Vector3.new(-136.61, 3.46, -82.49),
+
+    -- Aliases for General Match
+    EyeDrops          = Vector3.new(-152.79, 3.46, -56.10),
+    Bandages          = Vector3.new(-152.82, 3.46, -79.31),
+    FirstAid          = Vector3.new(-152.64, 3.46, -67.75),
+    Pills             = Vector3.new(-137.03, 3.46, -63.56),
+    CoughSyrup        = Vector3.new(-136.61, 3.46, -82.49),
+    Herbs             = Vector3.new(-137.12, 3.46, -57.82),
+    Thermometer       = Vector3.new(-152.41, 3.46, -72.61),
+    Plaster           = Vector3.new(-152.53, 3.46, -84.23),
+    Ointment          = Vector3.new(-155.06, 5.64, 39.76),
     ShopCounter       = Vector3.new(30.0, 3.2, -35.0)
 }
 
