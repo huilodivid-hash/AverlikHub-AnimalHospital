@@ -1397,7 +1397,13 @@ local function RunAverlikHub()
     end)
 
     TabHospital:CreateSection("Быстрые действия")
-    TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить инвентарь)", true, function()
+    TabHospital:CreateButton("📋 Принять клиента (Бланк ➔ Фото ➔ Печать)", true, function()
+        task.spawn(function()
+            SendNotification("Ресепшен", "Принятие клиента запущено...", 2)
+            ProcessReceptionIntake()
+        end)
+    end)
+    TabHospital:CreateButton("Взять лекарства со шкафа (Заполнить инвентарь)", false, function()
         task.spawn(function()
             local cabPos = CustomWaypoints.Med_Herbs or CustomWaypoints.Med_Pills or CustomWaypoints.Med_FirstAid
             if cabPos then TeleportTo(cabPos) end
@@ -2011,27 +2017,139 @@ local function RunAverlikHub()
 
     local lastReceptionTime = 0
 
-    local function ProcessHospitalCycle()
-        -- 0. Авто-регистрация на ресепшене (только раз в 30 сек, чтобы не перебивать лечение)
-        if Config.AutoRegistration and (tick() - lastReceptionTime > 30) then
-            lastReceptionTime = tick()
-            local recPos = CustomWaypoints.Reception
-            if recPos then
-                TeleportTo(recPos)
-                task.wait(0.25)
-            end
-            for _, rObj in pairs(Workspace:GetDescendants()) do
-                if IsReceptionPrompt(rObj) then
-                    local rCF = GetPromptTargetCFrame(rObj)
-                    if rCF then
-                        TeleportTo(rCF)
-                        task.wait(0.2)
-                        SafeInteractPrompt(rObj, 0.2)
-                        task.wait(0.3)
+    -- 📋 ПОЛНЫЙ ЦИКЛ ПРИНЯТИЯ КЛИЕНТОВ НА РЕСЕПШЕНЕ (Бланк ➔ Фото ➔ ПК ➔ Печать ➔ Колокольчик)
+    local function ProcessReceptionIntake()
+        local recPos = CustomWaypoints.Reception
+        if not recPos then return false end
+        local recVec = typeof(recPos) == "CFrame" and recPos.Position or recPos
+
+        -- Телепорт к стойке ресепшена
+        TeleportTo(recPos)
+        task.wait(0.35)
+
+        local didAction = false
+
+        -- 1. ШАГ 1: Заполнить форму (Планшет / Бланк на столе)
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                local pCF = GetPromptTargetCFrame(obj)
+                if pCF and (pCF.Position - recVec).Magnitude < 16 then
+                    local act = string.lower(tostring(obj.ActionText or ""))
+                    local objT = string.lower(tostring(obj.ObjectText or ""))
+                    if SafeFind(act, "заполн") or SafeFind(act, "форм") or SafeFind(act, "бланк") or SafeFind(objT, "бланк") or SafeFind(objT, "форм") then
+                        TeleportTo(pCF)
+                        task.wait(0.15)
+                        SafeInteractPrompt(obj, 0.4)
+                        didAction = true
+                        task.wait(0.6)
+                        break
+                    end
+                end
+            elseif obj:IsA("ClickDetector") and obj.Parent then
+                local p = obj.Parent
+                if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 16 then
+                    local pName = string.lower(p.Name)
+                    if SafeFind(pName, "clip") or SafeFind(pName, "form") or SafeFind(pName, "paper") or SafeFind(pName, "бланк") then
+                        pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                        didAction = true
+                        task.wait(0.6)
                         break
                     end
                 end
             end
+        end
+
+        -- 2. ШАГ 2: Сделать фото (Камера на штативе слева)
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                local pCF = GetPromptTargetCFrame(obj)
+                if pCF and (pCF.Position - recVec).Magnitude < 18 then
+                    local act = string.lower(tostring(obj.ActionText or ""))
+                    local objT = string.lower(tostring(obj.ObjectText or ""))
+                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
+                    if SafeFind(act, "фото") or SafeFind(act, "снять") or SafeFind(act, "photo") or SafeFind(act, "camera") or SafeFind(pName, "cam") or SafeFind(objT, "камер") then
+                        TeleportTo(pCF)
+                        task.wait(0.15)
+                        SafeInteractPrompt(obj, 0.4)
+                        didAction = true
+                        task.wait(0.6)
+                        break
+                    end
+                end
+            elseif obj:IsA("ClickDetector") and obj.Parent then
+                local p = obj.Parent
+                if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 18 then
+                    local pName = string.lower(p.Name)
+                    if SafeFind(pName, "cam") or SafeFind(pName, "photo") or SafeFind(pName, "камер") then
+                        pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                        didAction = true
+                        task.wait(0.6)
+                        break
+                    end
+                end
+            end
+        end
+
+        -- 3. ШАГ 3: Ожидание прогресс-бара регистрации на ПК (1.8 сек)
+        task.wait(1.8)
+
+        -- 4. ШАГ 4: Распечатать талон (Принтер справа от ПК)
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                local pCF = GetPromptTargetCFrame(obj)
+                if pCF and (pCF.Position - recVec).Magnitude < 18 then
+                    local act = string.lower(tostring(obj.ActionText or ""))
+                    local objT = string.lower(tostring(obj.ObjectText or ""))
+                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
+                    if SafeFind(act, "печат") or SafeFind(act, "print") or SafeFind(pName, "print") or SafeFind(objT, "принтер") then
+                        TeleportTo(pCF)
+                        task.wait(0.15)
+                        SafeInteractPrompt(obj, 0.4)
+                        didAction = true
+                        task.wait(0.6)
+                        break
+                    end
+                end
+            elseif obj:IsA("ClickDetector") and obj.Parent then
+                local p = obj.Parent
+                if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 18 then
+                    local pName = string.lower(p.Name)
+                    if SafeFind(pName, "print") or SafeFind(pName, "принтер") then
+                        pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                        didAction = true
+                        task.wait(0.6)
+                        break
+                    end
+                end
+            end
+        end
+
+        -- 5. ШАГ 5: Если никого не было, звоним в звонок (Колокольчик)
+        if not didAction then
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                    local pCF = GetPromptTargetCFrame(obj)
+                    if pCF and (pCF.Position - recVec).Magnitude < 16 then
+                        local act = string.lower(tostring(obj.ActionText or ""))
+                        local objT = string.lower(tostring(obj.ObjectText or ""))
+                        if SafeFind(act, "звон") or SafeFind(act, "bell") or SafeFind(act, "позв") or SafeFind(objT, "звон") then
+                            SafeInteractPrompt(obj, 0.3)
+                            task.wait(0.4)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+
+        return didAction
+    end
+
+    local function ProcessHospitalCycle()
+        -- 0. Авто-принятие клиентов на ресепшене
+        if Config.AutoRegistration and (tick() - lastReceptionTime > 15) then
+            lastReceptionTime = tick()
+            pcall(ProcessReceptionIntake)
         end
 
         -- Проход по палатам 1 - 5 (ПРОВЕРКА НАЛИЧИЯ БОЛЬНОГО ➔ КОЙКА ➔ СКАНЕР ➔ ПОЛКА ➔ ЛЕЧЕНИЕ)
