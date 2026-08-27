@@ -369,31 +369,68 @@ local function GetItemPromptDirect(itemName)
     return nil
 end
 
-local function GrabAndEquipMedicine(itemName)
-    local tool = FindToolInInventory(itemName)
-    if not tool then
-        local pp = GetItemPromptDirect(itemName)
-        if pp then
-            Log("AutoTreatment", "Grabbing treatment item", {
-                countBefore = 0,
-                prompt = pp:GetFullName(),
-                targetItem = itemName
-            })
-            local pos = Positions[itemName] or GetPromptPartPosition(pp)
-            TeleportAndFirePrompt(pp, pos, 0.4)
-            task.wait(0.4)
-        else
-            -- Teleport to shelf fallback
-            local shelf = Positions.Ointment
-            if itemName:find("Pill") or itemName:find("Drop") then shelf = Positions.Pills
-            elseif itemName:find("Syrup") then shelf = Positions.CoughSyrup
+local function EnsureItemInHand(itemName, maxWaitSeconds)
+    maxWaitSeconds = maxWaitSeconds or 4.5
+    local deadline = os.clock() + maxWaitSeconds
+    local char = GetCharacter()
+
+    -- 1. Check if tool is already equipped
+    local currentTool = char and char:FindFirstChildWhichIsA("Tool")
+    if currentTool and string.lower(currentTool.Name):find(string.lower(itemName)) then
+        currentTool:Activate()
+        return true
+    end
+
+    local prompt = GetItemPromptDirect(itemName)
+    local shelfPos = Positions[itemName] or (prompt and GetPromptPartPosition(prompt))
+
+    while os.clock() < deadline do
+        char = GetCharacter()
+        local tool = FindToolInInventory(itemName)
+
+        if tool then
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and tool.Parent ~= char then
+                hum:EquipTool(tool)
             end
-            TeleportPlayer(shelf)
-            task.wait(0.3)
+
+            -- Verify tool is actually in hand
+            local equipDeadline = os.clock() + 1.2
+            while os.clock() < equipDeadline do
+                if tool.Parent == char then
+                    tool:Activate()
+                    task.wait(0.15)
+                    return true
+                end
+                task.wait(0.1)
+            end
+            if tool.Parent == char then return true end
+        end
+
+        -- If not in inventory, teleport to shelf and activate prompt
+        if prompt and prompt.Enabled then
+            if shelfPos then TeleportPlayer(shelfPos) end
+            task.wait(0.15)
+            FirePrompt(prompt, 0.35)
+            task.wait(0.35)
+        else
+            prompt = GetItemPromptDirect(itemName)
+            if shelfPos then TeleportPlayer(shelfPos) end
+            task.wait(0.25)
         end
     end
 
-    return EquipAndActivateTool(itemName)
+    -- Final attempt to equip
+    local finalTool = FindToolInInventory(itemName)
+    if finalTool and char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum:EquipTool(finalTool) end
+        task.wait(0.2)
+        return finalTool.Parent == char
+    end
+
+    Log("Inventory", "Failed to confirm item in hand after wait", { item = itemName })
+    return false
 end
 
 local function GetTreatablePatientRooms()
@@ -477,17 +514,17 @@ local function ExecuteTreatmentCycle()
                 task.wait(1.5)
             end
 
-            -- Apply Ointment & Bandages
+            -- Apply Ointment & Bandages with 100% Item-in-Hand Confirmation
             local meds = {"Ointment", "Bandages"}
             for _, med in ipairs(meds) do
-                GrabAndEquipMedicine(med)
-                task.wait(0.3)
-
-                local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
-                local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
-                if bedPP then
-                    TeleportAndFirePrompt(bedPP, Positions.Room6_Bed, 0.5)
-                    task.wait(0.5)
+                local inHand = EnsureItemInHand(med, 5.0)
+                if inHand then
+                    local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+                    local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
+                    if bedPP then
+                        TeleportAndFirePrompt(bedPP, Positions.Room6_Bed, 0.5)
+                        task.wait(0.6)
+                    end
                 end
             end
         -- 2. General Medical Rooms 1 - 5 & Room 7
@@ -517,20 +554,19 @@ local function ExecuteTreatmentCycle()
                 task.wait(1.0)
             end
 
-            -- Step C: Grab Standard Cure & Apply
-            local commonMeds = {"Bandages", "First Aid Kit", "Pills"}
+            -- Step C: Grab Standard Cure with confirmation
+            local commonMeds = {"Bandages", "First Aid Kit", "Eye Drops", "Pills"}
             for _, med in ipairs(commonMeds) do
-                GrabAndEquipMedicine(med)
-                task.wait(0.2)
-                if rInfo.BedPP.Enabled then
+                if not rInfo.BedPP.Enabled then break end
+                local inHand = EnsureItemInHand(med, 3.5)
+                if inHand and rInfo.BedPP.Enabled then
                     TeleportAndFirePrompt(rInfo.BedPP, nil, 0.5)
-                    task.wait(0.5)
+                    task.wait(0.6)
                 end
             end
         end
     end
 end
-
 -- 🧹 9. SLIME CLEANER & CAMERA FIXER
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function CleanSlime()
