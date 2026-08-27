@@ -776,16 +776,22 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🛡️ 11. AUTO SHUTTER & ANOMALY EVALUATOR
 -- ══════════════════════════════════════════════════════════════════════════
+
+local isShutterClosed = false
+
 local function EvaluateCounterThreats()
     local npcsFolder = Workspace:FindFirstChild("NPCs")
     if not npcsFolder then return end
+
+    local hasThreatAtCounter = false
+    local threatNpc = nil
 
     for _, npc in ipairs(npcsFolder:GetChildren()) do
         if npc:IsA("Model") and npc ~= LocalPlayer.Character then
             local isThreat = false
             local name = npc.Name
 
-            if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or name:find("Tako") or name:find("Skinwalker") or name:find("Anomaly") then
+            if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or name:find("Tako") or name:find("Skinwalker") or name:find("Anomaly") or name:find("Mika") or name:find("Chloe") or name:find("Cookie") then
                 isThreat = true
             elseif name == "Barney" then
                 isThreat = (npc:GetAttribute("Anomaly") == true)
@@ -793,28 +799,45 @@ local function EvaluateCounterThreats()
 
             Log("AutoShutter", "Evaluating counter NPC", { isThreat = tostring(isThreat), npc = npc:GetFullName() })
 
-            if isThreat and _G.AutoAnomalyShutter then
-                local shutterPP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton") and Workspace.Misc.ShutterButton:FindFirstChild("PP")
-                if shutterPP and shutterPP.Enabled then
-                    TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
-                    Log("AutoShutter", "Closed shutter for threat", { npc = npc:GetFullName() })
-                    Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
-                    task.wait(1.0)
-                    return
-                end
-            end
+            if isThreat then
+                hasThreatAtCounter = true
+                threatNpc = npc
 
-            if isThreat and _G.AutoAskLeaveAnomaly then
-                local askPP = npc:FindFirstChild("PP")
-                if askPP and askPP.Enabled and (askPP.ActionText or ""):find("Ask") then
-                    Log("AutoAskLeaveAnomaly", "Pressing Ask To Leave prompt", { npc = npc:GetFullName(), prompt = askPP:GetFullName() })
-                    TeleportAndFirePrompt(askPP, Positions.AskToLeave, 0.4)
-                    task.wait(0.5)
+                if _G.AutoAskLeaveAnomaly then
+                    local askPP = npc:FindFirstChild("PP")
+                    if askPP and askPP.Enabled and (askPP.ActionText or ""):find("Ask") then
+                        Log("AutoAskLeaveAnomaly", "Pressing Ask To Leave prompt", { npc = npc:GetFullName(), prompt = askPP:GetFullName() })
+                        TeleportAndFirePrompt(askPP, Positions.AskToLeave, 0.4)
+                        task.wait(0.5)
+                    end
                 end
             end
         end
     end
+
+    local shutterPP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton") and Workspace.Misc.ShutterButton:FindFirstChild("PP")
+
+    if hasThreatAtCounter and _G.AutoAnomalyShutter then
+        if shutterPP and shutterPP.Enabled and not isShutterClosed then
+            TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
+            isShutterClosed = true
+            Log("AutoShutter", "Closed shutter for moving threat", { npc = threatNpc and threatNpc:GetFullName() or "Workspace.NPCs.Threat" })
+            Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
+            task.wait(0.5)
+        else
+            Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
+        end
+    elseif not hasThreatAtCounter and isShutterClosed and _G.AutoAnomalyShutter then
+        if shutterPP and shutterPP.Enabled then
+            Log("AutoShutter", "Detected anomaly leave animation")
+            Log("AutoShutter", "Opening shutter after threat left check-in")
+            TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
+            isShutterClosed = false
+            task.wait(0.5)
+        end
+    end
 end
+
 
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🏢 12. AUTO CHECK IN ENGINE
