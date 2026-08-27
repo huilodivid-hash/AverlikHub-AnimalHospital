@@ -1877,67 +1877,110 @@ local function RunAverlikHub()
         return nil
     end
 
-    local function GetDiagnosedMedicine(wardNum)
+    local function StripTags(str)
+        if not str or type(str) ~= "string" then return "" end
+        return string.gsub(str, "<[^>]+>", "")
+    end
+
+    -- 🩺 НАИБОЛЕЕ НАДЕЖНЫЙ МНОГОСЛОЙНЫЙ ДВИЖОК ОПРЕДЕЛЕНИЯ ДИАГНОЗА
+    local function GetDiagnosedMedicine(wardNum, maxWaitSeconds)
+        maxWaitSeconds = maxWaitSeconds or 3.5
+        local startTime = tick()
+
         local devPos = wardNum and GetWardDevicePosition(wardNum) or nil
         local devVec = devPos and (typeof(devPos) == "CFrame" and devPos.Position or devPos) or nil
         local bedPos = wardNum and GetWardBedPosition(wardNum) or nil
         local bedVec = bedPos and (typeof(bedPos) == "CFrame" and bedPos.Position or bedPos) or nil
 
-        -- 1. Проверка SurfaceGui и BillboardGui в Workspace (экран монитора ПК, анализатор, доска над койкой)
-        for _, gui in pairs(Workspace:GetDescendants()) do
-            if gui:IsA("SurfaceGui") or gui:IsA("BillboardGui") then
-                local isNear = true
-                if devVec or bedVec then
-                    local adPart = gui.Adornee or gui.Parent
-                    if adPart and adPart:IsA("BasePart") then
-                        local d1 = devVec and (adPart.Position - devVec).Magnitude or 999
-                        local d2 = bedVec and (adPart.Position - bedVec).Magnitude or 999
-                        if d1 > 30 and d2 > 30 then isNear = false end
+        while (tick() - startTime) <= maxWaitSeconds do
+            -- 1. СЛОЙ 1: SurfaceGui и BillboardGui на мониторе ПК, центрифуге и доске палаты
+            for _, gui in pairs(Workspace:GetDescendants()) do
+                if gui:IsA("SurfaceGui") or gui:IsA("BillboardGui") then
+                    local isNear = true
+                    if devVec or bedVec then
+                        local adPart = gui.Adornee or gui.Parent
+                        if adPart and adPart:IsA("BasePart") then
+                            local d1 = devVec and (adPart.Position - devVec).Magnitude or 999
+                            local d2 = bedVec and (adPart.Position - bedVec).Magnitude or 999
+                            if d1 > 35 and d2 > 35 then isNear = false end
+                        end
+                    end
+
+                    if isNear then
+                        for _, elem in pairs(gui:GetDescendants()) do
+                            if (elem:IsA("TextLabel") or elem:IsA("TextButton") or elem:IsA("TextBox")) and elem.Visible then
+                                local cleanText = StripTags(elem.Text)
+                                local matched = MatchMedicineKey(cleanText, nil)
+                                if matched then return matched end
+                            elseif elem:IsA("ImageLabel") or elem:IsA("ImageButton") then
+                                local matched = MatchMedicineKey(elem.Name, elem.Image)
+                                if matched then return matched end
+                            end
+                        end
                     end
                 end
+            end
 
-                if isNear then
+            -- 2. СЛОЙ 2: Атрибуты (Attributes) и Value-объекты моделей палаты и пациента
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("Model") or obj:IsA("Configuration") or obj:IsA("Folder") then
+                    local isNear = true
+                    local primary = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj.Parent
+                    if primary and primary:IsA("BasePart") and (devVec or bedVec) then
+                        local d1 = devVec and (primary.Position - devVec).Magnitude or 999
+                        local d2 = bedVec and (primary.Position - bedVec).Magnitude or 999
+                        if d1 > 35 and d2 > 35 then isNear = false end
+                    end
+
+                    if isNear then
+                        local attrs = obj:GetAttributes()
+                        for attrName, attrVal in pairs(attrs) do
+                            local matched = MatchMedicineKey(tostring(attrVal), nil)
+                            if matched then return matched end
+                        end
+                        for _, valObj in pairs(obj:GetChildren()) do
+                            if valObj:IsA("StringValue") then
+                                local matched = MatchMedicineKey(valObj.Value, nil)
+                                if matched then return matched end
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- 3. СЛОЙ 3: Всплывающий интерфейс рецепта / карточки (PlayerGui)
+            local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            if pg then
+                for _, g in pairs(pg:GetChildren()) do
+                    if g:IsA("ScreenGui") and g.Enabled and g.Name ~= "AverlikHub_MainGui" then
+                        for _, elem in pairs(g:GetDescendants()) do
+                            if (elem:IsA("TextLabel") or elem:IsA("TextButton") or elem:IsA("TextBox")) and elem.Visible then
+                                local cleanText = StripTags(elem.Text)
+                                local matched = MatchMedicineKey(cleanText, nil)
+                                if matched then return matched end
+                            elseif elem:IsA("ImageLabel") or elem:IsA("ImageButton") then
+                                local matched = MatchMedicineKey(elem.Name, elem.Image)
+                                if matched then return matched end
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- 4. СЛОЙ 4: Глобальный поиск по всем видимым надписям больницы
+            for _, gui in pairs(Workspace:GetDescendants()) do
+                if (gui:IsA("SurfaceGui") or gui:IsA("BillboardGui")) and gui.Enabled then
                     for _, elem in pairs(gui:GetDescendants()) do
-                        if (elem:IsA("TextLabel") or elem:IsA("TextButton") or elem:IsA("TextBox")) and elem.Visible then
-                            local matched = MatchMedicineKey(elem.Text, nil)
-                            if matched then return matched end
-                        elseif elem:IsA("ImageLabel") or elem:IsA("ImageButton") then
-                            local matched = MatchMedicineKey(elem.Name, elem.Image)
+                        if (elem:IsA("TextLabel") or elem:IsA("TextButton")) and elem.Visible then
+                            local cleanText = StripTags(elem.Text)
+                            local matched = MatchMedicineKey(cleanText, nil)
                             if matched then return matched end
                         end
                     end
                 end
             end
-        end
 
-        -- 2. Проверка всплывающего UI (PlayerGui)
-        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        if pg then
-            for _, g in pairs(pg:GetChildren()) do
-                if g:IsA("ScreenGui") and g.Enabled and g.Name ~= "AverlikHub_MainGui" then
-                    for _, elem in pairs(g:GetDescendants()) do
-                        if (elem:IsA("TextLabel") or elem:IsA("TextButton") or elem:IsA("TextBox")) and elem.Visible then
-                            local matched = MatchMedicineKey(elem.Text, nil)
-                            if matched then return matched end
-                        elseif elem:IsA("ImageLabel") or elem:IsA("ImageButton") then
-                            local matched = MatchMedicineKey(elem.Name, elem.Image)
-                            if matched then return matched end
-                        end
-                    end
-                end
-            end
-        end
-
-        -- 3. Глобальный поиск по всем SurfaceGui/BillboardGui в Workspace
-        for _, gui in pairs(Workspace:GetDescendants()) do
-            if (gui:IsA("SurfaceGui") or gui:IsA("BillboardGui")) and gui.Enabled then
-                for _, elem in pairs(gui:GetDescendants()) do
-                    if (elem:IsA("TextLabel") or elem:IsA("TextButton")) and elem.Visible then
-                        local matched = MatchMedicineKey(elem.Text, nil)
-                        if matched then return matched end
-                    end
-                end
-            end
+            task.wait(0.25)
         end
 
         return nil
@@ -2083,120 +2126,180 @@ local function RunAverlikHub()
 
     local lastReceptionTime = 0
 
+    local function HasWaitingReceptionCustomers()
+        local recPos = CustomWaypoints.Reception
+        if not recPos then return false end
+        local recVec = typeof(recPos) == "CFrame" and recPos.Position or recPos
+
+        -- 1. Проверка табло над ресепшеном
+        for _, gui in pairs(Workspace:GetDescendants()) do
+            if (gui:IsA("SurfaceGui") or gui:IsA("BillboardGui")) and gui.Enabled then
+                local adPart = gui.Adornee or gui.Parent
+                if adPart and adPart:IsA("BasePart") and (adPart.Position - recVec).Magnitude < 30 then
+                    for _, lbl in pairs(gui:GetDescendants()) do
+                        if (lbl:IsA("TextLabel") or lbl:IsA("TextBox")) and lbl.Visible then
+                            local t = string.lower(lbl.Text)
+                            if SafeFind(t, "регистрац") or SafeFind(t, "требуют") then
+                                local num = tonumber(string.match(t, "%d+"))
+                                if num and num > 0 then return true end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 2. Проверка активного бланка на стойке
+        local formPos = CustomWaypoints.Reception_Form or recPos
+        local formVec = typeof(formPos) == "CFrame" and formPos.Position or formPos
+        for _, p in pairs(Workspace:GetDescendants()) do
+            if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
+                local pCF = GetPromptTargetCFrame(p)
+                if pCF and (pCF.Position - formVec).Magnitude < 12 then
+                    local act = string.lower(tostring(p.ActionText or ""))
+                    if SafeFind(act, "заполн") or SafeFind(act, "форм") or SafeFind(act, "бланк") then
+                        return true
+                    end
+                end
+            end
+        end
+
+        -- 3. Проверка зверька у стойки
+        for _, m in pairs(Workspace:GetDescendants()) do
+            if m:IsA("Model") and m ~= LocalPlayer.Character and not m:IsDescendantOf(LocalPlayer.Character) then
+                local hum = m:FindFirstChildOfClass("Humanoid")
+                local head = m:FindFirstChild("Head") or m:FindFirstChild("HumanoidRootPart")
+                if (hum or head) then
+                    local pPos = head and head.Position or (m.PrimaryPart and m.PrimaryPart.Position)
+                    if pPos and (pPos - recVec).Magnitude < 10 then
+                        return true
+                    end
+                end
+            end
+        end
+
+        return false
+    end
+
     -- 📋 ПОЛНЫЙ ЦИКЛ ПРИНЯТИЯ КЛИЕНТОВ НА РЕСЕПШЕНЕ (Бланк ➔ Фото ➔ ПК ➔ Печать)
     local function ProcessReceptionIntake()
         local recPos = CustomWaypoints.Reception
         if not recPos then return false end
         local recVec = typeof(recPos) == "CFrame" and recPos.Position or recPos
 
-        -- Телепорт к стойке ресепшена
-        TeleportTo(recPos)
-        task.wait(0.35)
+        if not HasWaitingReceptionCustomers() then
+            return false
+        end
 
-        local didAction = false
+        local totalRegistered = 0
 
-        -- 1. ШАГ 1: Заполнить форму (Планшет / Бланк на столе)
-        local formPos = CustomWaypoints.Reception_Form or recPos
-        TeleportTo(formPos)
-        task.wait(0.2)
+        while HasWaitingReceptionCustomers() and totalRegistered < 5 do
+            -- 1. ШАГ 1: Заполнить форму (Планшет / Бланк на столе)
+            local formPos = CustomWaypoints.Reception_Form or recPos
+            TeleportTo(formPos)
+            task.wait(0.2)
 
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
-                local pCF = GetPromptTargetCFrame(obj)
-                if pCF and (pCF.Position - recVec).Magnitude < 16 then
-                    local act = string.lower(tostring(obj.ActionText or ""))
-                    local objT = string.lower(tostring(obj.ObjectText or ""))
-                    if SafeFind(act, "заполн") or SafeFind(act, "форм") or SafeFind(act, "бланк") or SafeFind(objT, "бланк") or SafeFind(objT, "форм") then
-                        SafeInteractPrompt(obj, 0.4)
-                        didAction = true
-                        task.wait(0.5)
-                        break
+            local formDone = false
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                    local pCF = GetPromptTargetCFrame(obj)
+                    if pCF and (pCF.Position - recVec).Magnitude < 16 then
+                        local act = string.lower(tostring(obj.ActionText or ""))
+                        local objT = string.lower(tostring(obj.ObjectText or ""))
+                        if SafeFind(act, "заполн") or SafeFind(act, "форм") or SafeFind(act, "бланк") or SafeFind(objT, "бланк") or SafeFind(objT, "форм") then
+                            SafeInteractPrompt(obj, 0.4)
+                            formDone = true
+                            task.wait(0.5)
+                            break
+                        end
                     end
-                end
-            elseif obj:IsA("ClickDetector") and obj.Parent then
-                local p = obj.Parent
-                if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 16 then
-                    local pName = string.lower(p.Name)
-                    if SafeFind(pName, "clip") or SafeFind(pName, "form") or SafeFind(pName, "paper") or SafeFind(pName, "бланк") then
-                        pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
-                        didAction = true
-                        task.wait(0.5)
-                        break
+                elseif obj:IsA("ClickDetector") and obj.Parent then
+                    local p = obj.Parent
+                    if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 16 then
+                        local pName = string.lower(p.Name)
+                        if SafeFind(pName, "clip") or SafeFind(pName, "form") or SafeFind(pName, "paper") or SafeFind(pName, "бланк") then
+                            pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                            formDone = true
+                            task.wait(0.5)
+                            break
+                        end
                     end
                 end
             end
-        end
 
-        -- 2. ШАГ 2: Сделать фото (Камера на штативе слева)
-        local camPos = CustomWaypoints.Reception_Camera or (recPos * CFrame.new(-3.5, 0, 0))
-        TeleportTo(camPos)
-        task.wait(0.2)
+            if not formDone then break end
 
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
-                local pCF = GetPromptTargetCFrame(obj)
-                if pCF and (pCF.Position - recVec).Magnitude < 18 then
-                    local act = string.lower(tostring(obj.ActionText or ""))
-                    local objT = string.lower(tostring(obj.ObjectText or ""))
-                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
-                    if SafeFind(act, "фото") or SafeFind(act, "снять") or SafeFind(act, "photo") or SafeFind(act, "camera") or SafeFind(pName, "cam") or SafeFind(objT, "камер") then
-                        SafeInteractPrompt(obj, 0.4)
-                        didAction = true
-                        task.wait(0.5)
-                        break
+            -- 2. ШАГ 2: Сделать фото (Камера на штативе слева)
+            local camPos = CustomWaypoints.Reception_Camera or (recPos * CFrame.new(-3.5, 0, 0))
+            TeleportTo(camPos)
+            task.wait(0.2)
+
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                    local pCF = GetPromptTargetCFrame(obj)
+                    if pCF and (pCF.Position - recVec).Magnitude < 18 then
+                        local act = string.lower(tostring(obj.ActionText or ""))
+                        local objT = string.lower(tostring(obj.ObjectText or ""))
+                        local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
+                        if SafeFind(act, "фото") or SafeFind(act, "снять") or SafeFind(act, "photo") or SafeFind(act, "camera") or SafeFind(pName, "cam") or SafeFind(objT, "камер") then
+                            SafeInteractPrompt(obj, 0.4)
+                            task.wait(0.5)
+                            break
+                        end
                     end
-                end
-            elseif obj:IsA("ClickDetector") and obj.Parent then
-                local p = obj.Parent
-                if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 18 then
-                    local pName = string.lower(p.Name)
-                    if SafeFind(pName, "cam") or SafeFind(pName, "photo") or SafeFind(pName, "камер") then
-                        pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
-                        didAction = true
-                        task.wait(0.5)
-                        break
-                    end
-                end
-            end
-        end
-
-        -- 3. ШАГ 3: Ожидание прогресс-бара регистрации на ПК (1.8 сек)
-        task.wait(1.8)
-
-        -- 4. ШАГ 4: Распечатать талон (Принтер справа от ПК)
-        local printPos = CustomWaypoints.Reception_Printer or (recPos * CFrame.new(3.8, 0, 0))
-        TeleportTo(printPos)
-        task.wait(0.2)
-
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
-                local pCF = GetPromptTargetCFrame(obj)
-                if pCF and (pCF.Position - recVec).Magnitude < 18 then
-                    local act = string.lower(tostring(obj.ActionText or ""))
-                    local objT = string.lower(tostring(obj.ObjectText or ""))
-                    local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
-                    if SafeFind(act, "печат") or SafeFind(act, "print") or SafeFind(pName, "print") or SafeFind(objT, "принтер") then
-                        SafeInteractPrompt(obj, 0.4)
-                        didAction = true
-                        task.wait(0.5)
-                        break
-                    end
-                end
-            elseif obj:IsA("ClickDetector") and obj.Parent then
-                local p = obj.Parent
-                if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 18 then
-                    local pName = string.lower(p.Name)
-                    if SafeFind(pName, "print") or SafeFind(pName, "принтер") then
-                        pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
-                        didAction = true
-                        task.wait(0.5)
-                        break
+                elseif obj:IsA("ClickDetector") and obj.Parent then
+                    local p = obj.Parent
+                    if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 18 then
+                        local pName = string.lower(p.Name)
+                        if SafeFind(pName, "cam") or SafeFind(pName, "photo") or SafeFind(pName, "камер") then
+                            pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                            task.wait(0.5)
+                            break
+                        end
                     end
                 end
             end
+
+            -- 3. ШАГ 3: Ожидание прогресс-бара регистрации на ПК (1.8 сек)
+            task.wait(1.8)
+
+            -- 4. ШАГ 4: Распечатать талон (Принтер справа от ПК)
+            local printPos = CustomWaypoints.Reception_Printer or (recPos * CFrame.new(3.8, 0, 0))
+            TeleportTo(printPos)
+            task.wait(0.2)
+
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
+                    local pCF = GetPromptTargetCFrame(obj)
+                    if pCF and (pCF.Position - recVec).Magnitude < 18 then
+                        local act = string.lower(tostring(obj.ActionText or ""))
+                        local objT = string.lower(tostring(obj.ObjectText or ""))
+                        local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
+                        if SafeFind(act, "печат") or SafeFind(act, "print") or SafeFind(pName, "print") or SafeFind(objT, "принтер") then
+                            SafeInteractPrompt(obj, 0.4)
+                            task.wait(0.5)
+                            break
+                        end
+                    end
+                elseif obj:IsA("ClickDetector") and obj.Parent then
+                    local p = obj.Parent
+                    if p:IsA("BasePart") and (p.Position - recVec).Magnitude < 18 then
+                        local pName = string.lower(p.Name)
+                        if SafeFind(pName, "print") or SafeFind(pName, "принтер") then
+                            pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
+                            task.wait(0.5)
+                            break
+                        end
+                    end
+                end
+            end
+
+            totalRegistered = totalRegistered + 1
+            SendNotification("Ресепшен", "Клиент успешно зарегистрирован! (" .. tostring(totalRegistered) .. ")", 2)
+            task.wait(0.8)
         end
 
-        return didAction
+        return totalRegistered > 0
     end
 
     local function ProcessHospitalCycle()
