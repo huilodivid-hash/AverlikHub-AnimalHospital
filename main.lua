@@ -2638,8 +2638,35 @@ local function RunAverlikHub()
         end
     end)
 
-    SendNotification("Averlik Hub", "Animal Hospital: идеальный авто-цикл готов!", 4)
-    print("[Averlik Hub] Умная фильтрация палат и тайминги компьютеров готовы!")
+    -- 🚀 ФОНОВЫЙ ЗАПУСК ДВИЖКА FN ANIMAL HOSPITAL С АВТО-СКРЫТИЕМ ЕГО СТОРОННЕГО UI
+    task.spawn(function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/caomod2077/Script/refs/heads/main/FN_AnimalHospital.lua"))()
+        end)
+    end)
+
+    -- Авто-скрытие сторонних окон, чтобы на экране оставался ТОЛЬКО наш красивый Averlik Hub GUI
+    task.spawn(function()
+        local CoreGui = pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui") or nil
+        local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        while true do
+            task.wait(0.8)
+            pcall(function()
+                for _, container in pairs({PlayerGui, CoreGui}) do
+                    if container then
+                        for _, gui in pairs(container:GetChildren()) do
+                            if gui:IsA("ScreenGui") and gui.Name ~= "AverlikHub_MainGui" and gui.Name ~= "RobloxGui" and gui.Name ~= "Chat" and gui.Name ~= "InGameMenu" and gui.Name ~= "TouchGui" and gui.Name ~= "PlayerList" and gui.Name ~= "PurchasePrompt" then
+                                gui.Enabled = false
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+
+    SendNotification("Averlik Hub", "Animal Hospital: Averlik Hub GUI активен!", 4)
+    print("[Averlik Hub] Averlik Hub GUI + FN Engine успешно запущены!")
 end
 
 local ok, err = pcall(RunAverlikHub)
