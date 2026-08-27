@@ -94,6 +94,12 @@ local Positions = {
     Room6_XrayMonitor = Vector3.new(-169.33, 6.23, 63.33),
     Room6_PrintedXRay = Vector3.new(-166.05, 5.15, 61.90),
 
+    
+    -- Emergency Room 7 (ICU / Treatment Protocol)
+    Room7_Bed         = Vector3.new(-106.53, 4.74, 52.13),
+    Room7_Monitor     = Vector3.new(-125.52, 6.28, 63.27),
+    Room7_PrintedXRay = Vector3.new(-122.58, 5.15, 61.96),
+
     -- Emergency Room 8 (Surgery)
     Room8_Bed         = Vector3.new(-144.89, 5.06, 99.59),
     Room8_IVDrops     = Vector3.new(-144.85, 5.20, 112.47),
@@ -572,6 +578,72 @@ local function TreatRoom8Surgery()
     return true
 end
 
+
+-- Палата 7 (Emergency ICU / X-Ray / Prepare Patient)
+local function TreatRoom7Emergency()
+    local room7 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room7")
+    if not room7 then return false end
+
+    local minigame = room7:FindFirstChild("Minigame")
+    local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+    local bedPP2 = inBed and inBed:FindFirstChild("PP2")
+    local bedPP = inBed and inBed:FindFirstChild("PP")
+
+    if bedPP2 and bedPP2.Enabled then
+        Log("AutoTreatment", "Found patient for room (or start prompt)", { prompt = bedPP2:GetFullName(), room = "Room7" })
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.Current", npcPrompt = bedPP2:GetFullName(), room = "Room7" })
+        Log("AutoTreatment", "Pressing bed prompt", { prompt = bedPP2:GetFullName(), room = "Room7" })
+
+        -- 1. Initial Bed Prompt
+        TeleportAndFirePrompt(bedPP2, Positions.Room7_Bed, 0.4)
+        task.wait(1.5)
+
+        -- 2. Monitor Process
+        local monitorPP2 = minigame:FindFirstChild("Monitor") and minigame.Monitor:FindFirstChild("PP2")
+        if monitorPP2 and monitorPP2.Enabled then
+            Log("AutoTreatment", "Pressing monitor process prompt", { prompt = monitorPP2:GetFullName(), retryLeft = 1, room = "Room7" })
+            TeleportAndFirePrompt(monitorPP2, Positions.Room7_Monitor, 0.4)
+            task.wait(2.5)
+        end
+
+        -- 3. Prepare Patient Bed Prompt
+        if bedPP2 and bedPP2.Enabled and (bedPP2.ActionText or ""):find("Prepare") then
+            Log("AutoTreatment", "Room7: pressing BedPP2 (Prepare Patient)", { prompt = bedPP2:GetFullName() })
+            TeleportAndFirePrompt(bedPP2, Positions.Room7_Bed, 0.4)
+            task.wait(1.5)
+        end
+
+        -- 4. Printed X-Ray / Results Collect
+        local printedPP = minigame:FindFirstChild("PrintedXRay") and minigame.PrintedXRay:FindFirstChild("PP")
+        if printedPP and printedPP.Enabled then
+            Log("AutoTreatment", "Pressing xresult prompt", { prompt = printedPP:GetFullName(), room = "Room7" })
+            TeleportAndFirePrompt(printedPP, Positions.Room7_PrintedXRay, 0.4)
+            task.wait(1.5)
+        end
+
+        -- 5. Deliver Medication to Bed
+        local meds = { "Ointment", "Bandages", "Medicine", "Scalpel" }
+        for _, med in ipairs(meds) do
+            GrabItemUntilInInventory(med, "Room7")
+            if GetItemCount(med) > 0 then
+                UseInventoryTool(med)
+                TeleportPlayer(Positions.Room7_Bed)
+                task.wait(0.2)
+
+                local targetBedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
+                if targetBedPP then
+                    PressPromptNearbyUntil(targetBedPP, 0.15, 2.0, function()
+                        return GetItemCount(med) == 0
+                    end)
+                end
+                task.wait(0.4)
+            end
+        end
+        return true
+    end
+    return false
+end
+
 -- Палата 6 (Реанимация / X-Ray)
 local function TreatRoom6Emergency()
     local room6 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room6")
@@ -674,6 +746,7 @@ local function ExecuteTreatmentCycle()
 
     if TreatRoom8Surgery() then return end
     if TreatRoom6Emergency() then return end
+    if TreatRoom7Emergency() then return end
     if TreatMedicalRooms() then return end
 
     Log("AutoTreatment", "No treatable patient found in any room")
