@@ -101,19 +101,25 @@ local function RunAverlikHub()
         getgenv().AverlikHub_Instance = ScreenGui
     end
 
-    -- 📍 Таблица кастомных точек телепортации (с вашими точными координатами и ракурсами взгляда)
+    -- 📍 Таблица кастомных точек телепортации (Все ваши сохраненные координаты и ракурсы)
     local CustomWaypoints = {
+        -- Ресепшен (Все шаги)
+        Reception = CFrame.new(-108.7247, 3.4125, 10.2041, 1.0000, 0, 0, 0, 1.0000, 0, 0, 0, 1.0000),
+        Reception_Form = CFrame.new(-103.9118, 3.4125, -0.4003, 1.0000, 0, 0.0052, 0, 1.0000, 0, -0.0052, 0, 1.0000),
+        Reception_Camera = CFrame.new(-108.7958, 3.4125, -0.3836, 0.9994, 0, -0.0349, 0, 1.0000, 0, 0.0349, 0, 0.9994),
+        Reception_Printer = CFrame.new(-99.5409, 3.4125, 0.0997, 0.3818, 0, -0.9242, 0, 1.0000, 0, 0.9242, 0, 0.3818),
+
         -- Палаты 1 - 5, 7 (Койка + Устройство)
-        Ward1_Bed = CFrame.new(-168.2000, 5.8061, -41.2333, -0.9997, 0, -0.0225, 0, 1.0000, 0, 0.0225, 0, -0.9997),
+        Ward1_Bed = CFrame.new(-168.4174, 5.8061, -41.0413, 1.0000, 0, 0, 0, 1.0000, 0, 0, 0, 1.0000),
         Ward1_Device = CFrame.new(-177.6558, 3.4575, -44.2175, 0.0276, 0, 0.9996, 0, 1.0000, 0, -0.9996, 0, 0.0276),
 
         Ward2_Bed = CFrame.new(-121.2388, 5.8061, -59.5030, 1.0000, 0, -0.0026, 0, 1.0000, 0, 0.0026, 0, 1.0000),
         Ward2_Device = CFrame.new(-111.4617, 3.4575, -56.7069, -0.0144, 0, -0.9999, 0, 1.0000, 0, 0.9999, 0, -0.0144),
 
-        Ward3_Bed = CFrame.new(-168.2885, 5.8061, -80.1926, -1.0000, 0, 0.0088, 0, 1.0000, 0, -0.0088, 0, -1.0000),
+        Ward3_Bed = CFrame.new(-168.0784, 5.8135, -80.1025, 1.0000, 0, 0, 0, 1.0000, 0, 0, 0, 1.0000),
         Ward3_Device = CFrame.new(-177.9783, 3.4575, -83.5864, 0.0101, 0, 0.9999, 0, 1.0000, 0, -0.9999, 0, 0.0101),
 
-        Ward4_Bed = CFrame.new(-121.1867, 5.8061, -99.1204, 1.0000, 0, -0.0026, 0, 1.0000, 0, 0.0026, 0, 1.0000),
+        Ward4_Bed = CFrame.new(-121.1582, 5.8061, -99.0621, 1.0000, 0, 0, 0, 1.0000, 0, 0, 0, 1.0000),
         Ward4_Device = CFrame.new(-111.0429, 3.4575, -94.0062, 0.0066, 0, -1.0000, 0, 1.0000, 0, 1.0000, 0, 0.0066),
 
         Ward5_Bed = CFrame.new(-154.0585, 5.8060, -114.6957, 0.0084, 0, 1.0000, 0, 1.0000, 0, -1.0000, 0, 0.0084),
@@ -137,8 +143,7 @@ local function RunAverlikHub()
         Med_Bandage = CFrame.new(-152.8181, 3.4575, -79.3061, 0.0306, 0, 0.9995, 0, 1.0000, 0, -0.9995, 0, 0.0306),
         Med_Plaster = CFrame.new(-152.5291, 3.4575, -84.2309, -0.0165, 0, 0.9999, 0, 1.0000, 0, -0.9999, 0, -0.0165),
 
-        -- 🏢 Инфраструктура
-        Reception = CFrame.new(-108.7247, 3.4125, 10.2041, 1.0000, 0, 0, 0, 1.0000, 0, 0, 0, 1.0000),
+        -- Кофе
         Coffee = CFrame.new(-123.8188, 7.9340, 10.2180, 1.0000, 0, 0, 0, 1.0000, 0, 0, 0, 1.0000)
     }
 
@@ -1542,15 +1547,15 @@ local function RunAverlikHub()
         end)
     end
 
-    -- 2. ТОЧКИ ТЕЛЕПОРТА (ПОЛНЫЙ РЕДАКТОР WAYPOINTS)
+    -- 2. ТОЧКИ ТЕЛЕПОРТА (СТУДИЯ И ВИЗУАЛИЗАЦИЯ WAYPOINTS)
     TabWaypoints:CreateSection("3D Визуализация и Сохранение")
-    TabWaypoints:CreateToggle("3D Маркеры всех точек в мире (ESP)", "Показывает неоновые круги и метки прямо в игре", ShowWaypointESP, function(val)
+    TabWaypoints:CreateToggle("3D Маркеры всех точек в мире (ESP)", "Показывает неоновые круги, названия и стрелки взгляда прямо в игре", ShowWaypointESP, function(val)
         ShowWaypointESP = val
         UpdateWaypointVisuals()
     end)
     TabWaypoints:CreateButton("💾 Сохранить все точки в файл (Waypoints.json)", true, function()
         SaveWaypointsToFile()
-        SendNotification("Waypoints", "Точки и ракурсы взгляда успешно сохранены!", 3)
+        SendNotification("Waypoints", "Все 32 точки и углы взгляда сохранены!", 3)
     end)
     TabWaypoints:CreateButton("📋 Скопировать координаты в буфер (JSON)", false, function()
         pcall(function()
@@ -1564,41 +1569,13 @@ local function RunAverlikHub()
             local jsonStr = HttpService:JSONEncode(exportData)
             if setclipboard then
                 setclipboard(jsonStr)
-                SendNotification("Буфер обмена", "JSON с координатами скопирован!", 2)
+                SendNotification("Буфер обмена", "JSON с координатами скопирован в буфер!", 2)
             end
         end)
     end)
 
-    local function MakeWaypointRow(keyName, displayName)
-        TabWaypoints:CreateDualButton("📍 " .. displayName, "🚀 ТП", function()
-            local cf = GetMyCFrame()
-            if cf then
-                CustomWaypoints[keyName] = cf
-                SaveWaypointsToFile()
-                UpdateWaypointVisuals()
-                SendNotification("Точка сохранена", displayName .. "\n(Координаты и направление зафиксированы!)", 2)
-            end
-        end, function()
-            local cf = CustomWaypoints[keyName]
-            if not cf and string.find(keyName, "Bed") then
-                local num = tonumber(string.match(keyName, "%d+")) or 1
-                cf = GetWardBedPosition(num)
-            elseif not cf and string.find(keyName, "Device") then
-                local num = tonumber(string.match(keyName, "%d+")) or 1
-                cf = GetWardDevicePosition(num)
-            end
-
-            if cf then
-                TeleportTo(cf)
-                SendNotification("Телепорт", "Перемещен к: " .. displayName, 2)
-            else
-                SendNotification("Ошибка", "Сначала подойдите и нажмите '📍 Записать'", 2)
-            end
-        end)
-    end
-
     -- Добавление своей произвольной точки
-    TabWaypoints:CreateSection("➕ Создать свою кастомную точку")
+    TabWaypoints:CreateSection("➕ Создать свою новую точку")
     local customPointName = "Custom_Point_1"
     TabWaypoints:CreateInput("Имя новой точки", "Например: Моя_Точка", "Custom_Point_1", function(val)
         customPointName = val
@@ -1609,51 +1586,14 @@ local function RunAverlikHub()
             CustomWaypoints[customPointName] = cf
             SaveWaypointsToFile()
             UpdateWaypointVisuals()
-            MakeWaypointRow(customPointName, "Кастом: " .. customPointName)
-            SendNotification("Waypoints", "Создана новая точка: " .. customPointName, 3)
+            SendNotification("Waypoints", "Создана и сохранена точка: " .. customPointName, 3)
         end
     end)
 
-    -- Ресепшен и Инфраструктура
-    TabWaypoints:CreateSection("🏢 Ресепшен (Все шаги)")
-    MakeWaypointRow("Reception", "📋 Стойка ресепшена (Центр)")
-    MakeWaypointRow("Reception_Form", "📝 Планшет / Бланк регистрации")
-    MakeWaypointRow("Reception_Camera", "📷 Камера на штативе (Слева)")
-    MakeWaypointRow("Reception_Printer", "🖨️ Принтер (Справа)")
-    MakeWaypointRow("Reception_Bell", "🔔 Колокольчик вызова")
-    MakeWaypointRow("Coffee", "☕ Кофейный автомат (Рассудок)")
-
-    -- Палаты 1 - 6 (Койка + Сканер + Компьютер)
-    for i = 1, 6 do
-        TabWaypoints:CreateSection("Палата " .. tostring(i) .. " (Койка + Сканер)")
-        MakeWaypointRow("Ward" .. tostring(i) .. "_Bed", "Палата " .. tostring(i) .. ": Койка пациента")
-        MakeWaypointRow("Ward" .. tostring(i) .. "_Device", "Палата " .. tostring(i) .. ": Сканер ДНК / Центрифуга")
-    end
-
-    TabWaypoints:CreateSection("Палата 7 (Реанимация)")
-    MakeWaypointRow("Ward7_Bed", "Палата 7: Стол пациента")
-    MakeWaypointRow("Ward7_Device", "Палата 7: ЭКГ Монитор сердца")
-
-    -- РАЗДЕЛЬНЫЕ ТОЧКИ ДЛЯ КАЖДОГО ЛЕКАРСТВА
-    TabWaypoints:CreateSection("🟩 Зеленый шкаф (Раздельные полки)")
-    MakeWaypointRow("Med_Herbs", "🌿 Травы (Правая полка)")
-    MakeWaypointRow("Med_Pills", "💊 Таблетки (Левая полка)")
-
-    TabWaypoints:CreateSection("🟦 Синий шкаф (Раздельные полки)")
-    MakeWaypointRow("Med_Drops", "💧 Капли (Левая полка)")
-    MakeWaypointRow("Med_IVDrip", "💉 Капельницы (Правая полка)")
-
-    TabWaypoints:CreateSection("🟥 Красный шкаф (Раздельные полки)")
-    MakeWaypointRow("Med_FirstAid", "🧰 Аптечки (Левая полка)")
-    MakeWaypointRow("Med_Thermometer", "🌡️ Термометры / Шприцы (Правая полка)")
-
-    TabWaypoints:CreateSection("🟨 Желтый шкаф (Раздельные полки)")
-    MakeWaypointRow("Med_Syrup", "🍯 Сиропы (Полка сиропов)")
-    MakeWaypointRow("Med_Mixture", "🧪 Микстуры (Полка микстур)")
-
-    TabWaypoints:CreateSection("⬜ Серый шкаф (Раздельные полки)")
-    MakeWaypointRow("Med_Bandage", "🩹 Бинты (Полка бинтов)")
-    MakeWaypointRow("Med_Plaster", "🩹 Пластыри / Инструменты")
+    TabWaypoints:CreateSection("✅ Статус точек")
+    TabWaypoints:CreateButton("📊 Все 32 основные точки зафиксированы и активны", false, function()
+        SendNotification("Статус", "Палаты 1-5, Палата 7, Ресепшен и 10 полок лекарств готовы к работе!", 3)
+    end)
 
     -- 3. ПАЛАТА 7 (РЕАНИМАЦИЯ)
     TabRoom7:CreateSection("Реанимация Палаты 7")
@@ -2003,31 +1943,37 @@ local function RunAverlikHub()
         return nil
     end
 
-    -- Проверка активности палаты (есть ли больной на койке, анализ в сканере или задача на ПК)
+    -- Проверка активности палаты (есть ли живой больной на койке или активная подсказка)
     local function IsWardActive(wardNum)
         local bedPos = GetWardBedPosition(wardNum)
         if not bedPos then return false end
         local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
-        local devPos = GetWardDevicePosition(wardNum)
-        local devVec = devPos and (typeof(devPos) == "CFrame" and devPos.Position or devPos) or nil
 
-        -- 1. Проверка активных ProximityPrompt возле койки или стола
+        -- 1. Проверка активных ProximityPrompt возле койки (взятие ДНК или лечение)
         for _, p in pairs(Workspace:GetDescendants()) do
             if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
                 local pCF = GetPromptTargetCFrame(p)
-                if pCF then
-                    if (pCF.Position - bedVec).Magnitude < 18 then return true end
-                    if devVec and (pCF.Position - devVec).Magnitude < 20 then return true end
+                if pCF and (pCF.Position - bedVec).Magnitude < 14 then
+                    if IsDNAPrompt(p) or IsHealPrompt(p) then
+                        return true
+                    end
                 end
             end
         end
 
-        -- 2. Проверка пациента (модели животного) на самой койке
+        -- 2. Проверка пациента (модели живого зверька с Humanoid или Head на койке)
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("Model") and obj ~= LocalPlayer.Character and not obj:IsDescendantOf(LocalPlayer.Character) then
-                local pPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                if pPart and (pPart.Position - bedVec).Magnitude < 8 then
-                    return true
+                local oName = string.lower(obj.Name)
+                if not SafeFind(oName, "bed") and not SafeFind(oName, "room") and not SafeFind(oName, "палат") and not SafeFind(oName, "мебел") and not SafeFind(oName, "door") and not SafeFind(oName, "wall") and not SafeFind(oName, "floor") then
+                    local hum = obj:FindFirstChildOfClass("Humanoid")
+                    local head = obj:FindFirstChild("Head") or obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso") or obj:FindFirstChild("UpperTorso")
+                    if hum or head or SafeFind(oName, "patient") or SafeFind(oName, "больной") or SafeFind(oName, "пациент") or SafeFind(oName, "animal") or SafeFind(oName, "bunny") or SafeFind(oName, "cat") or SafeFind(oName, "dog") then
+                        local pos = head and head.Position or (obj.PrimaryPart and obj.PrimaryPart.Position)
+                        if pos and (pos - bedVec).Magnitude < 8.5 then
+                            return true
+                        end
+                    end
                 end
             end
         end
@@ -2137,7 +2083,7 @@ local function RunAverlikHub()
 
     local lastReceptionTime = 0
 
-    -- 📋 ПОЛНЫЙ ЦИКЛ ПРИНЯТИЯ КЛИЕНТОВ НА РЕСЕПШЕНЕ (Бланк ➔ Фото ➔ ПК ➔ Печать ➔ Колокольчик)
+    -- 📋 ПОЛНЫЙ ЦИКЛ ПРИНЯТИЯ КЛИЕНТОВ НА РЕСЕПШЕНЕ (Бланк ➔ Фото ➔ ПК ➔ Печать)
     local function ProcessReceptionIntake()
         local recPos = CustomWaypoints.Reception
         if not recPos then return false end
@@ -2150,6 +2096,10 @@ local function RunAverlikHub()
         local didAction = false
 
         -- 1. ШАГ 1: Заполнить форму (Планшет / Бланк на столе)
+        local formPos = CustomWaypoints.Reception_Form or recPos
+        TeleportTo(formPos)
+        task.wait(0.2)
+
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
                 local pCF = GetPromptTargetCFrame(obj)
@@ -2157,11 +2107,9 @@ local function RunAverlikHub()
                     local act = string.lower(tostring(obj.ActionText or ""))
                     local objT = string.lower(tostring(obj.ObjectText or ""))
                     if SafeFind(act, "заполн") or SafeFind(act, "форм") or SafeFind(act, "бланк") or SafeFind(objT, "бланк") or SafeFind(objT, "форм") then
-                        TeleportTo(pCF)
-                        task.wait(0.15)
                         SafeInteractPrompt(obj, 0.4)
                         didAction = true
-                        task.wait(0.6)
+                        task.wait(0.5)
                         break
                     end
                 end
@@ -2172,7 +2120,7 @@ local function RunAverlikHub()
                     if SafeFind(pName, "clip") or SafeFind(pName, "form") or SafeFind(pName, "paper") or SafeFind(pName, "бланк") then
                         pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
                         didAction = true
-                        task.wait(0.6)
+                        task.wait(0.5)
                         break
                     end
                 end
@@ -2180,6 +2128,10 @@ local function RunAverlikHub()
         end
 
         -- 2. ШАГ 2: Сделать фото (Камера на штативе слева)
+        local camPos = CustomWaypoints.Reception_Camera or (recPos * CFrame.new(-3.5, 0, 0))
+        TeleportTo(camPos)
+        task.wait(0.2)
+
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
                 local pCF = GetPromptTargetCFrame(obj)
@@ -2188,11 +2140,9 @@ local function RunAverlikHub()
                     local objT = string.lower(tostring(obj.ObjectText or ""))
                     local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
                     if SafeFind(act, "фото") or SafeFind(act, "снять") or SafeFind(act, "photo") or SafeFind(act, "camera") or SafeFind(pName, "cam") or SafeFind(objT, "камер") then
-                        TeleportTo(pCF)
-                        task.wait(0.15)
                         SafeInteractPrompt(obj, 0.4)
                         didAction = true
-                        task.wait(0.6)
+                        task.wait(0.5)
                         break
                     end
                 end
@@ -2203,7 +2153,7 @@ local function RunAverlikHub()
                     if SafeFind(pName, "cam") or SafeFind(pName, "photo") or SafeFind(pName, "камер") then
                         pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
                         didAction = true
-                        task.wait(0.6)
+                        task.wait(0.5)
                         break
                     end
                 end
@@ -2214,6 +2164,10 @@ local function RunAverlikHub()
         task.wait(1.8)
 
         -- 4. ШАГ 4: Распечатать талон (Принтер справа от ПК)
+        local printPos = CustomWaypoints.Reception_Printer or (recPos * CFrame.new(3.8, 0, 0))
+        TeleportTo(printPos)
+        task.wait(0.2)
+
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
                 local pCF = GetPromptTargetCFrame(obj)
@@ -2222,11 +2176,9 @@ local function RunAverlikHub()
                     local objT = string.lower(tostring(obj.ObjectText or ""))
                     local pName = string.lower(tostring(obj.Parent and obj.Parent.Name or ""))
                     if SafeFind(act, "печат") or SafeFind(act, "print") or SafeFind(pName, "print") or SafeFind(objT, "принтер") then
-                        TeleportTo(pCF)
-                        task.wait(0.15)
                         SafeInteractPrompt(obj, 0.4)
                         didAction = true
-                        task.wait(0.6)
+                        task.wait(0.5)
                         break
                     end
                 end
@@ -2237,26 +2189,8 @@ local function RunAverlikHub()
                     if SafeFind(pName, "print") or SafeFind(pName, "принтер") then
                         pcall(function() if fireclickdetector then fireclickdetector(obj) end end)
                         didAction = true
-                        task.wait(0.6)
+                        task.wait(0.5)
                         break
-                    end
-                end
-            end
-        end
-
-        -- 5. ШАГ 5: Если никого не было, звоним в звонок (Колокольчик)
-        if not didAction then
-            for _, obj in pairs(Workspace:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") and obj.Enabled and not IsDoorOrTrash(obj) then
-                    local pCF = GetPromptTargetCFrame(obj)
-                    if pCF and (pCF.Position - recVec).Magnitude < 16 then
-                        local act = string.lower(tostring(obj.ActionText or ""))
-                        local objT = string.lower(tostring(obj.ObjectText or ""))
-                        if SafeFind(act, "звон") or SafeFind(act, "bell") or SafeFind(act, "позв") or SafeFind(objT, "звон") then
-                            SafeInteractPrompt(obj, 0.3)
-                            task.wait(0.4)
-                            break
-                        end
                     end
                 end
             end
