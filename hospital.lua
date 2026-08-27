@@ -180,20 +180,26 @@ local function RunAverlikHub()
         AutoHospitalCycle = false,
         AutoRegistration = true,
         StepDelay = 0.5,
+        ScannerWaitDelay = 6.0,
 
         -- Палата 7
         Room7_AutoCycle = false,
         Room7_AutoHeartGame = true,
         Room7_AutoIVDrip = true,
 
-        -- Игрок
+        -- Игрок & Авто-действия
+        AutoKeepSanity = false,
+        SkipDoctorDialogue = false,
+        AutoCamera = false,
         WalkSpeed = 16,
         WalkSpeedEnabled = false,
         NoClip = false,
         AntiAFK = true,
-        InfiniteSanity = true,
 
         -- Visuals & Misc
+        PatientESP = false,
+        AnomalyESP = false,
+        PlayerESP = false,
         FPSBoost = false,
         LowGraphics = false,
 
@@ -1653,17 +1659,19 @@ local function RunAverlikHub()
         Config.AutoHospitalCycle = val
         SendNotification("Больница", val and "Авто-лечение запущено!" or "Авто-лечение остановлено", 3)
     end)
-    TabHospital:CreateToggle("Авто-поддержание рассудка (Keep Sanity 100%)", "Пьет кофе из автомата при падении рассудка", Config.AutoKeepSanity or true, function(val)
+    TabHospital:CreateToggle("Авто-поддержание рассудка (Keep Sanity 100%)", "Пьет кофе из автомата при падении рассудка", Config.AutoKeepSanity, function(val)
         Config.AutoKeepSanity = val
+        SendNotification("Рассудок", val and "Авто-рассудок включен!" or "Авто-рассудок выключен!", 2)
     end)
-    TabHospital:CreateToggle("Скип диалогов доктора (RE/SetDoctorDialogueSkipped)", "Автоматически пропускает реплики доктора", Config.SkipDoctorDialogue or true, function(val)
+    TabHospital:CreateToggle("Скип диалогов доктора (RE/SetDoctorDialogueSkipped)", "Автоматически пропускает реплики доктора", Config.SkipDoctorDialogue, function(val)
         Config.SkipDoctorDialogue = val
         if val then SkipDoctorDialogue() end
+        SendNotification("Диалог", val and "Авто-скип диалогов включен!" or "Авто-скип диалогов выключен!", 2)
     end)
-    TabHospital:CreateSlider("Задержка между шагами (сек)", 0.2, 2.0, Config.StepDelay or 0.5, function(val)
+    TabHospital:CreateSlider("Задержка между шагами (сек)", 0.2, 2.0, Config.StepDelay, function(val)
         Config.StepDelay = val
     end)
-    TabHospital:CreateSlider("Ожидание сканера/центрифуги (сек)", 3.0, 12.0, Config.ScannerWaitDelay or 6.0, function(val)
+    TabHospital:CreateSlider("Ожидание сканера/центрифуги (сек)", 3.0, 12.0, Config.ScannerWaitDelay, function(val)
         Config.ScannerWaitDelay = val
     end)
 
@@ -1702,8 +1710,9 @@ local function RunAverlikHub()
         Config.AutoRegistration = val
         SendNotification("Ресепшен", val and "Авто-ресепшен включен!" or "Авто-ресепшен выключен", 2)
     end)
-    TabReception:CreateToggle("Авто-спуск затвора камеры (Trigger Shutter)", "Автоматически делает фото при приближении к камере", Config.AutoCamera or true, function(val)
+    TabReception:CreateToggle("Авто-спуск затвора камеры (Trigger Shutter)", "Автоматически делает фото при приближении к камере", Config.AutoCamera, function(val)
         Config.AutoCamera = val
+        SendNotification("Камера", val and "Авто-спуск камеры включен!" or "Авто-спуск камеры выключен!", 2)
     end)
     TabReception:CreateButton("📋 Принять клиента сейчас (Бланк ➔ Фото ➔ ПК ➔ Печать)", true, function()
         task.spawn(function()
@@ -1746,15 +1755,15 @@ local function RunAverlikHub()
     -- 4. ВКЛАДКА: ESP И ВИЗУАЛИЗАТОРЫ
     -- ══════════════════════════════════════════════════════════════════════════
     TabESP:CreateSection("Подсветка объектов (ESP)")
-    TabESP:CreateToggle("ESP Пациентов (Patient ESP / Highlight)", "Зеленая подсветка всех больных животных в палатах", Config.PatientESP or false, function(val)
+    TabESP:CreateToggle("ESP Пациентов (Patient ESP / Highlight)", "Зеленая подсветка всех больных животных в палатах", Config.PatientESP, function(val)
         Config.PatientESP = val
         UpdatePatientESP(val)
     end)
-    TabESP:CreateToggle("ESP Аномалий и Монстров (Anomaly ESP)", "Яркая красная подсветка скинволкеров и аномалий", Config.AnomalyESP or false, function(val)
+    TabESP:CreateToggle("ESP Аномалий и Монстров (Anomaly ESP)", "Яркая красная подсветка скинволкеров и аномалий", Config.AnomalyESP, function(val)
         Config.AnomalyESP = val
         UpdateAnomalyESP(val)
     end)
-    TabESP:CreateToggle("ESP Игроков (Player ESP)", "Синяя подсветка других врачей и игроков на сервере", Config.PlayerESP or false, function(val)
+    TabESP:CreateToggle("ESP Игроков (Player ESP)", "Синяя подсветка других врачей и игроков на сервере", Config.PlayerESP, function(val)
         Config.PlayerESP = val
         UpdatePlayerESP(val)
     end)
@@ -2586,11 +2595,11 @@ local function RunAverlikHub()
         end
     end)
 
-    -- Авто-кофе
+    -- Авто-кофе (Строго проверяет флаг Config.AutoKeepSanity)
     task.spawn(function()
         while true do
             task.wait(3.0)
-            if Config.InfiniteSanity then
+            if Config.AutoKeepSanity == true then
                 pcall(function()
                     local cofPos = CustomWaypoints.Coffee
                     if cofPos then TeleportTo(cofPos); task.wait(0.2) end
