@@ -289,6 +289,54 @@ local function RunAverlikHub()
         return true
     end
 
+    local function DoesToolMatchMedicine(toolName, reqMedKey)
+        if not toolName or not reqMedKey then return false end
+        local t = string.lower(toolName)
+        if reqMedKey == "Med_Herbs" and (SafeFind(t, "трав") or SafeFind(t, "herb") or SafeFind(t, "plant") or SafeFind(t, "растен") or SafeFind(t, "живот") or SafeFind(t, "stomach")) then return true end
+        if reqMedKey == "Med_Pills" and (SafeFind(t, "таблет") or SafeFind(t, "pill") or SafeFind(t, "капсул") or SafeFind(t, "голов") or SafeFind(t, "head")) then return true end
+        if reqMedKey == "Med_Drops" and (SafeFind(t, "капл") or SafeFind(t, "drop") or SafeFind(t, "глаз") or SafeFind(t, "eye") or SafeFind(t, "сухост") or SafeFind(t, "зрен")) then return true end
+        if reqMedKey == "Med_IVDrip" and (SafeFind(t, "капельниц") or SafeFind(t, "iv") or SafeFind(t, "drip") or SafeFind(t, "кров") or SafeFind(t, "blood")) then return true end
+        if reqMedKey == "Med_FirstAid" and (SafeFind(t, "аптеч") or SafeFind(t, "aid") or SafeFind(t, "kit") or SafeFind(t, "помощ") or SafeFind(t, "травм")) then return true end
+        if reqMedKey == "Med_Thermometer" and (SafeFind(t, "термометр") or SafeFind(t, "шприц") or SafeFind(t, "thermo") or SafeFind(t, "syringe") or SafeFind(t, "градусник") or SafeFind(t, "температур")) then return true end
+        if reqMedKey == "Med_Syrup" and (SafeFind(t, "сироп") or SafeFind(t, "syrup") or SafeFind(t, "кашел") or SafeFind(t, "горл")) then return true end
+        if reqMedKey == "Med_Mixture" and (SafeFind(t, "микстур") or SafeFind(t, "mixture") or SafeFind(t, "зель") or SafeFind(t, "аллерг") or SafeFind(t, "сып")) then return true end
+        if reqMedKey == "Med_Bandage" and (SafeFind(t, "бинт") or SafeFind(t, "band") or SafeFind(t, "повяз") or SafeFind(t, "перевяз") or SafeFind(t, "перелом")) then return true end
+        if reqMedKey == "Med_Plaster" and (SafeFind(t, "пластыр") or SafeFind(t, "plaster") or SafeFind(t, "patch") or SafeFind(t, "ссадин") or SafeFind(t, "порез")) then return true end
+        return false
+    end
+
+    local function EquipRequiredMedicine(reqMedKey)
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if not hum then return false end
+
+        -- 1. Проверяем, держим ли мы уже правильный предмет
+        local holdingTool = char:FindFirstChildWhichIsA("Tool")
+        if holdingTool then
+            if DoesToolMatchMedicine(holdingTool.Name, reqMedKey) then
+                return true
+            else
+                -- Снимаем неправильный предмет, чтобы случайно не убить пациента
+                hum:UnequipTools()
+                task.wait(0.2)
+            end
+        end
+
+        -- 2. Ищем строго подходящий предмет в рюкзаке
+        if bp then
+            for _, tool in ipairs(bp:GetChildren()) do
+                if tool:IsA("Tool") and DoesToolMatchMedicine(tool.Name, reqMedKey) then
+                    hum:EquipTool(tool)
+                    task.wait(0.2)
+                    return true
+                end
+            end
+        end
+
+        return false
+    end
+
     local function EquipMedicalTool(preferredName)
         pcall(function()
             local bp = LocalPlayer:FindFirstChild("Backpack")
@@ -296,31 +344,14 @@ local function RunAverlikHub()
             local hum = char and char:FindFirstChild("Humanoid")
             if not bp or not hum then return end
 
-            local tools = bp:GetChildren()
-            local targetTool = nil
-
             if preferredName then
-                for _, tool in ipairs(tools) do
+                for _, tool in ipairs(bp:GetChildren()) do
                     if tool:IsA("Tool") and SafeFind(tool.Name, preferredName) then
-                        targetTool = tool
-                        break
+                        hum:EquipTool(tool)
+                        task.wait(0.15)
+                        return
                     end
                 end
-            end
-
-            if not targetTool then
-                for _, tool in ipairs(tools) do
-                    if tool:IsA("Tool") then
-                        targetTool = tool
-                        break
-                    end
-                end
-            end
-
-            if targetTool then
-                hum:EquipTool(targetTool)
-                task.wait(0.15)
-                pcall(function() targetTool:Activate() end)
             end
         end)
     end
@@ -1825,7 +1856,7 @@ local function RunAverlikHub()
         local i = string.lower(tostring(img or ""))
 
         -- 1. 🌿 Травы (Живот / Тошнота / Отравление / Желудок)
-        if SafeFind(t, "живот") or SafeFind(t, "болит живот") or SafeFind(t, "тошнот") or SafeFind(t, "рвот") or SafeFind(t, "отравлен") or SafeFind(t, "желудок") or SafeFind(t, "пищевар") or SafeFind(t, "несварен") or SafeFind(t, "газ") or SafeFind(t, "колик") or SafeFind(t, "аппетит") or SafeFind(t, "stomach") or SafeFind(t, "belly") or SafeFind(t, "tummy") or SafeFind(t, "nausea") or SafeFind(t, "vomit") or SafeFind(t, "poison") or SafeFind(t, "digest") or SafeFind(t, "cramp") or SafeFind(t, "gut") or SafeFind(t, "трав") or SafeFind(t, "растен") or SafeFind(t, "herb") or SafeFind(t, "plant") or SafeFind(t, "leaf") or SafeFind(i, "herb") or SafeFind(i, "plant") or SafeFind(i, "leaf") then
+        if SafeFind(t, "живот") or SafeFind(t, "болит живот") or SafeFind(t, "тошнот") or SafeFind(t, "рвот") or SafeFind(t, "отравлен") or SafeFind(t, "желудок") or SafeFind(t, "пищевар") or SafeFind(t, "несварен") or SafeFind(t, "колик") or SafeFind(t, "аппетит") or SafeFind(t, "stomach") or SafeFind(t, "belly") or SafeFind(t, "tummy") or SafeFind(t, "nausea") or SafeFind(t, "vomit") or SafeFind(t, "poison") or SafeFind(t, "digest") or SafeFind(t, "cramp") or SafeFind(t, "gut") or SafeFind(t, "трав") or SafeFind(t, "растен") or SafeFind(t, "herb") or SafeFind(t, "plant") or SafeFind(t, "leaf") or SafeFind(i, "herb") or SafeFind(i, "plant") or SafeFind(i, "leaf") then
             return "Med_Herbs"
         end
 
@@ -1834,8 +1865,8 @@ local function RunAverlikHub()
             return "Med_Pills"
         end
 
-        -- 3. 💧 Капли (Глаза / Зрение / Нос / Уши / Слезы)
-        if SafeFind(t, "глаз") or SafeFind(t, "зрени") or SafeFind(t, "слез") or SafeFind(t, "конъюнктивит") or SafeFind(t, "насморк") or SafeFind(t, "сопл") or SafeFind(t, "уши") or SafeFind(t, "ухо") or SafeFind(t, "отит") or SafeFind(t, "заложенност") or SafeFind(t, "eye") or SafeFind(t, "eyes") or SafeFind(t, "vision") or SafeFind(t, "tear") or SafeFind(t, "tears") or SafeFind(t, "nose") or SafeFind(t, "ear") or SafeFind(t, "ears") or SafeFind(t, "капл") or SafeFind(t, "drop") or SafeFind(i, "drop") then
+        -- 3. 💧 Капли (Глаза / Сухость глаз / Зрение / Нос / Уши / Слезы)
+        if SafeFind(t, "глаз") or SafeFind(t, "сухост") or SafeFind(t, "сухие") or SafeFind(t, "зрени") or SafeFind(t, "слез") or SafeFind(t, "слезотечен") or SafeFind(t, "век") or SafeFind(t, "конъюнктивит") or SafeFind(t, "насморк") or SafeFind(t, "сопл") or SafeFind(t, "уши") or SafeFind(t, "ухо") or SafeFind(t, "отит") or SafeFind(t, "заложенност") or SafeFind(t, "eye") or SafeFind(t, "eyes") or SafeFind(t, "dry") or SafeFind(t, "dry eyes") or SafeFind(t, "vision") or SafeFind(t, "tear") or SafeFind(t, "tears") or SafeFind(t, "nose") or SafeFind(t, "ear") or SafeFind(t, "ears") or SafeFind(t, "капл") or SafeFind(t, "drop") or SafeFind(i, "drop") then
             return "Med_Drops"
         end
 
@@ -2345,59 +2376,60 @@ local function RunAverlikHub()
                     PerformDeskAnalysis(devPos)
                 end
 
-                -- ШАГ 3: Проверка лекарства в инвентаре / Поход к полке
-                local bp = LocalPlayer:FindFirstChild("Backpack")
-                local char = LocalPlayer.Character
-                local hasMed = false
-                if char and char:FindFirstChildWhichIsA("Tool") then hasMed = true end
-                if bp and #bp:GetChildren() > 0 then hasMed = true end
+                -- ШАГ 3: ЧТЕНИЕ ДИАГНОЗА (Строгий многослойный опрос до 5.0 сек)
+                local reqMedKey = GetDiagnosedMedicine(wardNum, 5.0)
 
-                if not hasMed then
-                    -- Читаем диагноз (до 4 попыток с микропаузой)
-                    local reqMedKey = nil
-                    for try = 1, 4 do
-                        reqMedKey = GetDiagnosedMedicine(wardNum)
-                        if reqMedKey then break end
-                        task.wait(0.25)
+                if not reqMedKey then
+                    SendNotification("⚠️ Внимание", "Диагноз в палате " .. tostring(wardNum) .. " не определен!\nЛечение пропущено во избежание ошибки.", 3)
+                    print("[Averlik Hub] Диагноз в палате " .. tostring(wardNum) .. " не распознан. Пропуск палаты.")
+                else
+                    SendNotification("🩺 Диагноз", "Палата " .. tostring(wardNum) .. ": Требуется " .. tostring(reqMedKey), 2)
+
+                    -- Проверяем, держим ли мы уже нужное лекарство
+                    local hasMatching = EquipRequiredMedicine(reqMedKey)
+
+                    if not hasMatching then
+                        local medTarget = CustomWaypoints[reqMedKey]
+                        if medTarget then
+                            TeleportTo(medTarget)
+                            task.wait(0.4)
+
+                            local myP = GetMyPosition()
+                            for _, cabObj in pairs(Workspace:GetDescendants()) do
+                                if IsCabinetPrompt(cabObj) then
+                                    local cabCF = GetPromptTargetCFrame(cabObj)
+                                    if cabCF and myP and (cabCF.Position - myP).Magnitude < 7.5 then
+                                        SafeInteractPrompt(cabObj, 0.4)
+                                        task.wait(0.5)
+                                        break
+                                    end
+                                end
+                            end
+
+                            -- Одеваем строго требуемое лекарство
+                            EquipRequiredMedicine(reqMedKey)
+                        end
                     end
 
-                    if reqMedKey and CustomWaypoints[reqMedKey] then
-                        local medTarget = CustomWaypoints[reqMedKey]
-                        TeleportTo(medTarget)
+                    -- ШАГ 4 & 5: СТРОГАЯ ЗАЩИТА: Лечим пациента ТОЛЬКО если в руках правильное лекарство!
+                    if EquipRequiredMedicine(reqMedKey) then
+                        TeleportTo(bedPos)
                         task.wait(0.35)
 
-                        -- Ищем подсказку именно на этой целевой полке (до 7 studs)
-                        local myP = GetMyPosition()
-                        for _, cabObj in pairs(Workspace:GetDescendants()) do
-                            if IsCabinetPrompt(cabObj) then
-                                local cabCF = GetPromptTargetCFrame(cabObj)
-                                if cabCF and myP and (cabCF.Position - myP).Magnitude < 7.5 then
-                                    SafeInteractPrompt(cabObj, 0.4)
-                                    task.wait(0.5)
+                        local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
+                        for _, p in pairs(Workspace:GetDescendants()) do
+                            if IsHealPrompt(p) then
+                                local pCF = GetPromptTargetCFrame(p)
+                                if pCF and (pCF.Position - bedVec).Magnitude < 18 then
+                                    SafeInteractPrompt(p, 0.5)
+                                    task.wait(1.5) -- Процесс лечения больного
+                                    SendNotification("✨ Успех", "Пациент в палате " .. tostring(wardNum) .. " успешно вылечен!", 2)
                                     break
                                 end
                             end
                         end
                     else
-                        print("[Averlik Hub] Диагноз в палате " .. tostring(wardNum) .. " не распознан. Пропуск взятия лекарства во избежание ошибки.")
-                    end
-                end
-
-                -- ШАГ 4 & 5: Возврат к койке с лекарством и лечение
-                TeleportTo(bedPos)
-                task.wait(0.35)
-                EquipMedicalTool()
-                task.wait(0.2)
-
-                local bedVec = typeof(bedPos) == "CFrame" and bedPos.Position or bedPos
-                for _, p in pairs(Workspace:GetDescendants()) do
-                    if IsHealPrompt(p) then
-                        local pCF = GetPromptTargetCFrame(p)
-                        if pCF and (pCF.Position - bedVec).Magnitude < 18 then
-                            SafeInteractPrompt(p, 0.5)
-                            task.wait(1.5) -- Процесс лечения больного
-                            break
-                        end
+                        SendNotification("❌ Отмена", "Не найдено верное лекарство для палаты " .. tostring(wardNum) .. "!\nЛечение отменено во избежание гибели.", 3)
                     end
                 end
 
