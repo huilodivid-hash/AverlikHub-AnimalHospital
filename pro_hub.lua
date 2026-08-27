@@ -1413,7 +1413,7 @@ local function RunAverlikHub()
     end
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🎛️ ВКЛАДКИ AVERLIK HUB (ТОЧНОЕ СООТВЕТСТВИЕ ВСЕМ ФУНКЦИЯМ FOXNAME HUB)
+    -- 🎛️ ВКЛАДКИ AVERLIK HUB (АВТОНОМНЫЙ ДВИЖОК)
     -- ══════════════════════════════════════════════════════════════════════════
     local TabMain     = CreateTab("Main", "🏠", "Главная панель и быстрый запуск", 1)
     local TabAuto     = CreateTab("Auto", "💼", "Автоматизация больницы, ресепшена и защиты", 2)
@@ -1425,48 +1425,8 @@ local function RunAverlikHub()
     local TabSettings = CreateTab("Settings", "⚙️", "Темы, цвета и сохранение профилей", 8)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 🔧 МОСТ СВЯЗИ С ДВИЖКОМ FOXNAME
+    -- 🔧 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
     -- ══════════════════════════════════════════════════════════════════════════
-    local function SetFoxnameToggle(queryTitle, targetValue)
-        pcall(function()
-            local genv = getgenv and getgenv() or {}
-            for _, env in pairs({genv, _G, shared}) do
-                if env and env.Fluent and env.Fluent.Options then
-                    for _, opt in pairs(env.Fluent.Options) do
-                        if opt.Title and SafeFind(opt.Title, queryTitle) and opt.SetValue then
-                            opt:SetValue(targetValue)
-                            return true
-                        end
-                    end
-                end
-            end
-
-            local containers = {
-                LocalPlayer:FindFirstChildOfClass("PlayerGui"),
-                pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui") or nil
-            }
-            for _, cont in pairs(containers) do
-                if cont then
-                    for _, obj in pairs(cont:GetDescendants()) do
-                        if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and SafeFind(obj.Text, queryTitle) then
-                            local tf = obj.Parent
-                            if tf then
-                                local btn = tf:FindFirstChildWhichIsA("TextButton") or tf:FindFirstChildWhichIsA("ImageButton") or tf.Parent:FindFirstChildWhichIsA("TextButton")
-                                if btn and getconnections then
-                                    for _, conn in pairs(getconnections(btn.MouseButton1Click or btn.Activated)) do
-                                        conn:Fire()
-                                    end
-                                    return true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-        return false
-    end
-
     local function SkipDoctorDialogue()
         pcall(function()
             local rs = game:GetService("ReplicatedStorage")
@@ -1536,6 +1496,119 @@ local function RunAverlikHub()
                 SendNotification("Шкаф", "Подсказка шкафа не найдена поблизости", 2)
             end
         end)
+    end
+
+    -- АВТО-УБОРКА СЛИЗИ
+    local function CleanSlime()
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled then
+                local act = string.lower(tostring(obj.ActionText or ""))
+                local objT = string.lower(tostring(obj.ObjectText or ""))
+                if SafeFind(act, "clean") or SafeFind(act, "убрать") or SafeFind(act, "вытереть") or SafeFind(objT, "slime") or SafeFind(objT, "слиз") then
+                    local pCF = GetPromptTargetCFrame(obj)
+                    if pCF then
+                        local oldCF = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.CFrame
+                        TeleportTo(pCF)
+                        task.wait(0.2)
+                        SafeInteractPrompt(obj, 0.4)
+                        task.wait(0.4)
+                        if oldCF then TeleportTo(oldCF) end
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- АВТО-ПОЧИНКА КАМЕР
+    local function FixCameras()
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and obj.Enabled then
+                local act = string.lower(tostring(obj.ActionText or ""))
+                local objT = string.lower(tostring(obj.ObjectText or ""))
+                if SafeFind(act, "fix") or SafeFind(act, "чинить") or SafeFind(act, "починить") or SafeFind(objT, "cam") or SafeFind(objT, "камер") then
+                    local pCF = GetPromptTargetCFrame(obj)
+                    if pCF then
+                        local oldCF = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.CFrame
+                        TeleportTo(pCF)
+                        task.wait(0.2)
+                        SafeInteractPrompt(obj, 0.4)
+                        task.wait(0.5)
+                        if oldCF then TeleportTo(oldCF) end
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- АВТО-ЗАКРЫТИЕ ЖАЛЮЗИ ПРИ АНОМАЛИИ
+    local function CheckAnomalyAtReception()
+        local recPos = CustomWaypoints.Reception
+        if not recPos then return end
+        local recVec = typeof(recPos) == "CFrame" and recPos.Position or recPos
+        for _, m in pairs(Workspace:GetDescendants()) do
+            if m:IsA("Model") and m ~= LocalPlayer.Character then
+                local name = string.lower(m.Name)
+                if SafeFind(name, "skinwalker") or SafeFind(name, "anomaly") or SafeFind(name, "monster") or SafeFind(name, "ghost") then
+                    local primary = m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")
+                    if primary and (primary.Position - recVec).Magnitude < 25 then
+                        for _, p in pairs(Workspace:GetDescendants()) do
+                            if p:IsA("ProximityPrompt") and p.Enabled then
+                                local act = string.lower(tostring(p.ActionText or ""))
+                                local objT = string.lower(tostring(p.ObjectText or ""))
+                                if SafeFind(act, "shutter") or SafeFind(act, "жалюз") or SafeFind(objT, "shutter") or SafeFind(objT, "жалюз") or SafeFind(act, "close") then
+                                    SafeInteractPrompt(p, 0.3)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- АВТО-УНИЧТОЖЕНИЕ АНОМАЛИЙ
+    local function DefendAgainstAnomalies()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        for _, m in pairs(Workspace:GetDescendants()) do
+            if m:IsA("Model") and m ~= char and not m:IsDescendantOf(char) then
+                local name = string.lower(m.Name)
+                if SafeFind(name, "skinwalker") or SafeFind(name, "anomaly") or SafeFind(name, "monster") then
+                    local primary = m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")
+                    if primary and (primary.Position - root.Position).Magnitude < 15 then
+                        for _, p in pairs(m:GetDescendants()) do
+                            if p:IsA("ProximityPrompt") and p.Enabled then
+                                SafeInteractPrompt(p, 0.2)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- АВТО-ПОМОЩЬ ПАЦИЕНТАМ
+    local function HelpFallenPatients()
+        for _, p in pairs(Workspace:GetDescendants()) do
+            if p:IsA("ProximityPrompt") and p.Enabled and not IsDoorOrTrash(p) then
+                local act = string.lower(tostring(p.ActionText or ""))
+                local objT = string.lower(tostring(p.ObjectText or ""))
+                if SafeFind(act, "help") or SafeFind(act, "помочь") or SafeFind(act, "поднять") or SafeFind(objT, "patient") or SafeFind(objT, "пациент") then
+                    local pCF = GetPromptTargetCFrame(p)
+                    if pCF then
+                        TeleportTo(pCF)
+                        task.wait(0.2)
+                        SafeInteractPrompt(p, 0.4)
+                        task.wait(0.5)
+                        break
+                    end
+                end
+            end
+        end
     end
 
     -- ESP СИСТЕМА
@@ -1694,11 +1767,9 @@ local function RunAverlikHub()
     TabMain:CreateToggle("Скип диалогов доктора (RE/SetDoctorDialogueSkipped)", "Автоматически пропускает реплики доктора", Config.SkipDoctorDialogue, function(val)
         Config.SkipDoctorDialogue = val
         if val then SkipDoctorDialogue() end
-        SendNotification("Диалог", val and "Авто-скип диалогов включен!" or "Авто-скип диалогов выключен!", 2)
     end)
     TabMain:CreateToggle("Авто-поддержание рассудка (Keep Sanity 100%)", "Пьет кофе из автомата при падении рассудка", Config.AutoKeepSanity, function(val)
         Config.AutoKeepSanity = val
-        SendNotification("Рассудок", val and "Авто-рассудок включен!" or "Авто-рассудок выключен!", 2)
     end)
     TabMain:CreateButton("☕ Выпить кофе сейчас (Рассудок на 100%)", false, function()
         task.spawn(function()
@@ -1720,43 +1791,29 @@ local function RunAverlikHub()
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
-    -- 2. ВКЛАДКА: AUTO (АВТОМАТИЗАЦИЯ — ТОЧНЫЙ СПИСОК FOXNAME)
+    -- 2. ВКЛАДКА: AUTO (АВТОМАТИЗАЦИЯ — ВСЕ 7 ФУНКЦИЙ)
     -- ══════════════════════════════════════════════════════════════════════════
     TabAuto:CreateSection("Автоматизация процессов")
     TabAuto:CreateToggle("Auto Check In", "Авто-прием и регистрация клиентов на ресепшене", Config.AutoRegistration, function(val)
         Config.AutoRegistration = val
-        SetFoxnameToggle("Auto Check In", val)
-        SendNotification("Auto", val and "Auto Check In включен!" or "Auto Check In выключен!", 2)
     end)
     TabAuto:CreateToggle("Auto Treatment", "Автоматический цикл лечения пациентов в палатах 1 - 5", Config.AutoHospitalCycle, function(val)
         Config.AutoHospitalCycle = val
-        SetFoxnameToggle("Auto Treatment", val)
-        SendNotification("Auto", val and "Auto Treatment запущен!" or "Auto Treatment остановлен!", 2)
     end)
     TabAuto:CreateToggle("Auto Clean Slime", "Auto clean slime when the slime appears", Config.AutoCleanSlime or false, function(val)
         Config.AutoCleanSlime = val
-        SetFoxnameToggle("Auto Clean Slime", val)
-        SendNotification("Auto", val and "Auto Clean Slime включен!" or "Auto Clean Slime выключен!", 2)
     end)
     TabAuto:CreateToggle("Auto Fix Cam", "Auto press camera fix prompts when cameras break", Config.AutoFixCam or false, function(val)
         Config.AutoFixCam = val
-        SetFoxnameToggle("Auto Fix Cam", val)
-        SendNotification("Auto", val and "Auto Fix Cam включен!" or "Auto Fix Cam выключен!", 2)
     end)
     TabAuto:CreateToggle("Auto Shutter On Anomaly", "Auto Close Shutter when Anomaly/Skinwalker is in the counter", Config.AutoShutterOnAnomaly or false, function(val)
         Config.AutoShutterOnAnomaly = val
-        SetFoxnameToggle("Auto Shutter On Anomaly", val)
-        SendNotification("Auto", val and "Auto Shutter On Anomaly включен!" or "Auto Shutter On Anomaly выключен!", 2)
     end)
     TabAuto:CreateToggle("Auto Kill Anomaly When Treatment", "Авто-ликвидация аномалий во время лечения", Config.AutoKillAnomaly or false, function(val)
         Config.AutoKillAnomaly = val
-        SetFoxnameToggle("Auto Kill Anomaly", val)
-        SendNotification("Auto", val and "Auto Kill Anomaly включен!" or "Auto Kill Anomaly выключен!", 2)
     end)
     TabAuto:CreateToggle("Auto Help Patient", "Автоматическая помощь упавшим/болеющим пациентам", Config.AutoHelpPatient or false, function(val)
         Config.AutoHelpPatient = val
-        SetFoxnameToggle("Auto Help Patient", val)
-        SendNotification("Auto", val and "Auto Help Patient включен!" or "Auto Help Patient выключен!", 2)
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
@@ -1921,6 +1978,18 @@ local function RunAverlikHub()
     TabSettings:CreateButton("💾 Сохранить все 32 точки (Waypoints.json)", false, function()
         SaveWaypointsToFile()
         SendNotification("Waypoints", "32 точки сохранены!", 2)
+    end)
+
+    -- Фоновые обработчики дополнительных функций Auto
+    task.spawn(function()
+        while true do
+            task.wait(2.5)
+            if Config.AutoCleanSlime then pcall(CleanSlime) end
+            if Config.AutoFixCam then pcall(FixCameras) end
+            if Config.AutoShutterOnAnomaly then pcall(CheckAnomalyAtReception) end
+            if Config.AutoKillAnomaly then pcall(DefendAgainstAnomalies) end
+            if Config.AutoHelpPatient then pcall(HelpFallenPatients) end
+        end
     end)
 
     -- ══════════════════════════════════════════════════════════════════════════
@@ -2624,35 +2693,8 @@ local function RunAverlikHub()
         end
     end)
 
-    -- 🚀 ФОНОВЫЙ ЗАПУСК ДВИЖКА FN ANIMAL HOSPITAL С АВТО-СКРЫТИЕМ ЕГО СТОРОННЕГО UI
-    task.spawn(function()
-        pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/caomod2077/Script/refs/heads/main/FN_AnimalHospital.lua"))()
-        end)
-    end)
-
-    -- Авто-скрытие сторонних окон, чтобы на экране оставался ТОЛЬКО наш красивый Averlik Hub GUI
-    task.spawn(function()
-        local CoreGui = pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui") or nil
-        local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        while true do
-            task.wait(0.8)
-            pcall(function()
-                for _, container in pairs({PlayerGui, CoreGui}) do
-                    if container then
-                        for _, gui in pairs(container:GetChildren()) do
-                            if gui:IsA("ScreenGui") and gui.Name ~= "AverlikHub_MainGui" and gui.Name ~= "RobloxGui" and gui.Name ~= "Chat" and gui.Name ~= "InGameMenu" and gui.Name ~= "TouchGui" and gui.Name ~= "PlayerList" and gui.Name ~= "PurchasePrompt" then
-                                gui.Enabled = false
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end)
-
-    SendNotification("Averlik Hub", "Animal Hospital: Averlik Hub GUI активен!", 4)
-    print("[Averlik Hub] Averlik Hub GUI + FN Engine успешно запущены!")
+    SendNotification("Averlik Hub", "Animal Hospital: Averlik Hub активен!", 4)
+    print("[Averlik Hub] Averlik Hub успешно инициализирован!")
 end
 
 local ok, err = pcall(RunAverlikHub)
