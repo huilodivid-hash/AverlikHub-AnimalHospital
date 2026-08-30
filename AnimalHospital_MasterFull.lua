@@ -641,14 +641,22 @@ local function TreatRoom7Emergency()
     if not room7 then return false end
 
     local minigame = room7:FindFirstChild("Minigame")
-    local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+    if not minigame then return false end
+
+    local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
     local bedPP2 = inBed and inBed:FindFirstChild("PP2")
-    local bedPP = inBed and inBed:FindFirstChild("PP")
+    local needed = ResolveNeededTreatmentItems("Room7")
+    local patient = GetPatientInRoom("Room7", Positions.Room7_Bed)
+
+    if #needed == 0 and not (bedPP2 and bedPP2.Enabled) and not patient then
+        return false
+    end
+
+    _G.AH_IsTreating = true
 
     if bedPP2 and bedPP2.Enabled then
         Log("AutoTreatment", "Found patient for room (or start prompt)", { prompt = bedPP2:GetFullName(), room = "Room7" })
-        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.Current", npcPrompt = bedPP2:GetFullName(), room = "Room7" })
-        Log("AutoTreatment", "Pressing bed prompt", { prompt = bedPP2:GetFullName(), room = "Room7" })
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", npcPrompt = bedPP2:GetFullName(), room = "Room7" })
 
         -- 1. Bed Start
         TeleportAndFirePrompt(bedPP2, Positions.Room7_Bed, 0.4)
@@ -656,13 +664,15 @@ local function TreatRoom7Emergency()
 
         -- 2. Monitor Process
         local monitorPP2 = minigame:FindFirstChild("Monitor") and minigame.Monitor:FindFirstChild("PP2")
-        if monitorPP2 and monitorPP2.Enabled then
+        if monitorPP2 then
+            monitorPP2.Enabled = true
             Log("AutoTreatment", "Pressing monitor process prompt", { prompt = monitorPP2:GetFullName(), retryLeft = 1, room = "Room7" })
             TeleportAndFirePrompt(monitorPP2, Positions.Room7_Monitor, 0.4)
             task.wait(2.5)
         end
 
         -- 3. Prepare Patient
+        bedPP2 = inBed and inBed:FindFirstChild("PP2")
         if bedPP2 and bedPP2.Enabled and (bedPP2.ActionText or ""):find("Prepare") then
             Log("AutoTreatment", "Room7: pressing BedPP2 (Prepare Patient)", { prompt = bedPP2:GetFullName() })
             TeleportAndFirePrompt(bedPP2, Positions.Room7_Bed, 0.4)
@@ -671,32 +681,74 @@ local function TreatRoom7Emergency()
 
         -- 4. Printed X-Ray Collect
         local printedPP = minigame:FindFirstChild("PrintedXRay") and minigame.PrintedXRay:FindFirstChild("PP")
-        if printedPP and printedPP.Enabled then
+        if printedPP then
+            printedPP.Enabled = true
             Log("AutoTreatment", "Pressing xresult prompt", { prompt = printedPP:GetFullName(), room = "Room7" })
             TeleportAndFirePrompt(printedPP, Positions.Room7_PrintedXRay, 0.4)
             task.wait(1.5)
         end
 
-        -- 5. Deliver Medication
-        local meds = { "Scalpel", "Ointment", "Bandages", "Medicine" }
-        for _, med in ipairs(meds) do
-            GrabItemUntilInInventory(med, "Room7")
-            if GetItemCount(med) > 0 then
-                UseInventoryTool(med)
+        needed = ResolveNeededTreatmentItems("Room7")
+    end
+
+    -- 5. Доставка лекарств по рецепту ТВ Палаты 7
+    if #needed > 0 then
+        local attempt = 0
+        while _G.AutoTreatment and not StopCheck() do
+            needed = ResolveNeededTreatmentItems("Room7")
+            if #needed == 0 then break end
+
+            attempt = attempt + 1
+            local currentItem = needed[1]
+
+            local itemsList = {}
+            for idx, it in ipairs(needed) do table.insert(itemsList, string.format("%d=%s", idx, it)) end
+            local neededStr = "{" .. table.concat(itemsList, ", ") .. "}"
+
+            Log("AutoTreatment", "Treatment item loop", {
+                attempt = attempt,
+                currentItem = currentItem,
+                isSkinwalker = "false",
+                medicineCount = GetMedicineItemCount(),
+                neededItems = neededStr,
+                npc = patient and patient:GetFullName() or "Room7.Patient",
+                room = "Room7",
+                shouldKill = "false"
+            })
+
+            if GetItemCount(currentItem) == 0 then
+                Log("Inventory", "Tool not found in inventory", { item = currentItem })
+                GrabItemUntilInInventory(currentItem, "Room7")
+            end
+
+            if GetItemCount(currentItem) > 0 then
+                UseInventoryTool(currentItem)
                 TeleportPlayer(Positions.Room7_Bed)
                 task.wait(0.2)
 
-                local targetBedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
-                if targetBedPP then
-                    PressPromptNearbyUntil(targetBedPP, 0.15, 2.0, function()
-                        return GetItemCount(med) == 0
+                local treatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
+                if treatPP then
+                    Log("AutoTreatment", "Delivering treatment item to bed", {
+                        prompt = treatPP:GetFullName(),
+                        room = "Room7",
+                        targetItem = currentItem
+                    })
+
+                    PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
+                        return GetItemCount(currentItem) == 0
                     end)
                 end
                 task.wait(0.4)
             end
         end
+
+        if patient then _G.AH_TreatedPatients[patient] = true end
+        _G.AH_IsTreating = false
+        Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Room7.Patient", room = "Room7" })
         return true
     end
+
+    _G.AH_IsTreating = false
     return false
 end
 
