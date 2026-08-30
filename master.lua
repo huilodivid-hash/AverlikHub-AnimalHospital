@@ -48,13 +48,19 @@ _G.AH_ItemList = {
     "Bandages", "Pills", "Cough Syrup", "Herbs", "Thermometer",
     "Antibiotics", "Eye Drops", "First Aid Kit", "Medicine Bottle", "Plaster", "Ointment"
 }
+
+_G.AH_TreatedPatients = setmetatable({}, { __mode = "k" })
+
 _G.AH_SurgeryItemList = {
     "Scalpel", "IV Drops", "Scissors", "Organ", "Transplant", "Medkit", "Medicine", "Bandages", "Ointment"
 }
 
 _G.AH_ItemSet = {}
 for _, it in ipairs(_G.AH_ItemList) do _G.AH_ItemSet[it] = true end
-for _, it in ipairs(_G.AH_SurgeryItemList) do _G.AH_ItemSet[it] = true end
+for _, it in ipairs(
+_G.AH_TreatedPatients = setmetatable({}, { __mode = "k" })
+
+_G.AH_SurgeryItemList) do _G.AH_ItemSet[it] = true end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
 -- 📜 2. CONSOLE LOGGER (FORMAT MATCHING 100% TO LIVE LOGS)
@@ -590,6 +596,7 @@ local function TreatRoom8Surgery()
         end
     end
 
+    if patient then _G.AH_TreatedPatients[patient] = true end
     Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", room = "Room8" })
     return true
 end
@@ -841,6 +848,7 @@ local function TreatMedicalRooms()
                     end
                 end
 
+                if patient then _G.AH_TreatedPatients[patient] = true end
                 Log("AutoTreatment", "Finished patient treatment", { npc = patientName, room = roomName })
                 return true
             else
@@ -962,6 +970,41 @@ end
 local function GetPatientAtCounter()
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return nil end
+
+    local counterSpot = Vector3.new(-103.91, 3.41, -0.40)
+    local CollectionService = game:GetService("CollectionService")
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
+            -- Игнорируем вылеченных / выписанных / уходящих пациентов
+            if _G.AH_TreatedPatients and _G.AH_TreatedPatients[npc] then continue end
+            if npc:GetAttribute("Treated") == true or npc:GetAttribute("Cured") == true or npc:GetAttribute("Leaving") == true or npc:GetAttribute("Discharged") == true then
+                continue
+            end
+
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+            if root then
+                local dist = (root.Position - counterSpot).Magnitude
+                -- Строгий радиус: только если NPC стоит непосредственно перед окном регистрации (<= 7.5 стадсов)
+                if dist <= 7.5 then
+                    local isWaiting = false
+                    if npc:GetAttribute("IsPatient") == true or npc:GetAttribute("IsVisitor") == true or npc:GetAttribute("Skinwalker") == true then
+                        isWaiting = true
+                    elseif CollectionService and (CollectionService:HasTag(npc, "VisitorAtCheckIn") or CollectionService:HasTag(npc, "VisitorAtCheckIn2")) then
+                        isWaiting = true
+                    elseif root.AssemblyLinearVelocity.Magnitude < 1.5 then
+                        isWaiting = true
+                    end
+
+                    if isWaiting then
+                        return npc
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
 
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
