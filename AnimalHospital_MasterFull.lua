@@ -435,51 +435,60 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════════
 -- 🧰 7. ITEM GRABBER (SHELVES & SURGERY STASH)
 -- ══════════════════════════════════════════════════════════════════════════════════════
-local function GetItemPrompt(itemName)
+local function GetItemPrompt(itemName, isSurgery)
     local target = NormalizeName(itemName)
 
-    -- 1. Room 8 Surgery Medicine Stash
-    local room8Med = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8") and Workspace.Rooms.Emergency.Room8:FindFirstChild("Minigame") and Workspace.Rooms.Emergency.Room8.Minigame:FindFirstChild("Medicine")
-    if room8Med then
-        for _, d in ipairs(room8Med:GetDescendants()) do
-            if d:IsA("ProximityPrompt") and d.Enabled then
-                local act = NormalizeName(d.ActionText or "")
-                local pName = NormalizeName(d.Parent and d.Parent.Name or "")
-                if act:find(target) or pName:find(target) then return d end
+    -- 1. Проверяем полочки хирургии Палаты 8, если требуется операция
+    if isSurgery or itemName == "Scalpel" or itemName == "Scissors" or itemName == "Organ" or itemName == "Transplant" then
+        local room8Med = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8") and Workspace.Rooms.Emergency.Room8:FindFirstChild("Minigame") and Workspace.Rooms.Emergency.Room8.Minigame:FindFirstChild("Medicine")
+        if room8Med then
+            for _, d in ipairs(room8Med:GetDescendants()) do
+                if d:IsA("ProximityPrompt") and d.Enabled then
+                    local pName = NormalizeName(d.Parent and d.Parent.Name or "")
+                    local act = NormalizeName(d.ActionText or "")
+                    if pName == target or pName:find(target) or act == target or act:find(target) then
+                        return d
+                    end
+                end
             end
         end
     end
 
-    -- 2. Workspace.Model.Items
-    local itemsFolder = Workspace:FindFirstChild("Model") and Workspace.Model:FindFirstChild("Items")
-    if itemsFolder then
-        for _, itemModel in ipairs(itemsFolder:GetChildren()) do
-            local mNorm = NormalizeName(itemModel.Name)
-            if mNorm == target or mNorm:find(target) or target:find(mNorm) then
-                local pp = itemModel:FindFirstChild("PP") or itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if pp and pp.Enabled then return pp end
-            end
-        end
-    end
-
-    -- 3. Global Scan
+    -- 2. Глобальный поиск по всем ProximityPrompt в Workspace с проверкой родителей
     for _, prompt in ipairs(Workspace:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") and prompt.Enabled then
             local act = NormalizeName(prompt.ActionText or "")
             local obj = NormalizeName(prompt.ObjectText or "")
-            local par = NormalizeName(prompt.Parent and prompt.Parent.Name or "")
-            if act:find(target) or obj:find(target) or par:find(target) then
+
+            local match = false
+            if act == target or act:find(target) or obj == target or obj:find(target) then
+                match = true
+            else
+                local curr = prompt.Parent
+                for _ = 1, 5 do
+                    if not curr or curr == Workspace then break end
+                    local cName = NormalizeName(curr.Name)
+                    if cName == target or cName:find(target) or (target:find(cName) and #cName >= 4) then
+                        match = true
+                        break
+                    end
+                    curr = curr.Parent
+                end
+            end
+
+            if match then
                 return prompt
             end
         end
     end
+
     return nil
 end
 
 local function GrabItemUntilInInventory(itemName, roomName)
     if GetItemCount(itemName) > 0 then return true end
 
-    -- Prevent Inventory Overflow
+    -- Очистка инвентаря от лишних предметов при заполнении
     if GetMedicineItemCount() >= 3 then
         local wrongTool = nil
         for _, container in ipairs(InventoryContainers()) do
@@ -493,111 +502,43 @@ local function GrabItemUntilInInventory(itemName, roomName)
         if wrongTool then DiscardToolAtTrash(wrongTool) end
     end
 
-    local prompt = GetItemPrompt(itemName)
-    local shelfPos = Positions["Room8_" .. itemName:gsub("%s+", "")] or Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")] or (prompt and GetPromptPartPosition(prompt))
+    local isSurgery = (roomName == "Room8")
+    local prompt = GetItemPrompt(itemName, isSurgery)
+    local shelfPos = (prompt and GetPromptPartPosition(prompt)) or Positions[itemName:gsub("%s+", "")] or Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions["Room8_" .. itemName:gsub("%s+", "")]
 
     if prompt and shelfPos then
         Log("AutoTreatment", "Grabbing treatment item", {
             countBefore = GetItemCount(itemName),
             prompt = prompt:GetFullName(),
-            room = roomName or "Room8",
+            room = roomName or "Room1",
             targetItem = itemName
         })
 
-        TeleportPlayer(shelfPos)
-        task.wait(0.15)
+        TeleportPlayer(shelfPos + Vector3.new(0, 1.0, 2.0))
+        task.wait(0.2)
 
         local countBefore = GetItemCount(itemName)
-        local success = PressPromptNearbyUntil(prompt, 0.15, 2.5, function()
+        PressPromptNearbyUntil(prompt, 0.12, 2.0, function()
             return GetItemCount(itemName) > countBefore
         end)
-        task.wait(0.2)
-        return success
-    end
-
-    return false
-end
-
--- ══════════════════════════════════════════════════════════════════════════════════════
-
-
-local function IsStaffNpc(npc)
-    if not npc then return true end
-    local name = string.lower(tostring(npc.Name or ""))
-    if name == "doctor" or name:find("doctor") or name == "barney" or name:find("barney") or name == "nurse" or name == "janitor" or name == "security" then
-        return true
-    end
-    if npc:GetAttribute("IsStaff") == true or npc:GetAttribute("Doctor") == true then
-        return true
-    end
-    return false
-end
-
-local function IsValidPatient(npc)
-    if not npc or not npc:IsA("Model") or npc == LocalPlayer.Character then return false end
-    if IsStaffNpc(npc) then return false end
-    if _G.AH_TreatedPatients and _G.AH_TreatedPatients[npc] then return false end
-    if npc:GetAttribute("Treated") == true or npc:GetAttribute("Cured") == true or npc:GetAttribute("Discharged") == true or npc:GetAttribute("Leaving") == true then
-        return false
-    end
-
-    if npc:GetAttribute("IsPatient") == true or npc:GetAttribute("IsVisitor") == true or npc:GetAttribute("InBed") == true or npc:GetAttribute("Skinwalker") == true then
-        return true
-    end
-
-    local pp = npc:FindFirstChild("PP") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if pp and pp.Enabled then
-        local act = string.lower(pp.ActionText or "")
-        if act:find("dna") or act:find("sample") or act:find("help") or act:find("treat") or act:find("talk") or act:find("sleep") then
-            return true
-        end
-    end
-
-    return false
-end
-
-local function GetPatientInRoom(roomName, bedPos)
-    local npcsFolder = Workspace:FindFirstChild("NPCs")
-    if not npcsFolder then return nil, nil end
-
-    for _, npc in ipairs(npcsFolder:GetChildren()) do
-        if npc:IsA("Model") and IsValidPatient(npc) then
-            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            local isNear = false
-            if root and bedPos then
-                local dist = (root.Position - bedPos).Magnitude
-                if dist <= 18 then
-                    isNear = true
-                end
-            end
-            if npc:GetAttribute("InBed") == true or npc:GetAttribute("Room") == roomName then
-                isNear = true
-            end
-
-            if isNear then
-                local bestPrompt = nil
-                for _, prompt in ipairs(npc:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                        local act = string.lower(prompt.ActionText or "")
-                        if act:find("dna") or act:find("sample") or act:find("sleep") then
-                            bestPrompt = prompt
-                            break
-                        elseif not bestPrompt then
-                            bestPrompt = prompt
-                        end
-                    end
-                end
-                return npc, bestPrompt
+        task.wait(0.3)
+    else
+        -- Фоллбэк: телепорт по калиброванным координатам шкафа
+        if shelfPos then
+            Log("AutoTreatment", "Teleporting to fallback shelf pos", { item = itemName, pos = tostring(shelfPos) })
+            TeleportPlayer(shelfPos + Vector3.new(0, 1.0, 2.0))
+            task.wait(0.3)
+            prompt = GetItemPrompt(itemName, isSurgery)
+            if prompt then
+                FirePrompt(prompt)
+                task.wait(0.4)
             end
         end
     end
-    return nil, nil
+
+    return GetItemCount(itemName) > 0
 end
 
--- 🩺 8. MULTI-WARD AUTO TREATMENT ROUTINES (AUTHENTICATED BY LIVE LOGS)
--- ══════════════════════════════════════════════════════════════════════════════════════
-
--- Палата 8 (Хирургия)
 local function TreatRoom8Surgery()
     _G.AH_IsTreating = true
     local room8 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8")
