@@ -375,8 +375,12 @@ local function IsItemChecked(guiItem)
 end
 
 local function ResolveNeededTreatmentItems(roomName)
-    local folder = GetRoomFolder(roomName)
-    local roomInst = folder and folder:FindFirstChild(roomName)
+    local rooms = Workspace:FindFirstChild("Rooms")
+    if not rooms then return {} end
+
+    local folder = rooms:FindFirstChild("Medical") or rooms:FindFirstChild("Emergency")
+    local roomInst = (rooms:FindFirstChild("Medical") and rooms.Medical:FindFirstChild(roomName))
+        or (rooms:FindFirstChild("Emergency") and rooms.Emergency:FindFirstChild(roomName))
     if not roomInst then return {} end
 
     local invGui = nil
@@ -387,8 +391,15 @@ local function ResolveNeededTreatmentItems(roomName)
     local needed = {}
     if invGui then
         for _, child in ipairs(invGui:GetChildren()) do
-            if child:IsA("GuiObject") and child.Visible and not IsItemChecked(child) then
-                table.insert(needed, child.Name)
+            if child:IsA("GuiObject") and child.Visible then
+                local check = child:FindFirstChild("check")
+                local isDone = false
+                if check and check.Visible == true then
+                    isDone = true
+                end
+                if not isDone then
+                    table.insert(needed, child.Name)
+                end
             end
         end
     end
@@ -788,130 +799,180 @@ local function TreatRoom6Emergency()
     return false
 end
 
--- Палаты 1 - 5 (Медицинские койки: ДНК ➔ Монитор ➔ Рецепт с ТВ ➔ Лечение)
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 🏥 ПАЛАТЫ 1 - 5 (workspace.Rooms.Medical.Room1..5: Bed.InBed + TV.Screen.UI.Report.inv)
+-- ══════════════════════════════════════════════════════════════════════════════════
 local function TreatMedicalRooms()
-    _G.AH_IsTreating = true
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
-    if not medical then _G.AH_IsTreating = false return false end
+    if not medical then return false end
 
     for i = 1, 5 do
         local roomName = "Room" .. tostring(i)
-        local room = medical:FindFirstChild(roomName) or medical:FindFirstChild("Ward" .. tostring(i))
+        local room = medical:FindFirstChild(roomName)
         if room then
-            local bedPos = Positions[roomName .. "_Bed"] or Positions["Ward" .. tostring(i) .. "_Bed"]
-            local devicePos = Positions[roomName .. "_Device"] or Positions["Ward" .. tostring(i) .. "_Device"]
-
             local minigame = room:FindFirstChild("Minigame")
-            local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
-            local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
+            local bed = minigame and minigame:FindFirstChild("Bed")
+            local inBed = bed and bed:FindFirstChild("InBed")
+            local monitor = minigame and minigame:FindFirstChild("Monitor")
+            local tvInv = nil
+            pcall(function()
+                tvInv = minigame.TV.Screen.UI.Report.inv
+            end)
 
-            -- 1. Поиск реального пациента и его ДНК-промпта
-            local patient, dnaPrompt = GetPatientInRoom(roomName, bedPos)
+            if inBed then
+                local inBedPos = (inBed:IsA("BasePart") and inBed.Position) or (inBed:GetPivot().Position)
 
-            if patient or (bedPP and bedPP.Enabled) then
-                local patientName = patient and patient:GetFullName() or "Workspace.NPCs.Patient"
-                local activePrompt = dnaPrompt or bedPP
+                -- 1. Проверяем наличие пациента на койке inBed
+                local patient = nil
+                local dnaPrompt = nil
 
-                Log("AutoTreatment", "Found patient for room (or start prompt)", {
-                    npc = patientName,
-                    prompt = activePrompt and activePrompt:GetFullName() or roomName,
-                    room = roomName
-                })
-                Log("AutoTreatment", "Starting patient treatment", {
-                    emergency = "false",
-                    npc = patientName,
-                    npcPrompt = activePrompt and activePrompt:GetFullName() or roomName,
-                    room = roomName
-                })
-
-                -- 2. Взятие ДНК-пробы (Take DNA sample)
-                if dnaPrompt and dnaPrompt.Enabled then
-                    Log("AutoTreatment", "Taking DNA sample", {
-                        npc = patientName,
-                        prompt = dnaPrompt:GetFullName(),
-                        room = roomName
-                    })
-                    TeleportAndFirePrompt(dnaPrompt, bedPos, 0.4)
-                    task.wait(0.5)
-                end
-
-                -- 3. Запуск обработки на мониторе (Process Results)
-                local monitor = minigame and minigame:FindFirstChild("Monitor")
-                local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
-                if monitorPP2 then
-                    monitorPP2.Enabled = true
-                    Log("AutoTreatment", "Pressing monitor process prompt", {
-                        prompt = monitorPP2:GetFullName(),
-                        retryLeft = 1,
-                        room = roomName
-                    })
-                    TeleportAndFirePrompt(monitorPP2, devicePos or GetPromptPartPosition(monitorPP2), 0.4)
-                    task.wait(2.5)
-                end
-
-                -- 4. Считывание ТВ-экрана и доставка лекарств
-                local treatPP = (inBed and inBed:FindFirstChild("PP")) or (inBed and inBed:FindFirstChild("PP2")) or (inBed and inBed:FindFirstChildWhichIsA("ProximityPrompt", true)) or dnaPrompt
-                local attempt = 0
-
-                while _G.AutoTreatment and not StopCheck() do
-                    local needed = ResolveNeededTreatmentItems(roomName)
-                    if #needed == 0 and room.Name ~= roomName then
-                        needed = ResolveNeededTreatmentItems(room.Name)
-                    end
-                    if #needed == 0 then break end
-
-                    attempt = attempt + 1
-                    local currentItem = needed[1]
-
-                    local itemsList = {}
-                    for idx, it in ipairs(needed) do table.insert(itemsList, string.format("%d=%s", idx, it)) end
-                    local neededStr = "{" .. table.concat(itemsList, ", ") .. "}"
-
-                    Log("AutoTreatment", "Treatment item loop", {
-                        attempt = attempt,
-                        currentItem = currentItem,
-                        isSkinwalker = "false",
-                        medicineCount = GetMedicineItemCount(),
-                        neededItems = neededStr,
-                        npc = patientName,
-                        room = roomName,
-                        shouldKill = "false"
-                    })
-
-                    if GetItemCount(currentItem) == 0 then
-                        Log("Inventory", "Tool not found in inventory", { item = currentItem })
-                        GrabItemUntilInInventory(currentItem, roomName)
-                    end
-
-                    if GetItemCount(currentItem) > 0 then
-                        UseInventoryTool(currentItem)
-                        TeleportPlayer(bedPos)
-                        task.wait(0.2)
-
-                        if treatPP then
-                            Log("AutoTreatment", "Delivering treatment item to bed", {
-                                prompt = treatPP:GetFullName(),
-                                room = roomName,
-                                targetItem = currentItem
-                            })
-
-                            PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
-                                return GetItemCount(currentItem) == 0
-                            end)
+                -- Проверяем промпты внутри InBed
+                for _, p in ipairs(inBed:GetDescendants()) do
+                    if p:IsA("ProximityPrompt") and p.Enabled then
+                        local act = string.lower(p.ActionText or "")
+                        if act:find("dna") or act:find("sample") then
+                            dnaPrompt = p
+                        elseif not dnaPrompt then
+                            dnaPrompt = p
                         end
-                        task.wait(0.4)
                     end
                 end
 
-                if attempt > 0 then
-                    if patient then _G.AH_TreatedPatients[patient] = true end
-                    _G.AH_IsTreating = false
-                    Log("AutoTreatment", "Finished patient treatment", { npc = patientName, room = roomName })
-                    return true
+                -- Ищем NPC в Workspace.NPCs рядом с inBed
+                local npcsFolder = Workspace:FindFirstChild("NPCs")
+                if npcsFolder then
+                    for _, npc in ipairs(npcsFolder:GetChildren()) do
+                        if npc:IsA("Model") and IsValidPatient(npc) then
+                            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+                            if root then
+                                local dist = (root.Position - inBedPos).Magnitude
+                                if dist <= 12 then
+                                    patient = npc
+                                    for _, p in ipairs(npc:GetDescendants()) do
+                                        if p:IsA("ProximityPrompt") and p.Enabled then
+                                            local act = string.lower(p.ActionText or "")
+                                            if act:find("dna") or act:find("sample") then
+                                                dnaPrompt = p
+                                                break
+                                            elseif not dnaPrompt then
+                                                dnaPrompt = p
+                                            end
+                                        end
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    end
                 end
-            else
-                Log("AutoTreatment", "Skipping inactive recovery room", { room = roomName })
+
+                -- Если на койке есть пациент или активный промпт
+                if patient or dnaPrompt then
+                    _G.AH_IsTreating = true
+                    local patientName = patient and patient:GetFullName() or "Workspace.NPCs.Patient"
+
+                    Log("AutoTreatment", "Found patient for room (or start prompt)", {
+                        npc = patientName,
+                        prompt = dnaPrompt and dnaPrompt:GetFullName() or inBed:GetFullName(),
+                        room = roomName
+                    })
+                    Log("AutoTreatment", "Starting patient treatment", {
+                        emergency = "false",
+                        npc = patientName,
+                        npcPrompt = dnaPrompt and dnaPrompt:GetFullName() or inBed:GetFullName(),
+                        room = roomName
+                    })
+
+                    -- Шаг 2. Забор ДНК (Take DNA sample), если активен
+                    if dnaPrompt and dnaPrompt.Enabled and string.lower(dnaPrompt.ActionText or ""):find("dna") then
+                        Log("AutoTreatment", "Taking DNA sample", {
+                            npc = patientName,
+                            prompt = dnaPrompt:GetFullName(),
+                            room = roomName
+                        })
+                        TeleportPlayer(inBedPos + Vector3.new(0, 1.5, 0))
+                        task.wait(0.2)
+                        FirePrompt(dnaPrompt)
+                        task.wait(0.5)
+                    end
+
+                    -- Шаг 3. Обработка на мониторе палаты (Process Results)
+                    local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
+                    if monitorPP2 then
+                        monitorPP2.Enabled = true
+                        local monPos = GetPromptPartPosition(monitorPP2) or Positions[roomName .. "_Device"]
+                        Log("AutoTreatment", "Pressing monitor process prompt", {
+                            prompt = monitorPP2:GetFullName(),
+                            retryLeft = 1,
+                            room = roomName
+                        })
+                        if monPos then TeleportPlayer(monPos + Vector3.new(0, 1.5, 0)) end
+                        task.wait(0.2)
+                        FirePrompt(monitorPP2)
+                        task.wait(2.5)
+                    end
+
+                    -- Шаг 4. Считывание списка лекарств из TV.Screen.UI.Report.inv и пошаговая доставка
+                    local attempt = 0
+                    while _G.AutoTreatment and not StopCheck() do
+                        local needed = ResolveNeededTreatmentItems(roomName)
+                        if #needed == 0 then break end
+
+                        attempt = attempt + 1
+                        local currentItem = needed[1]
+
+                        local itemsList = {}
+                        for idx, it in ipairs(needed) do table.insert(itemsList, string.format("%d=%s", idx, it)) end
+                        local neededStr = "{" .. table.concat(itemsList, ", ") .. "}"
+
+                        Log("AutoTreatment", "Treatment item loop", {
+                            attempt = attempt,
+                            currentItem = currentItem,
+                            isSkinwalker = "false",
+                            medicineCount = GetMedicineItemCount(),
+                            neededItems = neededStr,
+                            npc = patientName,
+                            room = roomName,
+                            shouldKill = "false"
+                        })
+
+                        if GetItemCount(currentItem) == 0 then
+                            Log("Inventory", "Tool not found in inventory", { item = currentItem })
+                            GrabItemUntilInInventory(currentItem, roomName)
+                        end
+
+                        if GetItemCount(currentItem) > 0 then
+                            UseInventoryTool(currentItem)
+                            TeleportPlayer(inBedPos + Vector3.new(0, 1.5, 0))
+                            task.wait(0.2)
+
+                            -- Ищем целевой промпт для отдачи лекарства на InBed
+                            local treatPP = inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true) or (patient and patient:FindFirstChildWhichIsA("ProximityPrompt", true))
+                            if treatPP then
+                                Log("AutoTreatment", "Delivering treatment item to bed", {
+                                    prompt = treatPP:GetFullName(),
+                                    room = roomName,
+                                    targetItem = currentItem
+                                })
+
+                                PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
+                                    return GetItemCount(currentItem) == 0
+                                end)
+                            end
+                            task.wait(0.4)
+                        end
+                    end
+
+                    if attempt > 0 or (tvInv and #ResolveNeededTreatmentItems(roomName) == 0) then
+                        if patient then _G.AH_TreatedPatients[patient] = true end
+                        _G.AH_IsTreating = false
+                        Log("AutoTreatment", "Finished patient treatment", { npc = patientName, room = roomName })
+                        return true
+                    end
+                else
+                    Log("AutoTreatment", "Skipping inactive recovery room", { room = roomName })
+                end
             end
         end
     end
