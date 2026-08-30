@@ -75,10 +75,7 @@ _G.AH_SurgeryItemList = {
 
 _G.AH_ItemSet = {}
 for _, it in ipairs(_G.AH_ItemList) do _G.AH_ItemSet[it] = true end
-for _, it in ipairs(
-_G.AH_TreatedPatients = setmetatable({}, { __mode = "k" })
-
-_G.AH_SurgeryItemList) do _G.AH_ItemSet[it] = true end
+for _, it in ipairs(_G.AH_SurgeryItemList) do _G.AH_ItemSet[it] = true end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
 -- 📜 2. CONSOLE LOGGER (FORMAT MATCHING 100% TO LIVE LOGS)
@@ -557,24 +554,6 @@ local function GetPatientInRoom(roomName, bedPos)
     return nil
 end
 
-
-    for _, npc in ipairs(npcsFolder:GetChildren()) do
-        if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
-            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root and bedPos then
-                local dist = (root.Position - bedPos).Magnitude
-                if dist <= 14 then
-                    return npc
-                end
-            end
-            if npc:GetAttribute("InBed") == true or npc:GetAttribute("Room") == roomName then
-                return npc
-            end
-        end
-    end
-    return nil
-end
-
 -- 🩺 8. MULTI-WARD AUTO TREATMENT ROUTINES (AUTHENTICATED BY LIVE LOGS)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
@@ -1035,15 +1014,14 @@ local function GetPatientAtCounter()
     local counterSpot = Vector3.new(-103.91, 3.41, -0.40)
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and IsValidPatient(npc) then
-            if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
-                continue
-            end
-
-            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root then
-                local dist = (root.Position - counterSpot).Magnitude
-                if dist <= 7.0 then
-                    return npc
+            local isThreat = (npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true)
+            if not isThreat then
+                local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+                if root then
+                    local dist = (root.Position - counterSpot).Magnitude
+                    if dist <= 7.0 then
+                        return npc
+                    end
                 end
             end
         end
