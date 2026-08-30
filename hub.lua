@@ -482,9 +482,63 @@ end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
+
+local function IsStaffNpc(npc)
+    if not npc then return true end
+    local name = string.lower(tostring(npc.Name or ""))
+    if name == "doctor" or name:find("doctor") or name == "barney" or name:find("barney") or name == "nurse" or name == "janitor" or name == "security" then
+        return true
+    end
+    if npc:GetAttribute("IsStaff") == true or npc:GetAttribute("Doctor") == true then
+        return true
+    end
+    return false
+end
+
+local function IsValidPatient(npc)
+    if not npc or not npc:IsA("Model") or npc == LocalPlayer.Character then return false end
+    if IsStaffNpc(npc) then return false end
+    if _G.AH_TreatedPatients and _G.AH_TreatedPatients[npc] then return false end
+    if npc:GetAttribute("Treated") == true or npc:GetAttribute("Cured") == true or npc:GetAttribute("Discharged") == true or npc:GetAttribute("Leaving") == true then
+        return false
+    end
+
+    if npc:GetAttribute("IsPatient") == true or npc:GetAttribute("IsVisitor") == true or npc:GetAttribute("InBed") == true or npc:GetAttribute("Skinwalker") == true then
+        return true
+    end
+
+    local pp = npc:FindFirstChild("PP") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if pp and pp.Enabled then
+        local act = string.lower(pp.ActionText or "")
+        if act:find("dna") or act:find("sample") or act:find("help") or act:find("treat") or act:find("talk") or act:find("sleep") then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function GetPatientInRoom(roomName, bedPos)
     local npcsFolder = Workspace:FindFirstChild("NPCs")
     if not npcsFolder then return nil end
+
+    for _, npc in ipairs(npcsFolder:GetChildren()) do
+        if npc:IsA("Model") and IsValidPatient(npc) then
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+            if root and bedPos then
+                local dist = (root.Position - bedPos).Magnitude
+                if dist <= 12 then
+                    return npc
+                end
+            end
+            if npc:GetAttribute("InBed") == true or npc:GetAttribute("Room") == roomName then
+                return npc
+            end
+        end
+    end
+    return nil
+end
+
 
     for _, npc in ipairs(npcsFolder:GetChildren()) do
         if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
@@ -735,28 +789,11 @@ local function TreatMedicalRooms()
             local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
             local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
 
-            -- 1. Поиск реального пациента в палате
+            -- 1. Строгий поиск РЕАЛЬНОГО пациента (НЕ доктора и НЕ выписанного!)
             local patient = GetPatientInRoom(roomName, bedPos)
-            if not patient and bedPP and bedPP.Enabled then
-                -- Поиск NPC рядом с койкой
-                local npcs = Workspace:FindFirstChild("NPCs")
-                if npcs then
-                    for _, n in ipairs(npcs:GetChildren()) do
-                        if n:IsA("Model") and n ~= LocalPlayer.Character and n.Name ~= "Barney" then
-                            local r = n:FindFirstChild("HumanoidRootPart") or n:FindFirstChildWhichIsA("BasePart")
-                            if r and bedPos and (r.Position - bedPos).Magnitude <= 15 then
-                                patient = n
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-
-            -- 2. Если пациент найден
-            if patient or (bedPP and bedPP.Enabled) then
-                local patientName = patient and patient:GetFullName() or "Workspace.NPCs.Patient"
-                local patientPP = patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))
+            if patient then
+                local patientName = patient:GetFullName()
+                local patientPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
 
                 Log("AutoTreatment", "Found patient for room (or start prompt)", {
                     npc = patientName,
@@ -770,8 +807,8 @@ local function TreatMedicalRooms()
                     room = roomName
                 })
 
-                -- 3. Забор ДНК-пробы (Take DNA sample)
-                if patientPP and patientPP.Enabled then
+                -- 2. Забор ДНК-пробы (Take DNA sample)
+                if patientPP and patientPP.Enabled and (patientPP.ActionText or ""):find("DNA") then
                     Log("AutoTreatment", "Taking DNA sample", {
                         npc = patientName,
                         prompt = patientPP:GetFullName(),
@@ -781,7 +818,7 @@ local function TreatMedicalRooms()
                     task.wait(0.5)
                 end
 
-                -- 4. Обработка пробы на мониторе палаты (Process Results)
+                -- 3. Обработка пробы на мониторе палаты (Process Results)
                 local monitorPP2 = minigame and minigame:FindFirstChild("Monitor") and minigame.Monitor:FindFirstChild("PP2")
                 if monitorPP2 and monitorPP2.Enabled then
                     Log("AutoTreatment", "Pressing monitor process prompt", {
@@ -793,7 +830,7 @@ local function TreatMedicalRooms()
                     task.wait(2.5)
                 end
 
-                -- 5. Считывание ТВ-экрана диагностики
+                -- 4. Считывание ТВ-экрана диагностики (до 8 проверок)
                 local needed = {}
                 for retry = 1, 8 do
                     needed = ResolveNeededTreatmentItems(roomName)
@@ -804,12 +841,13 @@ local function TreatMedicalRooms()
                     task.wait(0.4)
                 end
 
-                -- Если ТВ-экран не успел выдать рецепт, используем безопасные лекарства общего типа
+                -- ВАЖНО: Если ТВ-экран пуст, НИ В КОЕМ СЛУЧАЕ НЕ БЕРЕМ СЛУЧАЙНЫЕ ПРЕДМЕТЫ!
                 if #needed == 0 then
-                    needed = { "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages" }
+                    Log("AutoTreatment", "Skipping inactive recovery room", { room = roomName })
+                    return false
                 end
 
-                -- 6. Доставка и применение лекарств
+                -- 5. Доставка и применение только назначенных ТВ-экраном лекарств
                 for attempt, med in ipairs(needed) do
                     if not _G.AutoTreatment then break end
 
@@ -848,7 +886,7 @@ local function TreatMedicalRooms()
                     end
                 end
 
-                if patient then _G.AH_TreatedPatients[patient] = true end
+                _G.AH_TreatedPatients[patient] = true
                 Log("AutoTreatment", "Finished patient treatment", { npc = patientName, room = roomName })
                 return true
             else
@@ -965,9 +1003,12 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (ТОЛЬКО ПРИ НАЛИЧИИ КЛИЕНТА У СТОЙКИ)
+-- 🏢 11. AUTO CHECK IN (ТОЛЬКО ДЛЯ РЕАЛЬНЫХ КЛИЕНТОВ ПРИ ОТКРЫТОЙ ШТОРКЕ)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientAtCounter()
+    -- Если шторка закрыта (угроза/аномалия), ресепшен НЕ работает!
+    if isShutterClosed then return nil end
+
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return nil end
 
@@ -975,43 +1016,17 @@ local function GetPatientAtCounter()
     local CollectionService = game:GetService("CollectionService")
 
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
-            -- Игнорируем вылеченных / выписанных / уходящих пациентов
-            if _G.AH_TreatedPatients and _G.AH_TreatedPatients[npc] then continue end
-            if npc:GetAttribute("Treated") == true or npc:GetAttribute("Cured") == true or npc:GetAttribute("Leaving") == true or npc:GetAttribute("Discharged") == true then
+        if npc:IsA("Model") and IsValidPatient(npc) then
+            -- Пропускаем аномалии / скинволкеров (их не регистрируем!)
+            if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
                 continue
             end
 
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
             if root then
                 local dist = (root.Position - counterSpot).Magnitude
-                -- Строгий радиус: только если NPC стоит непосредственно перед окном регистрации (<= 7.5 стадсов)
-                if dist <= 7.5 then
-                    local isWaiting = false
-                    if npc:GetAttribute("IsPatient") == true or npc:GetAttribute("IsVisitor") == true or npc:GetAttribute("Skinwalker") == true then
-                        isWaiting = true
-                    elseif CollectionService and (CollectionService:HasTag(npc, "VisitorAtCheckIn") or CollectionService:HasTag(npc, "VisitorAtCheckIn2")) then
-                        isWaiting = true
-                    elseif root.AssemblyLinearVelocity.Magnitude < 1.5 then
-                        isWaiting = true
-                    end
-
-                    if isWaiting then
-                        return npc
-                    end
-                end
-            end
-        end
-    end
-    return nil
-end
-
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
-            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root then
-                local dist = (root.Position - Positions.CheckInForm).Magnitude
-                if dist <= 22 then
+                -- Только если реальный клиент стоит непосредственно перед окном
+                if dist <= 7.0 then
                     return npc
                 end
             end
@@ -1021,9 +1036,9 @@ end
 end
 
 local function ExecuteCheckInCycle()
-    if not _G.AutoCheckIn then return end
+    if not _G.AutoCheckIn or isShutterClosed then return end
 
-    -- Если у стойки нет клиента, не телепортируемся к компьютеру!
+    -- Проверяем наличие реального клиента перед окном
     local patient = GetPatientAtCounter()
     if not patient then return end
 
