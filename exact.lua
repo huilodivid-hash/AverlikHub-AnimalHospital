@@ -480,27 +480,39 @@ local function TreatRoom8Surgery()
     local sleepPP = inBed and inBed:FindFirstChild("PP2")
     local treatPP = inBed and inBed:FindFirstChild("PP")
 
+    -- Строгая проверка: если в палате нет пациента (ни sleepPP, ни treatPP не активны), не заходим!
+    local hasPatient = (sleepPP and sleepPP.Enabled) or (treatPP and treatPP.Enabled)
+    if not hasPatient then return false end
+
     if sleepPP and sleepPP.Enabled then
         Log("AutoTreatment", "Found surgery start prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
-        Log("AutoTreatment", "Found patient for room (or start prompt)", { npc = "Workspace.NPCs.???", prompt = "Workspace.NPCs.???.PP", room = "Room8" })
-        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.???", npcPrompt = "Workspace.NPCs.???.PP", room = "Room8" })
+        Log("AutoTreatment", "Found patient for room (or start prompt)", { npc = "Workspace.NPCs.Patient", prompt = sleepPP:GetFullName(), room = "Room8" })
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.Patient", npcPrompt = sleepPP:GetFullName(), room = "Room8" })
         Log("AutoTreatment", "Pressing bed prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
 
         TeleportAndFirePrompt(sleepPP, Positions.Room8_Bed, 0.4)
         task.wait(1.5)
     end
 
-    local surgeryTools = { "Scalpel", "IV Drops", "Scissors", "Organ", "Transplant", "Medkit", "Medicine", "Bandages" }
     for attempt = 1, 15 do
         if not _G.AutoTreatment then break end
 
-        local needed = ResolveNeededTreatmentItems("Room8")
-        if #needed == 0 then
-            task.wait(0.35)
-            needed = ResolveNeededTreatmentItems("Room8")
+        treatPP = inBed and inBed:FindFirstChild("PP")
+        if not treatPP or not treatPP.Enabled then
+            -- Лечение завершено или пациент отсутствует
+            break
         end
+
+        local needed = {}
+        for retry = 1, 10 do
+            needed = ResolveNeededTreatmentItems("Room8")
+            if #needed > 0 then break end
+            task.wait(0.3)
+        end
+
+        -- Если ТВ-экран пуст и нет назначений, прерываем цикл (не берем предметы вслепую!)
         if #needed == 0 then
-            needed = { surgeryTools[math.min(attempt, #surgeryTools)] }
+            break
         end
 
         local currentItem = needed[1]
@@ -512,7 +524,7 @@ local function TreatRoom8Surgery()
             isSkinwalker = "false",
             medicineCount = GetMedicineItemCount(),
             neededItems = neededStr,
-            npc = "Workspace.NPCs.???",
+            npc = "Workspace.NPCs.Patient",
             room = "Room8",
             shouldKill = "false"
         })
@@ -528,25 +540,19 @@ local function TreatRoom8Surgery()
             task.wait(0.2)
 
             Log("AutoTreatment", "Delivering treatment item to bed", {
-                prompt = treatPP and treatPP:GetFullName() or "Workspace.Rooms.Emergency.Room8.Minigame.Bed.InBed.PP",
+                prompt = treatPP:GetFullName(),
                 room = "Room8",
                 targetItem = currentItem
             })
 
-            local bedPrompt = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
-            if bedPrompt then
-                PressPromptNearbyUntil(bedPrompt, 0.15, 2.0, function()
-                    return GetItemCount(currentItem) == 0
-                end)
-            end
-            task.wait(0.5)
+            PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
+                return GetItemCount(currentItem) == 0
+            end)
+            task.wait(0.4)
         end
-
-        local doneBed = inBed and inBed:FindFirstChild("PP")
-        if not doneBed or not doneBed.Enabled then break end
     end
 
-    Log("AutoTreatment", "Finished patient treatment", { npc = "Workspace.NPCs.???", room = "Room8" })
+    Log("AutoTreatment", "Finished patient treatment", { npc = "Workspace.NPCs.Patient", room = "Room8" })
     return true
 end
 
