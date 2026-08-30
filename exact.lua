@@ -954,68 +954,93 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 10. AUTO SHUTTER & ANOMALY THREAT EVALUATOR (WITH THREAT LOCK)
+-- 🛡️ 10. AUTO SHUTTER & ANOMALY THREAT EVALUATOR (EXACT FOXNAME REPLICA)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function EvaluateCounterThreats()
-    if not _G.AutoAnomalyShutter and not _G.AutoBarneyShutter then return end
+local function IsNpcThreat(npc)
+    if not npc or not npc:IsA("Model") or npc == LocalPlayer.Character then return false end
+    if _G.AutoAnomalyShutter and npc:GetAttribute("Skinwalker") == true then
+        return true
+    end
+    if _G.AutoBarneyShutter and (npc.Name == "Barney" or string.lower(npc.Name):find("barney")) and npc:GetAttribute("Anomaly") == true then
+        return true
+    end
+    return false
+end
 
+local function GetClosestCounterNpc()
     local npcsFolder = Workspace:FindFirstChild("NPCs")
-    if not npcsFolder then return end
+    if not npcsFolder then return nil, false end
 
-    local shutterPP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton") and Workspace.Misc.ShutterButton:FindFirstChild("PP")
-    local shutterPos = Positions.ShutterButton
-
-    local hasThreatAtCounter = false
-    local threatNpc = nil
+    local counterSpot = Vector3.new(-103.91, 3.41, -0.40)
+    local closestNpc = nil
+    local minDistance = 18 -- Только в пределах стойки регистрации
 
     for _, npc in ipairs(npcsFolder:GetChildren()) do
         if npc:IsA("Model") and npc ~= LocalPlayer.Character then
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
             if root then
-                local distToCounter = (root.Position - shutterPos).Magnitude
-                if distToCounter <= 35 then
-                    local isThreat = false
-                    if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
-                        isThreat = true
-                    elseif npc.Name == "Barney" and _G.AutoBarneyShutter then
-                        isThreat = (npc:GetAttribute("Anomaly") == true)
-                    end
-
-                    Log("AutoShutter", "Evaluating counter NPC", { isThreat = tostring(isThreat), npc = npc:GetFullName() })
-
-                    if isThreat then
-                        hasThreatAtCounter = true
-                        threatNpc = npc
-
-                        if _G.AutoAskLeaveAnomaly then
-                            local askPP = npc:FindFirstChild("PP")
-                            if askPP and askPP.Enabled and (askPP.ActionText or ""):find("Ask") then
-                                Log("AutoAskLeaveAnomaly", "Pressing Ask To Leave prompt", { npc = npc:GetFullName(), prompt = askPP:GetFullName() })
-                                TeleportAndFirePrompt(askPP, Positions.AskToLeave, 0.4)
-                                task.wait(0.5)
-                            end
-                        end
+                local dist = (root.Position - counterSpot).Magnitude
+                if dist < minDistance then
+                    -- Игнорируем уходящих / вылеченных
+                    local treated = (_G.AH_TreatedPatients and _G.AH_TreatedPatients[npc]) or npc:GetAttribute("Treated") == true or npc:GetAttribute("Cured") == true or npc:GetAttribute("Discharged") == true
+                    if not treated then
+                        closestNpc = npc
+                        minDistance = dist
                     end
                 end
             end
         end
     end
 
-    _G.HasActiveThreat = hasThreatAtCounter
+    if closestNpc then
+        return closestNpc, IsNpcThreat(closestNpc)
+    end
+    return nil, false
+end
 
-    if hasThreatAtCounter and _G.AutoAnomalyShutter then
-        if shutterPP and shutterPP.Enabled and not _G.IsShutterClosed then
-            TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
-            _G.IsShutterClosed = true
-            Log("AutoShutter", "Closed shutter for moving threat", { npc = threatNpc and threatNpc:GetFullName() or "Workspace.NPCs.Threat" })
-            Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
-            task.wait(0.5)
+local function EvaluateCounterThreats()
+    if not _G.AutoAnomalyShutter and not _G.AutoBarneyShutter then return end
+
+    local shutterPP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton") and Workspace.Misc.ShutterButton:FindFirstChild("PP")
+    local counterNpc, isThreat = GetClosestCounterNpc()
+
+    if counterNpc then
+        Log("AutoShutter", "Evaluating counter NPC", { isThreat = tostring(isThreat), npc = counterNpc:GetFullName() })
+
+        if isThreat then
+            _G.HasActiveThreat = true
+            -- Если у стойки угроза и шторка открыта -> закрываем
+            if shutterPP and shutterPP.Enabled and not _G.IsShutterClosed then
+                Log("AutoShutter", "Closed shutter for threat", { npc = counterNpc:GetFullName() })
+                TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
+                _G.IsShutterClosed = true
+                task.wait(0.5)
+            else
+                Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
+            end
+
+            if _G.AutoAskLeaveAnomaly then
+                local askPP = counterNpc:FindFirstChild("PP") or counterNpc:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if askPP and askPP.Enabled and (askPP.ActionText or ""):find("Ask") then
+                    Log("AutoAskLeaveAnomaly", "Pressing Ask To Leave prompt", { npc = counterNpc:GetFullName(), prompt = askPP:GetFullName() })
+                    TeleportAndFirePrompt(askPP, Positions.AskToLeave, 0.4)
+                    task.wait(0.5)
+                end
+            end
         else
-            Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
+            _G.HasActiveThreat = false
+            -- Если у стойки обычный клиент, а шторка закрыта -> открываем немедленно!
+            if shutterPP and shutterPP.Enabled and _G.IsShutterClosed then
+                Log("AutoShutter", "Opening shutter for normal patient at check-in")
+                TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
+                _G.IsShutterClosed = false
+                task.wait(0.5)
+            end
         end
-    elseif not hasThreatAtCounter and _G.IsShutterClosed and _G.AutoAnomalyShutter then
-        if shutterPP and shutterPP.Enabled then
-            Log("AutoShutter", "Detected anomaly leave animation")
+    else
+        _G.HasActiveThreat = false
+        -- Если у стойки вообще никого нет, а шторка была закрыта -> открываем
+        if shutterPP and shutterPP.Enabled and _G.IsShutterClosed then
             Log("AutoShutter", "Opening shutter after threat left check-in")
             TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
             _G.IsShutterClosed = false
