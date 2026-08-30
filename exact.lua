@@ -534,7 +534,7 @@ local function GetPatientInRoom(roomName, bedPos)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🩺 8. MULTI-WARD TREATMENT ENGINE (ROOMS 1 TO 8)
+-- 🩺 8. MULTI-WARD TREATMENT ENGINE (WITH TV CHECK-OFF CONFIRMATION & TRASH CLEANUP)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- Палата 8 (Хирургия)
@@ -596,10 +596,28 @@ local function TreatRoom8Surgery()
 
             local currentTreatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
             if currentTreatPP then
-                FirePrompt(currentTreatPP)
-                task.wait(0.5)
+                PressPromptNearbyUntil(currentTreatPP, 0.15, 2.0, function()
+                    return GetItemCount(currentItem) == 0
+                end)
                 UnequipAllTools()
-                task.wait(0.6) -- Пауза для обновления рецепта на ТВ
+
+                -- Ожидаем подтверждения снятия предмета с ТВ-экрана!
+                local waitTimeout = os.clock() + 4.0
+                while os.clock() < waitTimeout and not StopCheck() do
+                    local curNeeded = ResolveNeededTreatmentItems("Room8")
+                    local stillInReport = false
+                    for _, it in ipairs(curNeeded) do
+                        if it == currentItem then
+                            stillInReport = true
+                            break
+                        end
+                    end
+                    if not stillInReport then
+                        Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = "Room8" })
+                        break
+                    end
+                    task.wait(0.25)
+                end
             end
         end
     end
@@ -623,7 +641,7 @@ local function TreatRoom7Emergency()
     local minigame = room7:FindFirstChild("Minigame")
     if not minigame then return false end
 
-    local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+    local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
     local bedPP2 = inBed and inBed:FindFirstChild("PP2")
     local needed = ResolveNeededTreatmentItems("Room7")
     local patient = GetPatientInRoom("Room7", Positions.Room7_Bed)
@@ -682,10 +700,27 @@ local function TreatRoom7Emergency()
 
                 local treatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
                 if treatPP then
-                    FirePrompt(treatPP)
-                    task.wait(0.5)
+                    PressPromptNearbyUntil(treatPP, 0.15, 2.0, function()
+                        return GetItemCount(currentItem) == 0
+                    end)
                     UnequipAllTools()
-                    task.wait(0.6)
+
+                    local waitTimeout = os.clock() + 4.0
+                    while os.clock() < waitTimeout and not StopCheck() do
+                        local curNeeded = ResolveNeededTreatmentItems("Room7")
+                        local stillInReport = false
+                        for _, it in ipairs(curNeeded) do
+                            if it == currentItem then
+                                stillInReport = true
+                                break
+                            end
+                        end
+                        if not stillInReport then
+                            Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = "Room7" })
+                            break
+                        end
+                        task.wait(0.25)
+                    end
                 end
             end
         end
@@ -786,10 +821,27 @@ local function TreatRoom6Emergency()
 
                 local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or xrayPP
                 if treatPP then
-                    FirePrompt(treatPP)
-                    task.wait(0.5)
+                    PressPromptNearbyUntil(treatPP, 0.15, 2.0, function()
+                        return GetItemCount(currentItem) == 0
+                    end)
                     UnequipAllTools()
-                    task.wait(0.6)
+
+                    local waitTimeout = os.clock() + 4.0
+                    while os.clock() < waitTimeout and not StopCheck() do
+                        local curNeeded = ResolveNeededTreatmentItems("Room6")
+                        local stillInReport = false
+                        for _, it in ipairs(curNeeded) do
+                            if it == currentItem then
+                                stillInReport = true
+                                break
+                            end
+                        end
+                        if not stillInReport then
+                            Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = "Room6" })
+                            break
+                        end
+                        task.wait(0.25)
+                    end
                 end
             end
         end
@@ -804,7 +856,7 @@ local function TreatRoom6Emergency()
     return false
 end
 
--- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & CONTROLLED TREATMENT)
+-- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & SAFE DELIVERY)
 local function TreatMedicalRooms()
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
@@ -941,10 +993,39 @@ local function TreatMedicalRooms()
                                     targetItem = currentItem
                                 })
 
-                                FirePrompt(treatPP)
-                                task.wait(0.5)
+                                PressPromptNearbyUntil(treatPP, 0.15, 2.0, function()
+                                    return GetItemCount(currentItem) == 0
+                                end)
                                 UnequipAllTools()
-                                task.wait(0.6) -- Пауза для обработки сервером и обновления ТВ
+
+                                -- Ожидаем подтверждения снятия предмета с ТВ-экрана перед следующим лекарством!
+                                local waitTimeout = os.clock() + 4.0
+                                while os.clock() < waitTimeout and not StopCheck() do
+                                    local curNeeded = ResolveNeededTreatmentItems(roomName)
+                                    local stillInReport = false
+                                    for _, it in ipairs(curNeeded) do
+                                        if it == currentItem then
+                                            stillInReport = true
+                                            break
+                                        end
+                                    end
+                                    if not stillInReport then
+                                        Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = roomName })
+                                        break
+                                    end
+                                    task.wait(0.25)
+                                end
+                            end
+                        end
+                    end
+
+                    -- Очищаем любые оставшиеся лишние предметы в инвентаре
+                    if GetMedicineItemCount() > 0 then
+                        for _, container in ipairs(InventoryContainers()) do
+                            for _, tool in ipairs(container:GetChildren()) do
+                                if tool:IsA("Tool") then
+                                    DiscardToolAtTrash(tool)
+                                end
                             end
                         end
                     end
