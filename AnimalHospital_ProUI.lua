@@ -467,6 +467,28 @@ local function GrabItemUntilInInventory(itemName, roomName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
+
+local function GetPatientInRoom(roomName, bedPos)
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if not npcsFolder then return nil end
+
+    for _, npc in ipairs(npcsFolder:GetChildren()) do
+        if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+            if root and bedPos then
+                local dist = (root.Position - bedPos).Magnitude
+                if dist <= 14 then
+                    return npc
+                end
+            end
+            if npc:GetAttribute("InBed") == true or npc:GetAttribute("Room") == roomName then
+                return npc
+            end
+        end
+    end
+    return nil
+end
+
 -- 🩺 8. MULTI-WARD AUTO TREATMENT ROUTINES (AUTHENTICATED BY LIVE LOGS)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 
@@ -480,37 +502,45 @@ local function TreatRoom8Surgery()
     local sleepPP = inBed and inBed:FindFirstChild("PP2")
     local treatPP = inBed and inBed:FindFirstChild("PP")
 
-    -- Строгая проверка: если в палате нет пациента (ни sleepPP, ни treatPP не активны), не заходим!
-    local hasPatient = (sleepPP and sleepPP.Enabled) or (treatPP and treatPP.Enabled)
-    if not hasPatient then return false end
+    -- 1. Абсолютная проверка пациента на койке Палаты 8
+    local patient = GetPatientInRoom("Room8", Positions.Room8_Bed)
+    if not patient then
+        -- Если физического NPC на койке нет, проверяем активность кнопки усыпления
+        if not (sleepPP and sleepPP.Enabled and (sleepPP.ActionText or ""):find("Sleep")) then
+            return false
+        end
+    end
 
-    if sleepPP and sleepPP.Enabled then
+    -- 2. Если пациент не усыплен, нажимаем кнопку усыпления
+    if sleepPP and sleepPP.Enabled and (sleepPP.ActionText or ""):find("Sleep") then
         Log("AutoTreatment", "Found surgery start prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
-        Log("AutoTreatment", "Found patient for room (or start prompt)", { npc = "Workspace.NPCs.Patient", prompt = sleepPP:GetFullName(), room = "Room8" })
-        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.Patient", npcPrompt = sleepPP:GetFullName(), room = "Room8" })
+        Log("AutoTreatment", "Found patient for room (or start prompt)", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", prompt = sleepPP:GetFullName(), room = "Room8" })
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", npcPrompt = sleepPP:GetFullName(), room = "Room8" })
         Log("AutoTreatment", "Pressing bed prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
 
         TeleportAndFirePrompt(sleepPP, Positions.Room8_Bed, 0.4)
         task.wait(1.5)
     end
 
+    -- 3. Цикл операции: берем предметы ТОЛЬКО когда ТВ-экран диагностики выдал рецепт!
     for attempt = 1, 15 do
         if not _G.AutoTreatment then break end
 
+        -- Проверяем, жив ли еще пациент и продолжается ли лечение
+        patient = GetPatientInRoom("Room8", Positions.Room8_Bed)
         treatPP = inBed and inBed:FindFirstChild("PP")
         if not treatPP or not treatPP.Enabled then
-            -- Лечение завершено или пациент отсутствует
             break
         end
 
         local needed = {}
-        for retry = 1, 10 do
+        for retry = 1, 8 do
             needed = ResolveNeededTreatmentItems("Room8")
             if #needed > 0 then break end
-            task.wait(0.3)
+            task.wait(0.35)
         end
 
-        -- Если ТВ-экран пуст и нет назначений, прерываем цикл (не берем предметы вслепую!)
+        -- ВАЖНО: Если ТВ-экран пуст, НИ В КОЕМ СЛУЧАЕ НЕ БЕРЕМ НОЖ/СКАЛЬПЕЛЬ!
         if #needed == 0 then
             break
         end
@@ -524,7 +554,7 @@ local function TreatRoom8Surgery()
             isSkinwalker = "false",
             medicineCount = GetMedicineItemCount(),
             neededItems = neededStr,
-            npc = "Workspace.NPCs.Patient",
+            npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient",
             room = "Room8",
             shouldKill = "false"
         })
@@ -552,7 +582,7 @@ local function TreatRoom8Surgery()
         end
     end
 
-    Log("AutoTreatment", "Finished patient treatment", { npc = "Workspace.NPCs.Patient", room = "Room8" })
+    Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", room = "Room8" })
     return true
 end
 
