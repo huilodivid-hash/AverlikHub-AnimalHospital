@@ -323,7 +323,7 @@ local function DiscardToolAtTrash(tool)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📺 6. TV REPORT & PRESCRIPTION ENGINE
+-- 📺 6. TV REPORT & RECOVERY DETECTION ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local AssetToItemMap = {
     ['rbxassetid://139637091303873'] = 'Eye Drops',
@@ -363,13 +363,39 @@ local function IsItemChecked(guiItem)
     return false
 end
 
+local function IsRoomRecovering(room)
+    if not room then return false end
+    local minigame = room:FindFirstChild("Minigame")
+    local tv = minigame and minigame:FindFirstChild("TV")
+    local ui = tv and tv:FindFirstChild("Screen") and tv.Screen:FindFirstChild("UI")
+    if ui then
+        local healing = ui:FindFirstChild("Healing")
+        if healing and healing.Visible then return true end
+        local failed = ui:FindFirstChild("Failed")
+        if failed and failed.Visible then return true end
+    end
+    for _, d in ipairs(room:GetDescendants()) do
+        if d:IsA("TextLabel") and d.Visible then
+            local text = string.lower(tostring(d.Text or ""))
+            if text:find("recover") or text:find("healing") or text:find("recovering") or text:find("success") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function ResolveNeededTreatmentItems(roomName)
     local needed = {}
     local roomFolder = GetRoomFolder(roomName)
     if not roomFolder then return needed end
 
     local room = roomFolder:FindFirstChild(roomName)
-    local tv = room and room:FindFirstChild("Minigame") and room.Minigame:FindFirstChild("TV")
+    if not room or IsRoomRecovering(room) then
+        return needed
+    end
+
+    local tv = room:FindFirstChild("Minigame") and room.Minigame:FindFirstChild("TV")
     local reportInv = tv and tv:FindFirstChild("Screen") and tv.Screen:FindFirstChild("UI") and tv.Screen.UI:FindFirstChild("Report") and tv.Screen.UI.Report:FindFirstChild("inv")
 
     if reportInv then
@@ -399,7 +425,7 @@ local function ResolveNeededTreatmentItems(roomName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧰 7. UNIVERSAL ANCESTOR SHELF FINDER & CONTROLLED ITEM GRABBER
+-- 🧰 7. UNIVERSAL SHELF RESOLVER & STRICT SINGLE-ITEM GRABBER
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetItemPrompt(itemName, isSurgery)
     local target = NormalizeName(itemName)
@@ -450,21 +476,16 @@ local function GetItemPrompt(itemName, isSurgery)
 end
 
 local function GrabItemUntilInInventory(itemName, roomName)
-    -- Если предмет УЖЕ есть в инвентаре -> не берем повторно!
+    -- Если предмет УЖЕ есть в инвентаре -> ни в коем случае не берем повторно!
     if GetItemCount(itemName) > 0 then return true end
 
-    -- Очищаем инвентарь от лишних лекарств, чтобы не путать слоты
-    if GetMedicineItemCount() >= 2 then
-        local wrongTool = nil
-        for _, container in ipairs(InventoryContainers()) do
-            for _, tool in ipairs(container:GetChildren()) do
-                if tool:IsA("Tool") and NormalizeName(tool.Name) ~= NormalizeName(itemName) then
-                    wrongTool = tool
-                    break
-                end
+    -- Очищаем любые посторонние инструменты перед взятием нового
+    for _, container in ipairs(InventoryContainers()) do
+        for _, tool in ipairs(container:GetChildren()) do
+            if tool:IsA("Tool") and NormalizeName(tool.Name) ~= NormalizeName(itemName) then
+                DiscardToolAtTrash(tool)
             end
         end
-        if wrongTool then DiscardToolAtTrash(wrongTool) end
     end
 
     local isSurgery = (roomName == "Room8")
@@ -472,18 +493,18 @@ local function GrabItemUntilInInventory(itemName, roomName)
     local shelfPos = (prompt and GetPromptPartPosition(prompt)) or Positions[itemName:gsub("%s+", "")] or Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions["Room8_" .. itemName:gsub("%s+", "")]
 
     if prompt and shelfPos then
-        Log("AutoTreatment", "Grabbing treatment item", {
+        Log("AutoTreatment", "Grabbing single treatment item", {
             countBefore = GetItemCount(itemName),
             prompt = prompt:GetFullName(),
             room = roomName or "Room1",
             targetItem = itemName
         })
 
-        TeleportPlayer(shelfPos + Vector3.new(0, 1.0, 2.0))
-        task.wait(0.2)
+        TeleportPlayer(shelfPos + Vector3.new(0, 1.0, 1.5))
+        task.wait(0.25)
 
         local countBefore = GetItemCount(itemName)
-        -- ОДИН точный зажим промпта (без спама, чтобы не взять 3 штуки!)
+        -- РОВНО ОДИН зажим без спама
         FirePrompt(prompt)
 
         local t = os.clock()
@@ -491,23 +512,7 @@ local function GrabItemUntilInInventory(itemName, roomName)
             if GetItemCount(itemName) > countBefore then break end
             task.wait(0.05)
         end
-
-        -- Если сервер не отдал с первого раза, повторяем один раз
-        if GetItemCount(itemName) == countBefore then
-            FirePrompt(prompt)
-            task.wait(0.4)
-        end
-    else
-        if shelfPos then
-            Log("AutoTreatment", "Teleporting to fallback shelf pos", { item = itemName, pos = tostring(shelfPos) })
-            TeleportPlayer(shelfPos + Vector3.new(0, 1.0, 2.0))
-            task.wait(0.3)
-            prompt = GetItemPrompt(itemName, isSurgery)
-            if prompt then
-                FirePrompt(prompt)
-                task.wait(0.4)
-            end
-        end
+        task.wait(0.2)
     end
 
     return GetItemCount(itemName) > 0
@@ -534,13 +539,13 @@ local function GetPatientInRoom(roomName, bedPos)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🩺 8. MULTI-WARD TREATMENT ENGINE (WITH TV CHECK-OFF CONFIRMATION & TRASH CLEANUP)
+-- 🩺 8. MULTI-WARD SAFE TREATMENT ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- Палата 8 (Хирургия)
 local function TreatRoom8Surgery()
     local room8 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8")
-    if not room8 then return false end
+    if not room8 or IsRoomRecovering(room8) then return false end
 
     local minigame = room8:FindFirstChild("Minigame")
     local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
@@ -564,6 +569,11 @@ local function TreatRoom8Surgery()
 
     local attempt = 0
     while _G.AutoTreatment and not StopCheck() do
+        if IsRoomRecovering(room8) then
+            Log("AutoTreatment", "Patient is recovering, stopping surgery", { room = "Room8" })
+            break
+        end
+
         needed = ResolveNeededTreatmentItems("Room8")
         if #needed == 0 then break end
 
@@ -596,21 +606,18 @@ local function TreatRoom8Surgery()
 
             local currentTreatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
             if currentTreatPP then
-                PressPromptNearbyUntil(currentTreatPP, 0.15, 2.0, function()
-                    return GetItemCount(currentItem) == 0
-                end)
+                FirePrompt(currentTreatPP)
+                task.wait(0.4)
                 UnequipAllTools()
 
                 -- Ожидаем подтверждения снятия предмета с ТВ-экрана!
                 local waitTimeout = os.clock() + 4.0
                 while os.clock() < waitTimeout and not StopCheck() do
+                    if IsRoomRecovering(room8) then break end
                     local curNeeded = ResolveNeededTreatmentItems("Room8")
                     local stillInReport = false
                     for _, it in ipairs(curNeeded) do
-                        if it == currentItem then
-                            stillInReport = true
-                            break
-                        end
+                        if it == currentItem then stillInReport = true break end
                     end
                     if not stillInReport then
                         Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = "Room8" })
@@ -622,7 +629,7 @@ local function TreatRoom8Surgery()
         end
     end
 
-    if attempt > 0 then
+    if attempt > 0 or IsRoomRecovering(room8) then
         if patient then _G.AH_TreatedPatients[patient] = true end
         _G.AH_IsTreating = false
         Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", room = "Room8" })
@@ -636,12 +643,12 @@ end
 -- Палата 7 (Реанимация / ICU)
 local function TreatRoom7Emergency()
     local room7 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room7")
-    if not room7 then return false end
+    if not room7 or IsRoomRecovering(room7) then return false end
 
     local minigame = room7:FindFirstChild("Minigame")
     if not minigame then return false end
 
-    local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+    local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
     local bedPP2 = inBed and inBed:FindFirstChild("PP2")
     local needed = ResolveNeededTreatmentItems("Room7")
     local patient = GetPatientInRoom("Room7", Positions.Room7_Bed)
@@ -683,6 +690,11 @@ local function TreatRoom7Emergency()
     if #needed > 0 then
         local attempt = 0
         while _G.AutoTreatment and not StopCheck() do
+            if IsRoomRecovering(room7) then
+                Log("AutoTreatment", "Patient is recovering, stopping ICU treatment", { room = "Room7" })
+                break
+            end
+
             needed = ResolveNeededTreatmentItems("Room7")
             if #needed == 0 then break end
 
@@ -700,20 +712,17 @@ local function TreatRoom7Emergency()
 
                 local treatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
                 if treatPP then
-                    PressPromptNearbyUntil(treatPP, 0.15, 2.0, function()
-                        return GetItemCount(currentItem) == 0
-                    end)
+                    FirePrompt(treatPP)
+                    task.wait(0.4)
                     UnequipAllTools()
 
                     local waitTimeout = os.clock() + 4.0
                     while os.clock() < waitTimeout and not StopCheck() do
+                        if IsRoomRecovering(room7) then break end
                         local curNeeded = ResolveNeededTreatmentItems("Room7")
                         local stillInReport = false
                         for _, it in ipairs(curNeeded) do
-                            if it == currentItem then
-                                stillInReport = true
-                                break
-                            end
+                            if it == currentItem then stillInReport = true break end
                         end
                         if not stillInReport then
                             Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = "Room7" })
@@ -737,7 +746,7 @@ end
 -- ☢️ ПАЛАТА 6 (РЕАНИМАЦИЯ / РЕНТГЕН - X-RAY ROOM 6)
 local function TreatRoom6Emergency()
     local room6 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room6")
-    if not room6 then return false end
+    if not room6 or IsRoomRecovering(room6) then return false end
 
     local minigame = room6:FindFirstChild("Minigame")
     if not minigame then return false end
@@ -804,6 +813,11 @@ local function TreatRoom6Emergency()
 
         local attempt = 0
         while _G.AutoTreatment and not StopCheck() do
+            if IsRoomRecovering(room6) then
+                Log("AutoTreatment", "Patient is recovering, stopping X-Ray treatment", { room = "Room6" })
+                break
+            end
+
             needed = ResolveNeededTreatmentItems("Room6")
             if #needed == 0 then break end
 
@@ -821,20 +835,17 @@ local function TreatRoom6Emergency()
 
                 local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or xrayPP
                 if treatPP then
-                    PressPromptNearbyUntil(treatPP, 0.15, 2.0, function()
-                        return GetItemCount(currentItem) == 0
-                    end)
+                    FirePrompt(treatPP)
+                    task.wait(0.4)
                     UnequipAllTools()
 
                     local waitTimeout = os.clock() + 4.0
                     while os.clock() < waitTimeout and not StopCheck() do
+                        if IsRoomRecovering(room6) then break end
                         local curNeeded = ResolveNeededTreatmentItems("Room6")
                         local stillInReport = false
                         for _, it in ipairs(curNeeded) do
-                            if it == currentItem then
-                                stillInReport = true
-                                break
-                            end
+                            if it == currentItem then stillInReport = true break end
                         end
                         if not stillInReport then
                             Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = "Room6" })
@@ -856,7 +867,7 @@ local function TreatRoom6Emergency()
     return false
 end
 
--- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & SAFE DELIVERY)
+-- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & RECOVERY SAFEGUARD)
 local function TreatMedicalRooms()
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
@@ -865,7 +876,7 @@ local function TreatMedicalRooms()
     for i = 1, 5 do
         local roomName = "Room" .. tostring(i)
         local room = medical:FindFirstChild(roomName)
-        if room then
+        if room and not IsRoomRecovering(room) then
             local minigame = room:FindFirstChild("Minigame")
             local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
             local monitor = minigame and minigame:FindFirstChild("Monitor")
@@ -890,8 +901,8 @@ local function TreatMedicalRooms()
 
                 local needed = ResolveNeededTreatmentItems(roomName)
 
-                -- Если есть пациент, но рецепта на ТВ нет -> проводим диагностику
-                if #needed == 0 and patient then
+                -- Если есть пациент, но рецепта на ТВ нет и комната НЕ восстанавливается -> проводим диагностику
+                if #needed == 0 and patient and not IsRoomRecovering(room) then
                     local dnaPP = nil
                     for _, p in ipairs(patient:GetDescendants()) do
                         if p:IsA("ProximityPrompt") and p.Enabled and (string.lower(p.ActionText or ""):find("dna") or string.lower(p.ActionText or ""):find("sample")) then
@@ -954,6 +965,11 @@ local function TreatMedicalRooms()
 
                     local attempt = 0
                     while _G.AutoTreatment and not StopCheck() do
+                        if IsRoomRecovering(room) then
+                            Log("AutoTreatment", "Patient is recovering, stopping treatment", { room = roomName })
+                            break
+                        end
+
                         needed = ResolveNeededTreatmentItems(roomName)
                         if #needed == 0 then break end
 
@@ -993,21 +1009,18 @@ local function TreatMedicalRooms()
                                     targetItem = currentItem
                                 })
 
-                                PressPromptNearbyUntil(treatPP, 0.15, 2.0, function()
-                                    return GetItemCount(currentItem) == 0
-                                end)
+                                FirePrompt(treatPP)
+                                task.wait(0.4)
                                 UnequipAllTools()
 
                                 -- Ожидаем подтверждения снятия предмета с ТВ-экрана перед следующим лекарством!
                                 local waitTimeout = os.clock() + 4.0
                                 while os.clock() < waitTimeout and not StopCheck() do
+                                    if IsRoomRecovering(room) then break end
                                     local curNeeded = ResolveNeededTreatmentItems(roomName)
                                     local stillInReport = false
                                     for _, it in ipairs(curNeeded) do
-                                        if it == currentItem then
-                                            stillInReport = true
-                                            break
-                                        end
+                                        if it == currentItem then stillInReport = true break end
                                     end
                                     if not stillInReport then
                                         Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = roomName })
@@ -1020,12 +1033,10 @@ local function TreatMedicalRooms()
                     end
 
                     -- Очищаем любые оставшиеся лишние предметы в инвентаре
-                    if GetMedicineItemCount() > 0 then
-                        for _, container in ipairs(InventoryContainers()) do
-                            for _, tool in ipairs(container:GetChildren()) do
-                                if tool:IsA("Tool") then
-                                    DiscardToolAtTrash(tool)
-                                end
+                    for _, container in ipairs(InventoryContainers()) do
+                        for _, tool in ipairs(container:GetChildren()) do
+                            if tool:IsA("Tool") then
+                                DiscardToolAtTrash(tool)
                             end
                         end
                     end
