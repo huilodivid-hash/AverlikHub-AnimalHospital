@@ -540,28 +540,26 @@ local function GrabItemUntilInInventory(itemName, roomName)
 end
 
 local function TreatRoom8Surgery()
-    _G.AH_IsTreating = true
     local room8 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8")
     if not room8 then return false end
 
     local minigame = room8:FindFirstChild("Minigame")
     local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
     local sleepPP = inBed and inBed:FindFirstChild("PP2")
-    local treatPP = inBed and inBed:FindFirstChild("PP")
 
-    -- 1. Абсолютная проверка пациента на койке Палаты 8
+    local needed = ResolveNeededTreatmentItems("Room8")
     local patient = GetPatientInRoom("Room8", Positions.Room8_Bed)
-    if not patient then
-        -- Если физического NPC на койке нет, проверяем активность кнопки усыпления
-        if not (sleepPP and sleepPP.Enabled and (sleepPP.ActionText or ""):find("Sleep")) then
-            return false
-        end
+
+    -- Если нет рецепта и нет кнопки усыпления -> сразу выходим (false), давая лечить другие палаты!
+    if #needed == 0 and not (sleepPP and sleepPP.Enabled and (sleepPP.ActionText or ""):find("Sleep")) then
+        return false
     end
 
-    -- 2. Если пациент не усыплен, нажимаем кнопку усыпления
+    _G.AH_IsTreating = true
+
+    -- 1. Если доступна кнопка усыпления пациента
     if sleepPP and sleepPP.Enabled and (sleepPP.ActionText or ""):find("Sleep") then
         Log("AutoTreatment", "Found surgery start prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
-        Log("AutoTreatment", "Found patient for room (or start prompt)", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", prompt = sleepPP:GetFullName(), room = "Room8" })
         Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", npcPrompt = sleepPP:GetFullName(), room = "Room8" })
         Log("AutoTreatment", "Pressing bed prompt", { prompt = sleepPP:GetFullName(), room = "Room8" })
 
@@ -569,31 +567,18 @@ local function TreatRoom8Surgery()
         task.wait(1.5)
     end
 
-    -- 3. Цикл операции: берем предметы ТОЛЬКО когда ТВ-экран диагностики выдал рецепт!
-    for attempt = 1, 15 do
-        if not _G.AutoTreatment then break end
+    -- 2. Цикл доставки хирургических инструментов по рецепту ТВ
+    local attempt = 0
+    while _G.AutoTreatment and not StopCheck() do
+        needed = ResolveNeededTreatmentItems("Room8")
+        if #needed == 0 then break end
 
-        -- Проверяем, жив ли еще пациент и продолжается ли лечение
-        patient = GetPatientInRoom("Room8", Positions.Room8_Bed)
-        treatPP = inBed and inBed:FindFirstChild("PP")
-        if not treatPP or not treatPP.Enabled then
-            break
-        end
-
-        local needed = {}
-        for retry = 1, 8 do
-            needed = ResolveNeededTreatmentItems("Room8")
-            if #needed > 0 then break end
-            task.wait(0.35)
-        end
-
-        -- ВАЖНО: Если ТВ-экран пуст, НИ В КОЕМ СЛУЧАЕ НЕ БЕРЕМ НОЖ/СКАЛЬПЕЛЬ!
-        if #needed == 0 then
-            break
-        end
-
+        attempt = attempt + 1
         local currentItem = needed[1]
-        local neededStr = string.format("{1=%s}", currentItem)
+
+        local itemsList = {}
+        for idx, it in ipairs(needed) do table.insert(itemsList, string.format("%d=%s", idx, it)) end
+        local neededStr = "{" .. table.concat(itemsList, ", ") .. "}"
 
         Log("AutoTreatment", "Treatment item loop", {
             attempt = attempt,
@@ -616,23 +601,31 @@ local function TreatRoom8Surgery()
             TeleportPlayer(Positions.Room8_Bed)
             task.wait(0.2)
 
-            Log("AutoTreatment", "Delivering treatment item to bed", {
-                prompt = treatPP:GetFullName(),
-                room = "Room8",
-                targetItem = currentItem
-            })
+            local currentTreatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
+            if currentTreatPP then
+                Log("AutoTreatment", "Delivering treatment item to bed", {
+                    prompt = currentTreatPP:GetFullName(),
+                    room = "Room8",
+                    targetItem = currentItem
+                })
 
-            PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
-                return GetItemCount(currentItem) == 0
-            end)
+                PressPromptNearbyUntil(currentTreatPP, 0.15, 2.5, function()
+                    return GetItemCount(currentItem) == 0
+                end)
+            end
             task.wait(0.4)
         end
     end
 
-    if patient then _G.AH_TreatedPatients[patient] = true end
+    if attempt > 0 then
+        if patient then _G.AH_TreatedPatients[patient] = true end
+        _G.AH_IsTreating = false
+        Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", room = "Room8" })
+        return true
+    end
+
     _G.AH_IsTreating = false
-    Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", room = "Room8" })
-    return true
+    return false
 end
 
 -- Палата 7 (Реанимация / ICU)
@@ -752,9 +745,7 @@ local function TreatRoom7Emergency()
     return false
 end
 
--- ══════════════════════════════════════════════════════════════════════════════════
 -- ☢️ ПАЛАТА 6 (РЕАНИМАЦИЯ / РЕНТГЕН - X-RAY ROOM 6)
--- ══════════════════════════════════════════════════════════════════════════════════
 local function TreatRoom6Emergency()
     local room6 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room6")
     if not room6 then return false end
@@ -887,9 +878,6 @@ local function TreatRoom6Emergency()
     return false
 end
 
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 ПАЛАТЫ 1 - 5 (DIRECT TV-SCREEN & INBED TREATMENT ENGINE)
--- ══════════════════════════════════════════════════════════════════════════════════
 local function TreatMedicalRooms()
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
