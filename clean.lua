@@ -97,7 +97,7 @@ end
 local Positions = {
     -- Reception (Check-In)
     ShutterButton     = Vector3.new(-113.20, 5.65, -1.60),
-    CheckInPC         = Vector3.new(-97.68, 7.77, -2.50),
+    CheckInPC         = Vector3.new(-97.68, 3.50, -2.50),
     CheckInForm       = Vector3.new(-103.95, 6.10, -2.60),
     CheckInCamera     = Vector3.new(-108.57, 7.65, -2.93),
     CheckInPrinter    = Vector3.new(-96.86, 6.58, 1.26),
@@ -1050,7 +1050,7 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (БЛОКИРУЕТСЯ ПРИ ЛЕЧЕНИИ, УГРОЗАХ И ЗАКРЫТОЙ ШТОРКЕ)
+-- 🏢 11. AUTO CHECK IN (ПОЛНЫЙ ЦИКЛ РЕГИСТРАЦИИ КЛИЕНТОВ)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientAtCounter()
     if _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return nil end
@@ -1066,7 +1066,7 @@ local function GetPatientAtCounter()
                 local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
                 if root then
                     local dist = (root.Position - counterSpot).Magnitude
-                    if dist <= 7.0 then
+                    if dist <= 14 then -- Щедрый радиус стойки регистрации
                         return npc
                     end
                 end
@@ -1079,61 +1079,67 @@ end
 local function ExecuteCheckInCycle()
     if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return end
 
-    local patient = GetPatientAtCounter()
-    if not patient then return end
-
     local misc = Workspace:FindFirstChild("Misc")
     local checkIn = misc and misc:FindFirstChild("CheckIn")
     if not checkIn then return end
 
+    local patient = GetPatientAtCounter()
+    local pcPP = checkIn:FindFirstChild("Computer") and (checkIn.Computer:FindFirstChild("PP") or checkIn.Computer:FindFirstChildWhichIsA("ProximityPrompt", true))
+    local formPP = checkIn:FindFirstChild("Form") and (checkIn.Form:FindFirstChild("PP") or checkIn.Form:FindFirstChildWhichIsA("ProximityPrompt", true))
+    local camPP = checkIn:FindFirstChild("Camera") and (checkIn.Camera:FindFirstChild("PP") or checkIn.Camera:FindFirstChildWhichIsA("ProximityPrompt", true))
+    local printerPP = checkIn:FindFirstChild("Printer") and (checkIn.Printer:FindFirstChild("PP") or checkIn.Printer:FindFirstChildWhichIsA("ProximityPrompt", true))
+    local badgePP = checkIn:FindFirstChild("PrintedBadge") and (checkIn.PrintedBadge:FindFirstChild("PP") or checkIn.PrintedBadge:FindFirstChildWhichIsA("ProximityPrompt", true))
+
+    -- Если есть активная кнопка регистрации или пациент у стойки
+    if not patient and not (formPP and formPP.Enabled) and not (camPP and camPP.Enabled) and not (pcPP and pcPP.Enabled) and not (printerPP and printerPP.Enabled) and not (badgePP and badgePP.Enabled) then
+        return
+    end
+
     Log("AutoCheckIn", "Starting check-in cycle")
 
     -- 1. Stamp Forms
-    local formPP = checkIn:FindFirstChild("Form") and checkIn.Form:FindFirstChild("PP")
     if formPP and formPP.Enabled then
         TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.4)
-        task.wait(0.5)
+        task.wait(0.4)
     end
 
     -- 2. Take Photo
-    local camPP = checkIn:FindFirstChild("Camera") and checkIn.Camera:FindFirstChild("PP")
     if camPP and camPP.Enabled then
         TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.4)
+        task.wait(0.4)
+    end
+
+    -- 3. Register on Computer (срабатывает всегда, когда кнопка активна!)
+    if pcPP and pcPP.Enabled then
+        local pcPos = GetPromptPartPosition(pcPP) or Positions.CheckInPC
+        TeleportPlayer(pcPos + Vector3.new(0, 0, 1.5))
+        task.wait(0.2)
+        FirePrompt(pcPP)
         task.wait(0.5)
     end
 
-    -- 3. Register on PC (только 1 раз за шаг, без дикого спама!)
-    local printerPP = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
-    local badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
-    local pcPP = checkIn:FindFirstChild("Computer") and checkIn.Computer:FindFirstChild("PP")
-
-    if pcPP and pcPP.Enabled and (not printerPP or not printerPP.Enabled) and (not badgePP or not badgePP.Enabled) then
-        TeleportPlayer(Positions.CheckInPC)
-        task.wait(0.25)
-        FirePrompt(pcPP, 0.3)
-        task.wait(0.8)
-    end
-
     -- 4. Print Badge
-    printerPP = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
+    printerPP = checkIn:FindFirstChild("Printer") and (checkIn.Printer:FindFirstChild("PP") or checkIn.Printer:FindFirstChildWhichIsA("ProximityPrompt", true))
     if printerPP and printerPP.Enabled then
-        Log("AutoCheckIn", "Printing badge", { attempt = 1, patient = patient:GetFullName(), prompt = printerPP:GetFullName() })
+        Log("AutoCheckIn", "Printing badge", { attempt = 1, patient = patient and patient:GetFullName() or "Workspace.NPCs.Patient", prompt = printerPP:GetFullName() })
         TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4)
-        task.wait(2.5)
+        task.wait(2.0)
     end
 
     -- 5. Take Badge
-    badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
+    badgePP = checkIn:FindFirstChild("PrintedBadge") and (checkIn.PrintedBadge:FindFirstChild("PP") or checkIn.PrintedBadge:FindFirstChildWhichIsA("ProximityPrompt", true))
     if badgePP and badgePP.Enabled then
         TeleportAndFirePrompt(badgePP, Positions.PrintedBadge, 0.4)
         task.wait(0.4)
     end
 
     -- 6. Talk to Patient
-    local talkPP = patient:FindFirstChild("PP")
-    if talkPP and talkPP.Enabled and (talkPP.ActionText or ""):find("Talk") then
-        TeleportAndFirePrompt(talkPP, Positions.CounterTalk, 0.4)
-        task.wait(0.4)
+    if patient then
+        local talkPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if talkPP and talkPP.Enabled and (talkPP.ActionText or ""):find("Talk") then
+            TeleportAndFirePrompt(talkPP, Positions.CounterTalk, 0.4)
+            task.wait(0.4)
+        end
     end
 end
 
