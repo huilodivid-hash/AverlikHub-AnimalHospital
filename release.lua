@@ -220,7 +220,7 @@ local function StopCheck()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎒 5. INVENTORY ENGINE
+-- 🎒 5. INVENTORY & TOOL CONTROL ENGINE (SINGLE-ITEM PRECISION)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function NormalizeName(str)
     if not str then return "" end
@@ -282,6 +282,15 @@ local function GetMedicineItemCount()
     return count
 end
 
+local function UnequipAllTools()
+    local char = GetCharacter()
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid:UnequipTools()
+        task.wait(0.1)
+    end
+end
+
 local function UseInventoryTool(itemName)
     local char = GetCharacter()
     local humanoid = char and char:FindFirstChildOfClass("Humanoid")
@@ -290,6 +299,8 @@ local function UseInventoryTool(itemName)
     local tool = FindToolInInventory(itemName)
     if tool then
         if tool.Parent ~= char then
+            humanoid:UnequipTools()
+            task.wait(0.1)
             humanoid:EquipTool(tool)
             task.wait(0.2)
         end
@@ -300,7 +311,7 @@ end
 
 local function DiscardToolAtTrash(tool)
     if not tool then return end
-    Log("Inventory", "Discarding wrong tool at trash", { tool = tool.Name })
+    Log("Inventory", "Discarding tool at trash", { tool = tool.Name })
     TeleportPlayer(Positions.Trash)
     task.wait(0.2)
     local trashBin = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("Trash")
@@ -312,7 +323,7 @@ local function DiscardToolAtTrash(tool)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📺 6. TV REPORT & PRESCRIPTION ENGINE (SILENT & BULLETPROOF)
+-- 📺 6. TV REPORT & PRESCRIPTION ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local AssetToItemMap = {
     ['rbxassetid://139637091303873'] = 'Eye Drops',
@@ -388,7 +399,7 @@ local function ResolveNeededTreatmentItems(roomName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧰 7. UNIVERSAL ANCESTOR SHELF FINDER & ITEM GRABBER
+-- 🧰 7. UNIVERSAL ANCESTOR SHELF FINDER & CONTROLLED ITEM GRABBER
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetItemPrompt(itemName, isSurgery)
     local target = NormalizeName(itemName)
@@ -439,9 +450,11 @@ local function GetItemPrompt(itemName, isSurgery)
 end
 
 local function GrabItemUntilInInventory(itemName, roomName)
+    -- Если предмет УЖЕ есть в инвентаре -> не берем повторно!
     if GetItemCount(itemName) > 0 then return true end
 
-    if GetMedicineItemCount() >= 3 then
+    -- Очищаем инвентарь от лишних лекарств, чтобы не путать слоты
+    if GetMedicineItemCount() >= 2 then
         local wrongTool = nil
         for _, container in ipairs(InventoryContainers()) do
             for _, tool in ipairs(container:GetChildren()) do
@@ -470,10 +483,20 @@ local function GrabItemUntilInInventory(itemName, roomName)
         task.wait(0.2)
 
         local countBefore = GetItemCount(itemName)
-        PressPromptNearbyUntil(prompt, 0.12, 2.0, function()
-            return GetItemCount(itemName) > countBefore
-        end)
-        task.wait(0.3)
+        -- ОДИН точный зажим промпта (без спама, чтобы не взять 3 штуки!)
+        FirePrompt(prompt)
+
+        local t = os.clock()
+        while os.clock() - t < 1.5 and not StopCheck() do
+            if GetItemCount(itemName) > countBefore then break end
+            task.wait(0.05)
+        end
+
+        -- Если сервер не отдал с первого раза, повторяем один раз
+        if GetItemCount(itemName) == countBefore then
+            FirePrompt(prompt)
+            task.wait(0.4)
+        end
     else
         if shelfPos then
             Log("AutoTreatment", "Teleporting to fallback shelf pos", { item = itemName, pos = tostring(shelfPos) })
@@ -573,11 +596,11 @@ local function TreatRoom8Surgery()
 
             local currentTreatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
             if currentTreatPP then
-                PressPromptNearbyUntil(currentTreatPP, 0.15, 2.5, function()
-                    return GetItemCount(currentItem) == 0
-                end)
+                FirePrompt(currentTreatPP)
+                task.wait(0.5)
+                UnequipAllTools()
+                task.wait(0.6) -- Пауза для обновления рецепта на ТВ
             end
-            task.wait(0.4)
         end
     end
 
@@ -659,11 +682,11 @@ local function TreatRoom7Emergency()
 
                 local treatPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
                 if treatPP then
-                    PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
-                        return GetItemCount(currentItem) == 0
-                    end)
+                    FirePrompt(treatPP)
+                    task.wait(0.5)
+                    UnequipAllTools()
+                    task.wait(0.6)
                 end
-                task.wait(0.4)
             end
         end
 
@@ -763,11 +786,11 @@ local function TreatRoom6Emergency()
 
                 local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or xrayPP
                 if treatPP then
-                    PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
-                        return GetItemCount(currentItem) == 0
-                    end)
+                    FirePrompt(treatPP)
+                    task.wait(0.5)
+                    UnequipAllTools()
+                    task.wait(0.6)
                 end
-                task.wait(0.4)
             end
         end
 
@@ -781,7 +804,7 @@ local function TreatRoom6Emergency()
     return false
 end
 
--- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & TREATMENT)
+-- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & CONTROLLED TREATMENT)
 local function TreatMedicalRooms()
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
@@ -918,11 +941,11 @@ local function TreatMedicalRooms()
                                     targetItem = currentItem
                                 })
 
-                                PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
-                                    return GetItemCount(currentItem) == 0
-                                end)
+                                FirePrompt(treatPP)
+                                task.wait(0.5)
+                                UnequipAllTools()
+                                task.wait(0.6) -- Пауза для обработки сервером и обновления ТВ
                             end
-                            task.wait(0.4)
                         end
                     end
 
