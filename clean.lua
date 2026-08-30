@@ -1,4 +1,22 @@
 -- ══════════════════════════════════════════════════════════════════════════════════════
+-- 🛑 SINGLE-INSTANCE & PREVIOUS SCRIPT CLEANUP
+-- ══════════════════════════════════════════════════════════════════════════════════════
+if _G.AverlikCleanup then
+    pcall(_G.AverlikCleanup)
+end
+
+local scriptRunning = true
+_G.AverlikCleanup = function()
+    scriptRunning = false
+    _G.AH_IsTreating = false
+    _G.IsShutterClosed = false
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if pg and pg:FindFirstChild("AnimalHospitalProUI") then
+        pg.AnimalHospitalProUI:Destroy()
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════════
 -- 🏥 AVERLIK HUB: ANIMAL HOSPITAL DEFINITIVE MASTER SUITE (100% LOG-AUTHENTIC)
 -- ══════════════════════════════════════════════════════════════════════════════════════
 -- Reconstructed from 2,742 Live Log Executions (299 KB) in Roblox & Madium Workspace
@@ -562,6 +580,7 @@ end
 
 -- Палата 8 (Хирургия)
 local function TreatRoom8Surgery()
+    _G.AH_IsTreating = true
     local room8 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8")
     if not room8 then return false end
 
@@ -651,6 +670,7 @@ local function TreatRoom8Surgery()
     end
 
     if patient then _G.AH_TreatedPatients[patient] = true end
+    _G.AH_IsTreating = false
     Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", room = "Room8" })
     return true
 end
@@ -774,6 +794,7 @@ end
 
 -- Палаты 1 - 5 (Медицинские койки: ДНК ➔ Монитор ➔ Рецепт с ТВ ➔ Лечение)
 local function TreatMedicalRooms()
+    _G.AH_IsTreating = true
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
     if not medical then return false end
@@ -887,6 +908,7 @@ local function TreatMedicalRooms()
                 end
 
                 _G.AH_TreatedPatients[patient] = true
+                _G.AH_IsTreating = false
                 Log("AutoTreatment", "Finished patient treatment", { npc = patientName, room = roomName })
                 return true
             else
@@ -905,6 +927,7 @@ local function ExecuteTreatmentCycle()
     if TreatRoom6Emergency() then return end
     if TreatMedicalRooms() then return end
 
+    _G.AH_IsTreating = false
     Log("AutoTreatment", "No treatable patient found in any room")
 end
 
@@ -930,10 +953,8 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 10. AUTO SHUTTER & ANOMALY THREAT EVALUATOR (ONLY REAL ANOMALIES AT COUNTER)
+-- 🛡️ 10. AUTO SHUTTER & ANOMALY THREAT EVALUATOR (WITH THREAT LOCK)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local isShutterClosed = false
-
 local function EvaluateCounterThreats()
     if not _G.AutoAnomalyShutter and not _G.AutoBarneyShutter then return end
 
@@ -951,10 +972,8 @@ local function EvaluateCounterThreats()
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
             if root then
                 local distToCounter = (root.Position - shutterPos).Magnitude
-                -- Проверяем только NPC, находящихся рядом со стойкой ресепшена (в радиусе 35 стадсов)
                 if distToCounter <= 35 then
                     local isThreat = false
-                    -- Настоящая проверка на Скинволкера / Аномалию по игровым атрибутам
                     if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
                         isThreat = true
                     elseif npc.Name == "Barney" and _G.AutoBarneyShutter then
@@ -981,43 +1000,41 @@ local function EvaluateCounterThreats()
         end
     end
 
+    _G.HasActiveThreat = hasThreatAtCounter
+
     if hasThreatAtCounter and _G.AutoAnomalyShutter then
-        if shutterPP and shutterPP.Enabled and not isShutterClosed then
+        if shutterPP and shutterPP.Enabled and not _G.IsShutterClosed then
             TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
-            isShutterClosed = true
+            _G.IsShutterClosed = true
             Log("AutoShutter", "Closed shutter for moving threat", { npc = threatNpc and threatNpc:GetFullName() or "Workspace.NPCs.Threat" })
             Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
             task.wait(0.5)
         else
             Log("AutoShutter", "Keeping shutter closed while threat is at check-in")
         end
-    elseif not hasThreatAtCounter and isShutterClosed and _G.AutoAnomalyShutter then
+    elseif not hasThreatAtCounter and _G.IsShutterClosed and _G.AutoAnomalyShutter then
         if shutterPP and shutterPP.Enabled then
             Log("AutoShutter", "Detected anomaly leave animation")
             Log("AutoShutter", "Opening shutter after threat left check-in")
             TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
-            isShutterClosed = false
+            _G.IsShutterClosed = false
             task.wait(0.5)
         end
     end
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (ТОЛЬКО ДЛЯ РЕАЛЬНЫХ КЛИЕНТОВ ПРИ ОТКРЫТОЙ ШТОРКЕ)
+-- 🏢 11. AUTO CHECK IN (БЛОКИРУЕТСЯ ПРИ ЛЕЧЕНИИ, УГРОЗАХ И ЗАКРЫТОЙ ШТОРКЕ)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientAtCounter()
-    -- Если шторка закрыта (угроза/аномалия), ресепшен НЕ работает!
-    if isShutterClosed then return nil end
+    if _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return nil end
 
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return nil end
 
     local counterSpot = Vector3.new(-103.91, 3.41, -0.40)
-    local CollectionService = game:GetService("CollectionService")
-
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and IsValidPatient(npc) then
-            -- Пропускаем аномалии / скинволкеров (их не регистрируем!)
             if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
                 continue
             end
@@ -1025,7 +1042,6 @@ local function GetPatientAtCounter()
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
             if root then
                 local dist = (root.Position - counterSpot).Magnitude
-                -- Только если реальный клиент стоит непосредственно перед окном
                 if dist <= 7.0 then
                     return npc
                 end
@@ -1036,9 +1052,8 @@ local function GetPatientAtCounter()
 end
 
 local function ExecuteCheckInCycle()
-    if not _G.AutoCheckIn or isShutterClosed then return end
+    if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return end
 
-    -- Проверяем наличие реального клиента перед окном
     local patient = GetPatientAtCounter()
     if not patient then return end
 
@@ -1048,42 +1063,41 @@ local function ExecuteCheckInCycle()
 
     Log("AutoCheckIn", "Starting check-in cycle")
 
-    -- 1. Stamp Forms (если активен)
+    -- 1. Stamp Forms
     local formPP = checkIn:FindFirstChild("Form") and checkIn.Form:FindFirstChild("PP")
     if formPP and formPP.Enabled then
         TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.4)
-        task.wait(0.4)
+        task.wait(0.5)
     end
 
-    -- 2. Take Photo (если активен)
+    -- 2. Take Photo
     local camPP = checkIn:FindFirstChild("Camera") and checkIn.Camera:FindFirstChild("PP")
     if camPP and camPP.Enabled then
         TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.4)
-        task.wait(0.4)
+        task.wait(0.5)
     end
 
-    -- 3. Register on PC (только если принтер еще не печатает и бейдж не готов)
+    -- 3. Register on PC (только 1 раз за шаг, без дикого спама!)
     local printerPP = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
     local badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
     local pcPP = checkIn:FindFirstChild("Computer") and checkIn.Computer:FindFirstChild("PP")
 
     if pcPP and pcPP.Enabled and (not printerPP or not printerPP.Enabled) and (not badgePP or not badgePP.Enabled) then
         TeleportPlayer(Positions.CheckInPC)
-        task.wait(0.2)
-        PressPromptNearbyUntil(pcPP, 0.25, 2.0, function()
-            local pr = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
-            return pr and pr.Enabled
-        end)
+        task.wait(0.25)
+        FirePrompt(pcPP, 0.3)
+        task.wait(0.8)
     end
 
-    -- 4. Print Badge (если активен)
+    -- 4. Print Badge
+    printerPP = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
     if printerPP and printerPP.Enabled then
         Log("AutoCheckIn", "Printing badge", { attempt = 1, patient = patient:GetFullName(), prompt = printerPP:GetFullName() })
         TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4)
         task.wait(2.5)
     end
 
-    -- 5. Take Badge (если готов)
+    -- 5. Take Badge
     badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
     if badgePP and badgePP.Enabled then
         TeleportAndFirePrompt(badgePP, Positions.PrintedBadge, 0.4)
@@ -1148,7 +1162,7 @@ end
 -- 🔄 13. COORDINATED HEARTBEAT (1.5s CYCLE)
 -- ══════════════════════════════════════════════════════════════════════════
 task.spawn(function()
-    while true do
+    while scriptRunning do
         task.wait(1.5)
         Log("Loop", "Coordinated loop heartbeat", {
             autoAnomalyShutter   = tostring(_G.AutoAnomalyShutter),
@@ -1211,7 +1225,7 @@ local function UpdateESP()
 end
 
 task.spawn(function()
-    while true do
+    while scriptRunning do
         task.wait(2.5)
         if _G.PatientESP or _G.AnomalyESP or _G.PlayerESP then pcall(UpdateESP) end
     end
