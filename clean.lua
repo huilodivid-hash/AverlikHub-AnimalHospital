@@ -700,55 +700,138 @@ local function TreatRoom7Emergency()
     return false
 end
 
--- Палата 6 (Реанимация / X-Ray)
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- ☢️ ПАЛАТА 6 (РЕАНИМАЦИЯ / РЕНТГЕН - X-RAY ROOM 6)
+-- ══════════════════════════════════════════════════════════════════════════════════
 local function TreatRoom6Emergency()
     local room6 = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room6")
     if not room6 then return false end
 
     local minigame = room6:FindFirstChild("Minigame")
-    local xrayPP = minigame and minigame:FindFirstChild("xrayMonitor") and minigame.xrayMonitor:FindFirstChild("PP")
+    if not minigame then return false end
 
-    if xrayPP and xrayPP.Enabled then
-        Log("AutoTreatment", "Found patient for room (or start prompt)", { prompt = xrayPP:GetFullName(), room = "Room6" })
-        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = "Workspace.NPCs.Patient", npcPrompt = xrayPP:GetFullName(), room = "Room6" })
+    local xrayPos = Positions.Room6_XrayStart or Vector3.new(-176.77, 2.90, 54.93)
+    local patientPos = Positions.Room6_Bed or Vector3.new(-181.83, 3.91, 54.08)
 
-        TeleportAndFirePrompt(xrayPP, Positions.Room6_XrayStart, 0.4)
-        task.wait(1.5)
+    -- 1. Первым делом проверяем рецепт на ТВ-экране Палаты 6
+    local needed = ResolveNeededTreatmentItems("Room6")
 
-        local monitorPP2 = minigame:FindFirstChild("Monitor") and minigame.Monitor:FindFirstChild("PP2")
-        if monitorPP2 and monitorPP2.Enabled then
+    -- 2. Если на ТВ пусто, проверяем пациента в рентген-кабине или кнопку запуска
+    local xrayMonitor = minigame:FindFirstChild("xrayMonitor")
+    local xrayPP = xrayMonitor and (xrayMonitor:FindFirstChild("PP") or xrayMonitor:FindFirstChildWhichIsA("ProximityPrompt", true))
+
+    local patient = nil
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        for _, npc in ipairs(npcsFolder:GetChildren()) do
+            if npc:IsA("Model") and IsValidPatient(npc) then
+                local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+                if root and (root.Position - patientPos).Magnitude <= 16 then
+                    patient = npc
+                    break
+                end
+            end
+        end
+    end
+
+    if #needed == 0 and (patient or (xrayPP and xrayPP.Enabled)) then
+        _G.AH_IsTreating = true
+        Log("AutoTreatment", "Found patient for room (or start prompt)", { prompt = xrayPP and xrayPP:GetFullName() or "Room6_Start", room = "Room6" })
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", npcPrompt = xrayPP and xrayPP:GetFullName() or "Room6", room = "Room6" })
+
+        -- Шаг 1. Запуск рентгена (Begin X-Ray)
+        if xrayPP and xrayPP.Enabled then
+            Log("AutoTreatment", "Pressing Room6 xray prompt", { prompt = xrayPP:GetFullName() })
+            TeleportAndFirePrompt(xrayPP, xrayPos, 0.4)
+            task.wait(1.5)
+        end
+
+        -- Шаг 2. Обработка на мониторе (Process Results)
+        local monitor = minigame:FindFirstChild("Monitor")
+        local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if monitorPP2 then
+            monitorPP2.Enabled = true
             Log("AutoTreatment", "Pressing monitor process prompt", { prompt = monitorPP2:GetFullName(), retryLeft = 1, room = "Room6" })
             TeleportAndFirePrompt(monitorPP2, Positions.Room6_XrayMonitor, 0.4)
             task.wait(2.5)
         end
 
-        local xresultPP = minigame:FindFirstChild("PrintedXRay") and minigame.PrintedXRay:FindFirstChild("PP")
-        if xresultPP and xresultPP.Enabled then
+        -- Шаг 3. Забор снимка из xresult (Collect)
+        local xresult = minigame:FindFirstChild("xresult")
+        local xresultPP = xresult and (xresult:FindFirstChild("PP") or xresult:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if xresultPP then
+            xresultPP.Enabled = true
             Log("AutoTreatment", "Pressing xresult prompt", { prompt = xresultPP:GetFullName(), room = "Room6" })
             TeleportAndFirePrompt(xresultPP, Positions.Room6_PrintedXRay, 0.4)
             task.wait(1.5)
         end
 
-        local meds = { "Ointment", "Bandages" }
-        for _, med in ipairs(meds) do
-            GrabItemUntilInInventory(med, "Room6")
-            if GetItemCount(med) > 0 then
-                UseInventoryTool(med)
-                TeleportPlayer(Positions.Room6_Bed)
+        -- Перепроверяем рецепт после сбора снимка
+        needed = ResolveNeededTreatmentItems("Room6")
+    end
+
+    -- 3. Если на ТВ есть назначенные лекарства -> доставляем пациенту в рентген-кабине!
+    if #needed > 0 then
+        _G.AH_IsTreating = true
+        Log("AutoTreatment", "Starting patient treatment", { emergency = "true", neededItems = table.concat(needed, ", "), npc = patient and patient:GetFullName() or "Room6.Patient", room = "Room6" })
+
+        local attempt = 0
+        while _G.AutoTreatment and not StopCheck() do
+            needed = ResolveNeededTreatmentItems("Room6")
+            if #needed == 0 then break end
+
+            attempt = attempt + 1
+            local currentItem = needed[1]
+
+            local itemsList = {}
+            for idx, it in ipairs(needed) do table.insert(itemsList, string.format("%d=%s", idx, it)) end
+            local neededStr = "{" .. table.concat(itemsList, ", ") .. "}"
+
+            Log("AutoTreatment", "Treatment item loop", {
+                attempt = attempt,
+                currentItem = currentItem,
+                isSkinwalker = "false",
+                medicineCount = GetMedicineItemCount(),
+                neededItems = neededStr,
+                npc = patient and patient:GetFullName() or "Room6.Patient",
+                room = "Room6",
+                shouldKill = "false"
+            })
+
+            if GetItemCount(currentItem) == 0 then
+                Log("Inventory", "Tool not found in inventory", { item = currentItem })
+                GrabItemUntilInInventory(currentItem, "Room6")
+            end
+
+            if GetItemCount(currentItem) > 0 then
+                UseInventoryTool(currentItem)
+                TeleportPlayer(patientPos + Vector3.new(0, 1.0, 0))
                 task.wait(0.2)
 
-                local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
-                local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2"))
-                if bedPP then
-                    PressPromptNearbyUntil(bedPP, 0.15, 2.0, function()
-                        return GetItemCount(med) == 0
+                -- Ищем целевой промпт пациента или рентген-аппарата
+                local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or xrayPP
+                if treatPP then
+                    Log("AutoTreatment", "Delivering treatment item to patient in Room6", {
+                        prompt = treatPP:GetFullName(),
+                        room = "Room6",
+                        targetItem = currentItem
+                    })
+
+                    PressPromptNearbyUntil(treatPP, 0.15, 2.5, function()
+                        return GetItemCount(currentItem) == 0
                     end)
                 end
                 task.wait(0.4)
             end
         end
+
+        if patient then _G.AH_TreatedPatients[patient] = true end
+        _G.AH_IsTreating = false
+        Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Room6.Patient", room = "Room6" })
         return true
     end
+
+    _G.AH_IsTreating = false
     return false
 end
 
