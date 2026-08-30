@@ -323,7 +323,7 @@ local function DiscardToolAtTrash(tool)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📺 6. TV REPORT & RECOVERY DETECTION ENGINE
+-- 📺 6. TV REPORT & RECOVERY DETECTION ENGINE (AUTHENTIC GAME MATCHING)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local AssetToItemMap = {
     ['rbxassetid://139637091303873'] = 'Eye Drops',
@@ -346,7 +346,7 @@ local AssetToItemMap = {
 local function GetRoomFolder(roomName)
     local rooms = Workspace:FindFirstChild("Rooms")
     if not rooms then return nil end
-    local num = tonumber(roomName:match("%d+"))
+    local num = tonumber(tostring(roomName):match("%d+"))
     if num and num >= 6 then
         return rooms:FindFirstChild("Emergency")
     else
@@ -356,32 +356,53 @@ end
 
 local function IsItemChecked(guiItem)
     if not guiItem then return false end
-    local check = guiItem:FindFirstChild("Check") or guiItem:FindFirstChild("Tick") or guiItem:FindFirstChild("Cross")
-    if check and check:IsA("GuiObject") and check.Visible then
-        return true
+    -- Игровой чекбокс имеет имя "check" (со строчной буквы)
+    local check = guiItem:FindFirstChild("check") or guiItem:FindFirstChild("Check") or guiItem:FindFirstChild("tick") or guiItem:FindFirstChild("Tick")
+    if check and check:IsA("GuiObject") then
+        local ok, vis = pcall(function() return check.Visible end)
+        if ok and vis == true then return true end
     end
     return false
 end
 
 local function IsRoomRecovering(room)
     if not room then return false end
-    local minigame = room:FindFirstChild("Minigame")
-    local tv = minigame and minigame:FindFirstChild("TV")
-    local ui = tv and tv:FindFirstChild("Screen") and tv.Screen:FindFirstChild("UI")
-    if ui then
-        local healing = ui:FindFirstChild("Healing")
-        if healing and healing.Visible then return true end
-        local failed = ui:FindFirstChild("Failed")
-        if failed and failed.Visible then return true end
-    end
-    for _, d in ipairs(room:GetDescendants()) do
-        if d:IsA("TextLabel") and d.Visible then
-            local text = string.lower(tostring(d.Text or ""))
-            if text:find("recover") or text:find("healing") or text:find("recovering") or text:find("success") then
+    local roomFolder = GetRoomFolder(room.Name)
+    if not roomFolder then return false end
+
+    local ok, healing, header = pcall(function()
+        local ui = room.Minigame.TV.Screen.UI
+        return ui.Healing, ui.Healing.header
+    end)
+    if ok and healing and header then
+        local curr = header
+        local visible = true
+        while curr and curr ~= roomFolder do
+            if curr:IsA("GuiObject") and curr.Visible == false then
+                visible = false
+                break
+            end
+            curr = curr.Parent
+        end
+        if visible then
+            local text = string.lower(tostring(header.Text or ""))
+            if (text:find("patient") and text:find("recover")) or text:find("heal") or text:find("recovering") then
                 return true
             end
         end
     end
+
+    -- Дополнительная проверка на Failed / Healing экраны
+    local minigame = room:FindFirstChild("Minigame")
+    local tv = minigame and minigame:FindFirstChild("TV")
+    local ui = tv and tv:FindFirstChild("Screen") and tv.Screen:FindFirstChild("UI")
+    if ui then
+        local h = ui:FindFirstChild("Healing")
+        if h and h:IsA("GuiObject") and h.Visible then return true end
+        local f = ui:FindFirstChild("Failed")
+        if f and f:IsA("GuiObject") and f.Visible then return true end
+    end
+
     return false
 end
 
@@ -400,7 +421,7 @@ local function ResolveNeededTreatmentItems(roomName)
 
     if reportInv then
         for _, child in ipairs(reportInv:GetChildren()) do
-            if (child:IsA("ImageLabel") or child:IsA("ImageButton") or child:IsA("Frame")) and child.Visible then
+            if child:IsA("GuiObject") and child.Visible then
                 if not IsItemChecked(child) then
                     local matched = nil
                     if child:IsA("ImageLabel") or child:IsA("ImageButton") then
