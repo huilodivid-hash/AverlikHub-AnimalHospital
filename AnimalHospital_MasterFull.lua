@@ -884,47 +884,56 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 10. AUTO SHUTTER & ANOMALY THREAT EVALUATOR (WITH AUTO-REOPEN)
--- ══════════════════════════════════════════════════════════════════════════
+-- 🛡️ 10. AUTO SHUTTER & ANOMALY THREAT EVALUATOR (ONLY REAL ANOMALIES AT COUNTER)
+-- ══════════════════════════════════════════════════════════════════════════════════
 local isShutterClosed = false
 
 local function EvaluateCounterThreats()
+    if not _G.AutoAnomalyShutter and not _G.AutoBarneyShutter then return end
+
     local npcsFolder = Workspace:FindFirstChild("NPCs")
     if not npcsFolder then return end
+
+    local shutterPP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton") and Workspace.Misc.ShutterButton:FindFirstChild("PP")
+    local shutterPos = Positions.ShutterButton
 
     local hasThreatAtCounter = false
     local threatNpc = nil
 
     for _, npc in ipairs(npcsFolder:GetChildren()) do
         if npc:IsA("Model") and npc ~= LocalPlayer.Character then
-            local isThreat = false
-            local name = npc.Name
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+            if root then
+                local distToCounter = (root.Position - shutterPos).Magnitude
+                -- Проверяем только NPC, находящихся рядом со стойкой ресепшена (в радиусе 35 стадсов)
+                if distToCounter <= 35 then
+                    local isThreat = false
+                    -- Настоящая проверка на Скинволкера / Аномалию по игровым атрибутам
+                    if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
+                        isThreat = true
+                    elseif npc.Name == "Barney" and _G.AutoBarneyShutter then
+                        isThreat = (npc:GetAttribute("Anomaly") == true)
+                    end
 
-            if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or name:find("Tako") or name:find("Skinwalker") or name:find("Anomaly") or name:find("Mika") or name:find("Chloe") or name:find("Cookie") then
-                isThreat = true
-            elseif name == "Barney" then
-                isThreat = (npc:GetAttribute("Anomaly") == true)
-            end
+                    Log("AutoShutter", "Evaluating counter NPC", { isThreat = tostring(isThreat), npc = npc:GetFullName() })
 
-            Log("AutoShutter", "Evaluating counter NPC", { isThreat = tostring(isThreat), npc = npc:GetFullName() })
+                    if isThreat then
+                        hasThreatAtCounter = true
+                        threatNpc = npc
 
-            if isThreat then
-                hasThreatAtCounter = true
-                threatNpc = npc
-
-                if _G.AutoAskLeaveAnomaly then
-                    local askPP = npc:FindFirstChild("PP")
-                    if askPP and askPP.Enabled and (askPP.ActionText or ""):find("Ask") then
-                        Log("AutoAskLeaveAnomaly", "Pressing Ask To Leave prompt", { npc = npc:GetFullName(), prompt = askPP:GetFullName() })
-                        TeleportAndFirePrompt(askPP, Positions.AskToLeave, 0.4)
-                        task.wait(0.5)
+                        if _G.AutoAskLeaveAnomaly then
+                            local askPP = npc:FindFirstChild("PP")
+                            if askPP and askPP.Enabled and (askPP.ActionText or ""):find("Ask") then
+                                Log("AutoAskLeaveAnomaly", "Pressing Ask To Leave prompt", { npc = npc:GetFullName(), prompt = askPP:GetFullName() })
+                                TeleportAndFirePrompt(askPP, Positions.AskToLeave, 0.4)
+                                task.wait(0.5)
+                            end
+                        end
                     end
                 end
             end
         end
     end
-
-    local shutterPP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton") and Workspace.Misc.ShutterButton:FindFirstChild("PP")
 
     if hasThreatAtCounter and _G.AutoAnomalyShutter then
         if shutterPP and shutterPP.Enabled and not isShutterClosed then
@@ -948,57 +957,86 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (CONTINUOUS REGISTRATION MATCH)
--- ══════════════════════════════════════════════════════════════════════════
+-- 🏢 11. AUTO CHECK IN (ТОЛЬКО ПРИ НАЛИЧИИ КЛИЕНТА У СТОЙКИ)
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function GetPatientAtCounter()
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return nil end
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") and npc ~= LocalPlayer.Character and npc.Name ~= "Barney" then
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+            if root then
+                local dist = (root.Position - Positions.CheckInForm).Magnitude
+                if dist <= 22 then
+                    return npc
+                end
+            end
+        end
+    end
+    return nil
+end
+
 local function ExecuteCheckInCycle()
     if not _G.AutoCheckIn then return end
-    Log("AutoCheckIn", "Starting check-in cycle")
+
+    -- Если у стойки нет клиента, не телепортируемся к компьютеру!
+    local patient = GetPatientAtCounter()
+    if not patient then return end
 
     local misc = Workspace:FindFirstChild("Misc")
     local checkIn = misc and misc:FindFirstChild("CheckIn")
     if not checkIn then return end
 
-    -- 1. Stamp Forms
+    Log("AutoCheckIn", "Starting check-in cycle")
+
+    -- 1. Stamp Forms (если активен)
     local formPP = checkIn:FindFirstChild("Form") and checkIn.Form:FindFirstChild("PP")
-    if formPP and formPP.Enabled then TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.4); task.wait(0.4) end
+    if formPP and formPP.Enabled then
+        TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.4)
+        task.wait(0.4)
+    end
 
-    -- 2. Take Photo
+    -- 2. Take Photo (если активен)
     local camPP = checkIn:FindFirstChild("Camera") and checkIn.Camera:FindFirstChild("PP")
-    if camPP and camPP.Enabled then TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.4); task.wait(0.4) end
+    if camPP and camPP.Enabled then
+        TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.4)
+        task.wait(0.4)
+    end
 
-    -- 3. Continuous Register on PC
+    -- 3. Register on PC (только если принтер еще не печатает и бейдж не готов)
+    local printerPP = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
+    local badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
     local pcPP = checkIn:FindFirstChild("Computer") and checkIn.Computer:FindFirstChild("PP")
-    if pcPP and pcPP.Enabled then
+
+    if pcPP and pcPP.Enabled and (not printerPP or not printerPP.Enabled) and (not badgePP or not badgePP.Enabled) then
         TeleportPlayer(Positions.CheckInPC)
         task.wait(0.2)
-        PressPromptNearbyUntil(pcPP, 0.25, 2.5, function()
+        PressPromptNearbyUntil(pcPP, 0.25, 2.0, function()
             local pr = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
             return pr and pr.Enabled
         end)
     end
 
-    -- 4. Print Badge
-    local printerPP = checkIn:FindFirstChild("Printer") and checkIn.Printer:FindFirstChild("PP")
+    -- 4. Print Badge (если активен)
     if printerPP and printerPP.Enabled then
-        Log("AutoCheckIn", "Printing badge", { attempt = 1, patient = "Workspace.NPCs.Current", prompt = printerPP:GetFullName() })
-        TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4); task.wait(2.5)
+        Log("AutoCheckIn", "Printing badge", { attempt = 1, patient = patient:GetFullName(), prompt = printerPP:GetFullName() })
+        TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4)
+        task.wait(2.5)
     end
 
-    -- 5. Take Badge
-    local badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
-    if badgePP and badgePP.Enabled then TeleportAndFirePrompt(badgePP, Positions.PrintedBadge, 0.4); task.wait(0.4) end
+    -- 5. Take Badge (если готов)
+    badgePP = checkIn:FindFirstChild("PrintedBadge") and checkIn.PrintedBadge:FindFirstChild("PP")
+    if badgePP and badgePP.Enabled then
+        TeleportAndFirePrompt(badgePP, Positions.PrintedBadge, 0.4)
+        task.wait(0.4)
+    end
 
     -- 6. Talk to Patient
-    local npcsFolder = Workspace:FindFirstChild("NPCs")
-    if npcsFolder then
-        for _, npc in ipairs(npcsFolder:GetChildren()) do
-            local talkPP = npc:FindFirstChild("PP")
-            if talkPP and talkPP.Enabled and (talkPP.ActionText or ""):find("Talk") then
-                TeleportAndFirePrompt(talkPP, Positions.CounterTalk, 0.4)
-                task.wait(0.4)
-                break
-            end
-        end
+    local talkPP = patient:FindFirstChild("PP")
+    if talkPP and talkPP.Enabled and (talkPP.ActionText or ""):find("Talk") then
+        TeleportAndFirePrompt(talkPP, Positions.CounterTalk, 0.4)
+        task.wait(0.4)
     end
 end
 
