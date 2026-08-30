@@ -96,68 +96,80 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════════
 local Positions = {
     -- Reception (Check-In)
-    ShutterButton     = Vector3.new(-113.20, 5.65, -1.60),
+    ShutterButton     = Vector3.new(-113.20, 4.65, -4.10),
     CheckInPC         = Vector3.new(-97.68, 3.50, -2.50),
-    CheckInForm       = Vector3.new(-103.95, 6.10, -2.60),
-    CheckInCamera     = Vector3.new(-108.57, 7.65, -2.93),
-    CheckInPrinter    = Vector3.new(-96.86, 6.58, 1.26),
-    PrintedBadge      = Vector3.new(-98.25, 6.51, 1.26),
-    CounterTalk       = Vector3.new(-103.90, 5.47, -7.10),
+    CheckInForm       = Vector3.new(-103.95, 4.50, -2.60),
+    CheckInCamera     = Vector3.new(-108.57, 4.50, -2.93),
+    CheckInPrinter    = Vector3.new(-96.86, 4.50, 1.26),
+    PrintedBadge      = Vector3.new(-98.25, 4.50, 1.26),
+    CounterTalk       = Vector3.new(-103.90, 3.41, -7.10),
     AskToLeave        = Vector3.new(-92.60, 3.49, 5.60),
     Reception         = Vector3.new(-108.72, 3.41, 10.20),
 
     -- Barney & Coffee Machine
     BarneyDesk        = Vector3.new(-103.90, 3.53, -4.60),
-    CoffeeMachine     = Vector3.new(-123.82, 7.93, 10.22),
+    CoffeeMachine     = Vector3.new(-123.83, 4.01, 10.33),
 
     -- Emergency Room 8 (Surgery)
-    Room8_Bed         = Vector3.new(-144.89, 5.06, 99.59),
-    Room8_Scalpel     = Vector3.new(-132.85, 5.20, 104.97),
-    Room8_IVDrops     = Vector3.new(-144.85, 5.20, 112.47),
-    Room8_Scissors    = Vector3.new(-132.85, 5.20, 104.97),
-    Room8_Organ       = Vector3.new(-156.15, 5.20, 104.97),
-    Room8_Transplant  = Vector3.new(-132.85, 5.20, 100.97),
-    Room8_Medkit      = Vector3.new(-140.85, 5.20, 112.47),
-    Room8_Medicine    = Vector3.new(-132.85, 5.20, 96.97),
-    Room8_Bandages    = Vector3.new(-155.06, 5.64, 43.76),
+    Room8_Bed         = Vector3.new(-144.89, 3.56, 99.59),
+    Room8_Monitor     = Vector3.new(-134.63, 4.78, 85.74),
+    Room8_TV          = Vector3.new(-144.93, 8.34, 114.49),
+    Room8_Printer     = Vector3.new(-134.39, 3.78, 82.75),
+    Room8_IVDrops     = Vector3.new(-144.85, 3.70, 112.47),
+    Room8_Medkit      = Vector3.new(-140.85, 3.70, 112.47),
+    Room8_Medicine    = Vector3.new(-144.85, 3.70, 112.47),
+    Room8_Organ       = Vector3.new(-132.85, 3.70, 100.97),
+    Room8_Transplant  = Vector3.new(-132.85, 3.70, 97.00),
+    Room8_Antibiotics = Vector3.new(-132.85, 3.70, 105.00),
+    Room8_Bandages    = Vector3.new(-156.15, 3.70, 105.00),
+    Room8_Scissors    = Vector3.new(-156.15, 3.70, 101.00),
+    Room8_Scalpel     = Vector3.new(-156.15, 3.70, 97.00),
 
     -- Emergency Room 7 (ICU)
-    Room7_Bed         = Vector3.new(-106.53, 4.74, 52.13),
-    Room7_Monitor     = Vector3.new(-125.52, 6.28, 63.27),
-    Room7_PrintedXRay = Vector3.new(-122.58, 5.15, 61.96),
+    Room7_Bed         = Vector3.new(-106.53, 3.24, 52.13),
+    Room7_Monitor     = Vector3.new(-125.52, 4.78, 63.27),
+    Room7_PrintedXRay = Vector3.new(-122.58, 3.65, 63.66),
+    Room7_TV          = Vector3.new(-100.79, 8.64, 51.97),
 
     -- Emergency Room 6 (X-Ray)
     Room6_Bed         = Vector3.new(-181.83, 3.91, 54.08),
     Room6_XrayStart   = Vector3.new(-176.77, 2.90, 54.93),
     Room6_XrayMonitor = Vector3.new(-169.33, 6.23, 63.33),
-    Room6_PrintedXRay = Vector3.new(-166.05, 5.15, 61.90),
+    Room6_PrintedXRay = Vector3.new(-166.05, 3.70, 62.50),
+    Room6_TV          = Vector3.new(-166.08, 9.24, 64.89),
 
-    
-    -- Medical Rooms 1 to 5 Devices / Monitors
-    Room1_Device      = Vector3.new(-177.66, 3.46, -44.22),
-    Room2_Device      = Vector3.new(-111.46, 3.46, -56.71),
-    Room3_Device      = Vector3.new(-177.98, 3.46, -83.59),
-    Room4_Device      = Vector3.new(-111.04, 3.46, -94.01),
-    Room5_Device      = Vector3.new(-150.89, 3.46, -124.02),
+    -- Medical Rooms 1 to 5 Beds (InBed exact dump positions)
+    Room1_Bed         = Vector3.new(-168.22, 3.19, -41.90),
+    Room2_Bed         = Vector3.new(-121.37, 3.19, -58.74),
+    Room3_Bed         = Vector3.new(-168.22, 3.19, -81.10),
+    Room4_Bed         = Vector3.new(-121.28, 3.19, -98.24),
+    Room5_Bed         = Vector3.new(-153.42, 3.19, -114.74),
 
-    -- Medical Rooms 1 to 5 (Wards)
-    Room1_Bed         = Vector3.new(-168.22, 4.69, -41.90),
-    Room2_Bed         = Vector3.new(-121.24, 5.81, -59.50),
-    Room3_Bed         = Vector3.new(-168.22, 4.69, -81.10),
-    Room4_Bed         = Vector3.new(-121.16, 5.81, -99.06),
-    Room5_Bed         = Vector3.new(-153.42, 4.69, -114.74),
+    -- Medical Rooms 1 to 5 Monitors (Process Results)
+    Room1_Device      = Vector3.new(-180.76, 4.74, -45.91),
+    Room2_Device      = Vector3.new(-108.74, 4.74, -54.71),
+    Room3_Device      = Vector3.new(-180.76, 4.74, -85.12),
+    Room4_Device      = Vector3.new(-108.74, 4.74, -92.52),
+    Room5_Device      = Vector3.new(-149.41, 4.74, -127.28),
+
+    -- Medical Rooms 1 to 5 TVs
+    Room1_TV          = Vector3.new(-168.22, 8.67, -37.67),
+    Room2_TV          = Vector3.new(-121.29, 8.67, -63.27),
+    Room3_TV          = Vector3.new(-168.22, 8.67, -76.87),
+    Room4_TV          = Vector3.new(-121.29, 8.67, -102.47),
+    Room5_TV          = Vector3.new(-157.65, 8.67, -114.73),
 
     -- Medical Shelves & Dispensers
-    Shelf_IVDrops     = Vector3.new(-155.06, 5.64, 60.06),
-    Ointment          = Vector3.new(-155.06, 5.64, 39.76),
-    Bandages          = Vector3.new(-155.06, 5.64, 43.76),
-    FirstAid          = Vector3.new(-152.64, 3.46, -67.75),
+    Herbs             = Vector3.new(-137.12, 3.46, -57.82),
+    MapleSyrup        = Vector3.new(-134.99, 5.64, 37.86),
     EyeDrops          = Vector3.new(-152.79, 3.46, -56.10),
     Pills             = Vector3.new(-137.03, 3.46, -63.56),
-    CoughSyrup        = Vector3.new(-136.61, 3.46, -82.49),
-    Herbs             = Vector3.new(-137.12, 3.46, -57.82),
+    Bandages          = Vector3.new(-155.06, 5.64, 43.76),
     Thermometer       = Vector3.new(-152.41, 3.46, -72.61),
-    Plaster           = Vector3.new(-152.53, 3.46, -84.23)
+    CoughSyrup        = Vector3.new(-136.61, 3.46, -82.49),
+    Ointment          = Vector3.new(-155.06, 5.64, 39.76),
+    Plaster           = Vector3.new(-152.53, 3.46, -84.23),
+    FirstAid          = Vector3.new(-152.64, 3.46, -67.75)
 }
 
 -- ══════════════════════════════════════════════════════════════════════════════════════
