@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V21.0 DESIGNATED BED ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V23.0 CLEAN OPERATIONS)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -733,7 +733,10 @@ end
 
 local function GetRoomBedPrompt(roomData, minigame, patient)
     if roomData.Name == "Room6" then
-        return patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if patient then
+            local npPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if npPP and npPP.Enabled then return npPP end
+        end
     end
 
     local bed = minigame:FindFirstChild("Bed")
@@ -755,7 +758,7 @@ local function GetRoomBedPrompt(roomData, minigame, patient)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 9. COMPLETE TREATMENT ENGINE (ATOMIC FULL ROOM COMPLETION)
+-- 🏥 9. COMPLETE TREATMENT ENGINE (STRICT PATIENT EXISTENCE CHECK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientInRoom(roomData)
     local npcs = Workspace:FindFirstChild("NPCs")
@@ -779,6 +782,10 @@ end
 local function TreatSingleRoom(roomData)
     if not _G.AutoTreatment or StopCheck() then return false end
 
+    -- 🛑 ПРОВЕРКА: В комнате ДОЛЖЕН быть пациент! Если в комнате пусто - ничего не трогаем!
+    local patient = GetPatientInRoom(roomData)
+    if not patient then return false end
+
     if IsRoomRecovering(roomData) then return false end
 
     local folder = GetRoomFolder(roomData)
@@ -788,11 +795,10 @@ local function TreatSingleRoom(roomData)
     local minigame = room:FindFirstChild("Minigame")
     if not minigame then return false end
 
-    local patient = GetPatientInRoom(roomData)
     local didAction = false
 
-    -- 0. Если пациент возле палаты, но не на койке -> нажимаем PP2 (Place Patient in Bed)
-    if patient and roomData.Name ~= "Room6" and patient:GetAttribute("InBed") ~= true then
+    -- 0. Если пациент возле палаты, но не на койке (для комнат 1-5, 7, 8)
+    if roomData.Name ~= "Room6" and patient:GetAttribute("InBed") ~= true then
         local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
         local placePP = inBed and inBed:FindFirstChild("PP2")
         if placePP and placePP.Enabled then
@@ -805,17 +811,15 @@ local function TreatSingleRoom(roomData)
     end
 
     -- 1. DNA Sample Prompt (на пациенте)
-    if patient then
-        for _, p in ipairs(patient:GetDescendants()) do
-            if p:IsA("ProximityPrompt") and p.Enabled then
-                local act = string.lower(p.ActionText or "")
-                if act:find("sample") or act:find("dna") or act:find("take") or act:find("prepare") then
-                    Log("AutoTreatment", "Taking DNA sample", { room = roomData.Name, prompt = p:GetFullName() })
-                    PressPromptNearby(p, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
-                    didAction = true
-                    task.wait(0.3)
-                    break
-                end
+    for _, p in ipairs(patient:GetDescendants()) do
+        if p:IsA("ProximityPrompt") and p.Enabled then
+            local act = string.lower(p.ActionText or "")
+            if act:find("sample") or act:find("dna") or act:find("take") or act:find("prepare") then
+                Log("AutoTreatment", "Taking DNA sample", { room = roomData.Name, prompt = p:GetFullName() })
+                PressPromptNearby(p, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
+                didAction = true
+                task.wait(0.3)
+                break
             end
         end
     end
@@ -831,30 +835,37 @@ local function TreatSingleRoom(roomData)
     end
 
     -- 3. X-Ray Start Prompt (Room 6 xrayMonitor)
-    local xrayMonitor = minigame:FindFirstChild("xrayMonitor")
-    local xrayPP = xrayMonitor and (xrayMonitor:FindFirstChild("PP") or xrayMonitor:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if xrayPP and xrayPP.Enabled then
-        Log("AutoTreatment", "Starting X-Ray scan", { room = roomData.Name, prompt = xrayPP:GetFullName() })
-        PressPromptNearby(xrayPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
-        didAction = true
-        task.wait(0.3)
+    if roomData.Name == "Room6" then
+        local xrayMonitor = minigame:FindFirstChild("xrayMonitor")
+        local xrayPP = xrayMonitor and (xrayMonitor:FindFirstChild("PP") or xrayMonitor:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if xrayPP and xrayPP.Enabled then
+            Log("AutoTreatment", "Starting X-Ray scan in Room 6", { prompt = xrayPP:GetFullName() })
+            PressTreatmentPromptNearbyUntil(xrayPP, 0.25, 3.0, function()
+                return not xrayPP.Parent or not xrayPP.Enabled or #GetNeededTreatmentItems(roomData) > 0
+            end)
+            didAction = true
+            task.wait(0.3)
+        end
     end
 
-    -- 4. Monitor Process Prompt (PP2)
-    local monitor = minigame:FindFirstChild("Monitor")
-    local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if monitorPP2 and monitorPP2.Enabled then
-        Log("AutoTreatment", "Processing monitor results", { room = roomData.Name, prompt = monitorPP2:GetFullName() })
-        PressPromptNearby(monitorPP2, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
-        didAction = true
-        task.wait(0.3)
+    -- 4. Monitor Process Prompt (PP2) - Нажимаем только если в рецепте еще нет предметов
+    local neededBefore = GetNeededTreatmentItems(roomData)
+    if #neededBefore == 0 then
+        local monitor = minigame:FindFirstChild("Monitor")
+        local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if monitorPP2 and monitorPP2.Enabled then
+            Log("AutoTreatment", "Processing monitor results", { room = roomData.Name, prompt = monitorPP2:GetFullName() })
+            PressPromptNearby(monitorPP2, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
+            didAction = true
+            task.wait(0.3)
+        end
     end
 
-    -- 5. Printed X-Ray Result (xresult / PrintedXRay)
-    local xresult = minigame:FindFirstChild("xresult") or minigame:FindFirstChild("PrintedXRay")
+    -- 5. Printed X-Ray Result (PrintedXRay / xresult)
+    local xresult = minigame:FindFirstChild("PrintedXRay") or minigame:FindFirstChild("xresult") or minigame:FindFirstChild("PrintedXRay", true) or minigame:FindFirstChild("xresult", true)
     local xresultPP = xresult and (xresult:FindFirstChild("PP") or xresult:FindFirstChildWhichIsA("ProximityPrompt", true))
     if xresultPP and xresultPP.Enabled then
-        Log("AutoTreatment", "Taking X-Ray result", { room = roomData.Name, prompt = xresultPP:GetFullName() })
+        Log("AutoTreatment", "Taking X-Ray result sheet", { room = roomData.Name, prompt = xresultPP:GetFullName() })
         PressPromptNearby(xresultPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
         didAction = true
         task.wait(0.3)
@@ -866,7 +877,7 @@ local function TreatSingleRoom(roomData)
         Log("AutoTreatment", "Starting patient prescription delivery", {
             emergency = roomData.Emergency and "true" or "false",
             neededItems = table.concat(needed, ", "),
-            npc = patient and patient:GetFullName() or (roomData.Name .. ".Patient"),
+            npc = patient:GetFullName(),
             room = roomData.Name
         })
 
@@ -889,7 +900,7 @@ local function TreatSingleRoom(roomData)
             attempt = attempt + 1
             local currentItem = needed[1]
 
-            if _G.AutoKillAnomaly and patient and patient:GetAttribute("Skinwalker") == true then
+            if _G.AutoKillAnomaly and patient:GetAttribute("Skinwalker") == true then
                 local allItems = roomData.Emergency and _G.AH_SurgeryItemList or _G.AH_ItemList
                 for _, wrong in ipairs(allItems) do
                     local isWanted = false
@@ -913,7 +924,7 @@ local function TreatSingleRoom(roomData)
                 end
 
                 if targetPrompt and targetPrompt.Enabled then
-                    Log("AutoTreatment", "Delivering treatment item to bed", { room = roomData.Name, targetItem = currentItem, prompt = targetPrompt:GetFullName() })
+                    Log("AutoTreatment", "Delivering treatment item to room/bed", { room = roomData.Name, targetItem = currentItem, prompt = targetPrompt:GetFullName() })
                     PressTreatmentPromptNearbyUntil(targetPrompt, 0.15, 2.5, function()
                         return GetItemCount(currentItem) == 0 or not targetPrompt.Parent or not targetPrompt.Enabled
                     end)
@@ -948,8 +959,8 @@ local function TreatSingleRoom(roomData)
         if wrong then DiscardToolAtTrash(wrong) end
 
         if appliedAny or IsRoomRecovering(roomData) then
-            if patient then MarkPatientTreated(patient) end
-            Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or (roomData.Name .. ".Patient"), room = roomData.Name })
+            MarkPatientTreated(patient)
+            Log("AutoTreatment", "Finished patient treatment", { npc = patient:GetFullName(), room = roomData.Name })
         end
 
         return true
@@ -1202,7 +1213,7 @@ local function AutoAskLeaveAnomaly()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧯 12. AUTO PUT OUT FIRE (PATIENTS & ROOMS)
+-- 🧯 12. AUTO PUT OUT FIRE (WITH AUTOMATIC EXTINGUISHER RETURN)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function EquipExtinguisher()
     if GetItemCount("Extinguisher") > 0 then
@@ -1218,6 +1229,20 @@ local function EquipExtinguisher()
         return UseInventoryTool("Extinguisher")
     end
     return false
+end
+
+local function ReturnExtinguisher()
+    if GetItemCount("Extinguisher") == 0 then return end
+    local misc = Workspace:FindFirstChild("Misc")
+    local extStation = misc and misc:FindFirstChild("ExtinguisherStation")
+    local extPP = extStation and extStation:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if extPP and extPP.Enabled then
+        Log("AutoPutOutFire", "Returning Extinguisher back to station")
+        UseInventoryTool("Extinguisher")
+        task.wait(0.1)
+        PressPromptNearby(extPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        UnequipAllTools()
+    end
 end
 
 local function AutoPutOutFire()
@@ -1257,8 +1282,14 @@ local function AutoPutOutFire()
     end
 
     if firesExtinguished > 0 then
-        UnequipAllTools()
+        task.wait(0.2)
+        ReturnExtinguisher()
         return true
+    end
+
+    -- Если огнетушитель остался в руках без пожаров - возвращаем на станцию
+    if GetItemCount("Extinguisher") > 0 then
+        ReturnExtinguisher()
     end
 
     return false
@@ -1627,7 +1658,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v21.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v23.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
