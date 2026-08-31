@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V17.0 BED INTERACTION ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V18.0 PURE THREAT & SHUTTER)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -40,6 +40,7 @@ _G.HasActiveThreat = false
 local _AH_TreatedPatients = {}
 local _AH_HandledCheckInPatients = {}
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
+local _AH_LeavingNpcs = setmetatable({}, { __mode = "k" })
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -508,57 +509,61 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 6. THREAT DETECTION & SHUTTER ENGINE
+-- 🛡️ 6. PURE FOXNAME THREAT DETECTION & SHUTTER ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function GetShutterPP()
+    local misc = Workspace:FindFirstChild("Misc")
+    local btn = misc and misc:FindFirstChild("ShutterButton")
+    return btn and (btn:FindFirstChild("PP") or btn:FindFirstChildWhichIsA("ProximityPrompt", true))
+end
+
 local function IsShutterClosed()
-    local btn = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton")
-    local pp = btn and (btn:FindFirstChild("PP") or btn:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if pp then
-        local act = string.lower(tostring(pp.ActionText or ""))
-        return act:find("open") ~= nil
-    end
-    return false
+    local pp = GetShutterPP()
+    if not pp then return nil end
+    return string.lower(tostring(pp.ActionText or "")) == "open"
 end
 
-local function SetShutterState(shouldBeClosed, reasonNpc)
-    local currentlyClosed = IsShutterClosed()
-    if currentlyClosed == shouldBeClosed then return end
+local function SetShutterClosed(shouldBeClosed)
+    local pp = GetShutterPP()
+    if not pp or not pp.Enabled or StopCheck() then return false end
+    local isClosed = IsShutterClosed()
+    if isClosed == nil or isClosed == shouldBeClosed then return false end
 
-    local btn = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton")
-    local pp = btn and (btn:FindFirstChild("PP") or btn:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if pp and pp.Enabled then
-        if shouldBeClosed then
-            Log("AutoShutter", "Closed shutter for threat", { npc = reasonNpc and reasonNpc:GetFullName() or "Unknown" })
-        else
-            Log("AutoShutter", "Opening shutter for normal patients")
-        end
-        PressPromptNearby(pp, 0.2, Vector3.new(0, 1.0, 1.5), 0.1)
-    end
+    Log("AutoShutter", shouldBeClosed and "Closing shutter" or "Opening shutter")
+    PressPromptNearby(pp, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
+    return true
 end
 
-local function IsBarney(npc)
+local function IsBarneyNpc(npc)
     if not npc then return false end
     return string.find(string.lower(npc.Name), "barney") ~= nil
 end
 
+local function IsValidPatient(npc)
+    if not npc or not npc:IsA("Model") then return false end
+    local name = npc.Name
+    if name == "Barney" or name == "Cleaner" or name == "Guard" or name == "Security" then return false end
+    return true
+end
+
 local function IsNpcThreat(npc)
     if not npc or not npc:IsA("Model") then return false end
-    if IsBarney(npc) then return _G.AutoBarneyShutter == true end
-    if not _G.AutoAnomalyShutter then return false end
+    if _G.AutoBarneyShutter and IsBarneyNpc(npc) then return true end
+    if _G.AutoAnomalyShutter and npc:GetAttribute("Skinwalker") == true then return true end
+    return false
+end
 
-    if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Anomaly") == true or npc:GetAttribute("IsThreat") == true then
-        return true
-    end
+local function IsThreatLeaving(npc)
+    if not npc or not npc:IsA("Model") then return false end
+    if _AH_LeavingNpcs[npc] then return true end
 
-    local name = string.lower(npc.Name)
-    if name:find("stalker") or name:find("monster") or name:find("anomaly") or name:find("skinwalker") or name:find("ghost") then
-        return true
-    end
-
-    for _, desc in ipairs(npc:GetDescendants()) do
-        if desc:IsA("StringValue") or desc:IsA("BoolValue") then
-            local dName = string.lower(desc.Name)
-            if (dName:find("threat") or dName:find("anomaly") or dName:find("skinwalker")) and desc.Value then
+    local hum = npc:FindFirstChildOfClass("Humanoid")
+    if hum then
+        for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+            local anim = track.Animation
+            local animId = anim and anim.AnimationId or ""
+            if animId:find("88351809285459") or (track.Priority == Enum.AnimationPriority.Action and not track.Looped) then
+                _AH_LeavingNpcs[npc] = true
                 return true
             end
         end
@@ -566,32 +571,63 @@ local function IsNpcThreat(npc)
     return false
 end
 
-local function EvaluateCounterThreats()
+local function HasNormalPatientAtCheckIn()
     local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return end
+    if not npcs then return false end
 
-    local counterPos = Positions.CheckInCounter
-    local threatFound = false
-    local threatNpc = nil
+    local misc = Workspace:FindFirstChild("Misc")
+    local checkIn = misc and misc:FindFirstChild("CheckIn")
+    local center = Positions.CheckInCounter
 
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") then
+        if npc:IsA("Model") and IsValidPatient(npc) and not IsNpcThreat(npc) then
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root and (root.Position - counterPos).Magnitude <= 28 then
-                if IsNpcThreat(npc) then
-                    threatFound = true
-                    threatNpc = npc
-                    break
-                end
+            if root and (root.Position - center).Magnitude <= 28 then
+                return true
             end
         end
     end
+    return false
+end
 
-    _G.HasActiveThreat = threatFound
-    if threatFound then
-        SetShutterState(true, threatNpc)
+local function HasThreatNearCheckIn()
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return false end
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") and IsNpcThreat(npc) and not IsThreatLeaving(npc) then
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+            if root and (root.Position - Positions.CheckInCounter).Magnitude <= 32 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function EvaluateShutterLogic()
+    if not (_G.AutoBarneyShutter or _G.AutoAnomalyShutter) then
+        if IsShutterClosed() == true then
+            SetShutterClosed(false)
+        end
+        return
+    end
+
+    local threatNear = HasThreatNearCheckIn()
+    local normalNear = HasNormalPatientAtCheckIn()
+
+    if threatNear then
+        _G.HasActiveThreat = true
+        if IsShutterClosed() == false then
+            Log("AutoShutter", "Closed shutter for active threat at check-in")
+            SetShutterClosed(true)
+        end
     else
-        SetShutterState(false)
+        _G.HasActiveThreat = false
+        if IsShutterClosed() == true then
+            Log("AutoShutter", "Opening shutter: no active threats at counter")
+            SetShutterClosed(false)
+        end
     end
 end
 
@@ -645,13 +681,6 @@ local function IsRoomRecovering(roomData)
         end
     end
     return false
-end
-
-local function IsValidPatient(npc)
-    if not npc or not npc:IsA("Model") then return false end
-    local name = npc.Name
-    if name == "Barney" or name == "Cleaner" or name == "Guard" or name == "Security" then return false end
-    return true
 end
 
 local function IsPatientAlreadyTreated(npc)
@@ -912,7 +941,7 @@ local function MarkCheckInPatientHandled(npc)
 end
 
 local function GetPatientAtCounter()
-    if IsShutterClosed() or _G.HasActiveThreat then return nil, nil end
+    if IsShutterClosed() == true or _G.HasActiveThreat then return nil, nil end
 
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return nil, nil end
@@ -950,7 +979,7 @@ local function GetNpcTalkPrompt(npc)
 end
 
 local function GetNpcCheckInPrompt(npc)
-    if not npc or IsBarney(npc) or npc.Name == "Cleaner" or npc.Name == "Guard" then return nil end
+    if not npc or IsBarneyNpc(npc) or npc.Name == "Cleaner" or npc.Name == "Guard" then return nil end
     local talk = GetNpcTalkPrompt(npc)
     if talk then return talk end
 
@@ -1004,7 +1033,7 @@ local function DeliverBadgeToPatient(patient)
 end
 
 local function ExecuteCheckInCycle()
-    if not _G.AutoCheckIn or IsShutterClosed() or _G.HasActiveThreat or StopCheck() then
+    if not _G.AutoCheckIn or IsShutterClosed() == true or _G.HasActiveThreat or StopCheck() then
         return false
     end
 
@@ -1130,13 +1159,14 @@ local function AutoAskLeaveAnomaly()
     if not npcs then return false end
 
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") then
+        if npc:IsA("Model") and npc:GetAttribute("Skinwalker") == true then
             for _, p in ipairs(npc:GetDescendants()) do
                 if p:IsA("ProximityPrompt") and p.Enabled then
                     local act = string.lower(p.ActionText or "")
                     if act:find("ask to leave") or act:find("leave") or act:find("dismiss") then
                         Log("AutoAskLeaveAnomaly", "Asking anomaly to leave", { npc = npc:GetFullName() })
                         PressPromptNearby(p, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
+                        _AH_LeavingNpcs[npc] = true
                         return true
                     end
                 end
@@ -1252,7 +1282,7 @@ local function AutoTaserAnomalies()
     if not npcs then return false end
 
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsNpcThreat(npc) then
+        if npc:IsA("Model") and IsNpcThreat(npc) and not IsThreatLeaving(npc) then
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
             if root then
                 EquipTaser()
@@ -1280,7 +1310,7 @@ local function ProcessBarneyCoffee()
 
     local barney = nil
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsBarney(npc) then
+        if npc:IsA("Model") and IsBarneyNpc(npc) then
             barney = npc
             break
         end
@@ -1590,7 +1620,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v17.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v18.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -1998,11 +2028,11 @@ task.spawn(function()
             end
         end
 
-        -- 6. ШТОРКА
-        pcall(EvaluateCounterThreats)
+        -- 6. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
+        pcall(EvaluateShutterLogic)
 
         -- 7. РЕСЕПШЕН (Регистрация посетителей)
-        if _G.AutoCheckIn and not _G.HasActiveThreat and not IsShutterClosed() then
+        if _G.AutoCheckIn and not _G.HasActiveThreat and IsShutterClosed() ~= true then
             pcall(ExecuteCheckInCycle)
         end
 
