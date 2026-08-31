@@ -117,35 +117,35 @@ local function Log(category, message, details)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔍 3. ANOMALY & THREAT RECOGNITION
+-- 🔍 3. ANOMALY & THREAT RECOGNITION (ACCURATE - NO FALSE POSITIVES)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local ThreatDatabase = {
-    ["Sushi Gills"] = { Eyes = "Red", Teeth = "Sharp", Threat = true },
-    ["SlimeWalker"] = { Slime = true, Threat = true },
-    ["Skinwalker"] = { Threat = true }
+local ThreatNames = {
+    ["SlimeWalker"] = true,
+    ["Skinwalker"] = true,
+    ["Anomaly"] = true
 }
 
 local function IsValidPatient(npc)
     if not npc or not npc:IsA("Model") then return false end
-    if npc.Name == "Barney" or npc.Name == "Cleaner" or npc.Name == "Guard" then return false end
+    local name = npc.Name
+    if name == "Barney" or name == "Cleaner" or name == "Guard" then return false end
     return true
 end
 
 local function IsNpcThreat(npc)
     if not npc or not npc:IsA("Model") then return false end
-    if npc:GetAttribute("Threat") == true or npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Anomaly") == true then
+    if npc.Name == "Barney" or npc.Name == "Cleaner" or npc.Name == "Guard" then return false end
+
+    -- Проверка встроенных атрибутов игры
+    if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
         return true
     end
-    if ThreatDatabase[npc.Name] and ThreatDatabase[npc.Name].Threat then
+
+    -- Проверка имени модели
+    if ThreatNames[npc.Name] then
         return true
     end
-    for _, part in ipairs(npc:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if part.BrickColor.Name == "Really red" or part.Color == Color3.fromRGB(255, 0, 0) then
-                return true
-            end
-        end
-    end
+
     return false
 end
 
@@ -1201,8 +1201,10 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (PERFECT FOXNAME-GRADE RECEPTION PIPELINE)
+-- 🏢 11. AUTO CHECK IN (ACCURATE NON-SPAMMING RECEPTION ROUTER)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local DeskPromptCooldowns = {}
+
 local function GetPatientAtCounter()
     if _G.IsShutterClosed or _G.HasActiveThreat then return nil end
 
@@ -1212,8 +1214,7 @@ local function GetPatientAtCounter()
     local counterSpot = Vector3.new(-103.91, 3.41, -0.40)
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
-            local isThreat = (npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true)
-            if not isThreat then
+            if not IsNpcThreat(npc) then
                 local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
                 if root then
                     local dist = (root.Position - counterSpot).Magnitude
@@ -1240,6 +1241,21 @@ local function GetNpcCheckInPrompt(npc)
     return nil
 end
 
+local function IsPromptOnCooldown(pp)
+    if not pp then return true end
+    local cd = DeskPromptCooldowns[pp]
+    if cd and os.clock() < cd then
+        return true
+    end
+    return false
+end
+
+local function SetPromptCooldown(pp, duration)
+    if pp then
+        DeskPromptCooldowns[pp] = os.clock() + (duration or 1.5)
+    end
+end
+
 local function GetNextDeskPrompt()
     local misc = Workspace:FindFirstChild("Misc")
     local checkIn = misc and misc:FindFirstChild("CheckIn")
@@ -1249,7 +1265,7 @@ local function GetNextDeskPrompt()
     for _, bName in ipairs({"PatientBadgeBase", "VisitorBadgeBase", "PrintedBadge"}) do
         local b = checkIn:FindFirstChild(bName)
         local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if bPP and bPP.Enabled then
+        if bPP and bPP.Enabled and not IsPromptOnCooldown(bPP) then
             return bPP, "Badge"
         end
     end
@@ -1257,28 +1273,28 @@ local function GetNextDeskPrompt()
     -- 2. Принтер (Printer)
     local printer = checkIn:FindFirstChild("Printer")
     local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if printerPP and printerPP.Enabled then
+    if printerPP and printerPP.Enabled and not IsPromptOnCooldown(printerPP) then
         return printerPP, "Printer"
     end
 
     -- 3. Компьютер (Computer)
     local pc = checkIn:FindFirstChild("Computer")
     local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if pcPP and pcPP.Enabled then
+    if pcPP and pcPP.Enabled and not IsPromptOnCooldown(pcPP) then
         return pcPP, "Computer"
     end
 
     -- 4. Фотоаппарат (Camera)
     local cam = checkIn:FindFirstChild("Camera")
     local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if camPP and camPP.Enabled then
+    if camPP and camPP.Enabled and not IsPromptOnCooldown(camPP) then
         return camPP, "Camera"
     end
 
     -- 5. Бланк (Form)
     local form = checkIn:FindFirstChild("Form")
     local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if formPP and formPP.Enabled then
+    if formPP and formPP.Enabled and not IsPromptOnCooldown(formPP) then
         return formPP, "Form"
     end
 
@@ -1291,7 +1307,7 @@ local function ExecuteCheckInCycle()
     local patient = GetPatientAtCounter()
     if not patient then return false end
 
-    -- Проверяем, есть ли промпт отдать бейдж прямо сейчас на клиенте
+    -- 1. Проверяем, есть ли промпт отдать бейдж прямо сейчас на клиенте
     local npcPrompt = GetNpcCheckInPrompt(patient)
     if npcPrompt and npcPrompt.Enabled then
         for _, c in ipairs(InventoryContainers()) do
@@ -1314,7 +1330,7 @@ local function ExecuteCheckInCycle()
         return true
     end
 
-    -- Ищем активный промпт на столе
+    -- 2. Ищем активный промпт на столе стойки
     local deskPP, deskType = GetNextDeskPrompt()
     if not deskPP or not deskPP.Enabled then
         return false
@@ -1326,7 +1342,9 @@ local function ExecuteCheckInCycle()
         TeleportPlayer(pPos + Vector3.new(0, 1.0, 1.5))
         task.wait(0.2)
     end
+
     FirePrompt(deskPP)
+    SetPromptCooldown(deskPP, 1.5)
     task.wait(0.4)
 
     -- Если взяли бейдж, сразу отдаем пациенту
