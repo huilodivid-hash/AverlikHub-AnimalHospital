@@ -727,8 +727,10 @@ local function ExecuteTreatmentCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 9. DYNAMIC SMART RECEPTION PIPELINE
+-- 🏢 9. DYNAMIC SMART RECEPTION PIPELINE (DEBOUNCED NON-SPAM)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local _AH_CheckInStepCooldowns = {}
+
 local function GetPatientAtCounter()
     if IsShutterClosed() or _G.HasActiveThreat then return nil end
 
@@ -784,6 +786,8 @@ local function ExecuteCheckInCycle()
     local patient = GetPatientAtCounter()
     if not patient then return false end
 
+    local now = os.clock()
+
     -- 1. Передача бейджика пациенту (если бейджик на руках или промпт пациента активен)
     local npcPrompt = GetNpcCheckInPrompt(patient)
     if npcPrompt and npcPrompt.Enabled then
@@ -796,6 +800,7 @@ local function ExecuteCheckInCycle()
         task.wait(0.2)
         UnequipAllTools()
         MarkPatientTreated(patient)
+        _AH_CheckInStepCooldowns = {}
         return true
     end
 
@@ -823,6 +828,7 @@ local function ExecuteCheckInCycle()
                 UnequipAllTools()
                 MarkPatientTreated(patient)
             end
+            _AH_CheckInStepCooldowns = {}
             return true
         end
     end
@@ -831,48 +837,60 @@ local function ExecuteCheckInCycle()
     local form = checkIn:FindFirstChild("Form")
     local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
     if formPP and formPP.Enabled then
-        Log("AutoCheckIn", "Processing check-in step", { step = "Form", prompt = formPP:GetFullName() })
-        local fPos = GetPromptPartPosition(formPP) or Positions.CheckInForm
-        TeleportPlayer(fPos + Vector3.new(0, 1.0, 1.0))
-        task.wait(0.12)
-        FirePrompt(formPP, 0.35)
-        return true
+        if (now - (_AH_CheckInStepCooldowns["Form"] or 0)) >= 1.5 then
+            _AH_CheckInStepCooldowns["Form"] = now
+            Log("AutoCheckIn", "Processing check-in step", { step = "Form", prompt = formPP:GetFullName() })
+            local fPos = GetPromptPartPosition(formPP) or Positions.CheckInForm
+            TeleportPlayer(fPos + Vector3.new(0, 1.0, 1.0))
+            task.wait(0.12)
+            FirePrompt(formPP, 0.35)
+            return true
+        end
     end
 
     -- 4. Фотоаппарат (Camera)
     local cam = checkIn:FindFirstChild("Camera")
     local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
     if camPP and camPP.Enabled then
-        Log("AutoCheckIn", "Processing check-in step", { step = "Camera", prompt = camPP:GetFullName() })
-        local cPos = GetPromptPartPosition(camPP) or Positions.CheckInCamera
-        TeleportPlayer(cPos + Vector3.new(0, 1.0, 1.0))
-        task.wait(0.12)
-        FirePrompt(camPP, 0.35)
-        return true
+        if (now - (_AH_CheckInStepCooldowns["Camera"] or 0)) >= 1.5 then
+            _AH_CheckInStepCooldowns["Camera"] = now
+            Log("AutoCheckIn", "Processing check-in step", { step = "Camera", prompt = camPP:GetFullName() })
+            local cPos = GetPromptPartPosition(camPP) or Positions.CheckInCamera
+            TeleportPlayer(cPos + Vector3.new(0, 1.0, 1.0))
+            task.wait(0.12)
+            FirePrompt(camPP, 0.35)
+            return true
+        end
     end
 
-    -- 5. Компьютер (Computer)
+    -- 5. Компьютер (Computer - с защитой от спама во время анимации)
     local pc = checkIn:FindFirstChild("Computer")
     local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
     if pcPP and pcPP.Enabled then
-        Log("AutoCheckIn", "Processing check-in step", { step = "Computer", prompt = pcPP:GetFullName() })
-        local pcPos = GetPromptPartPosition(pcPP) or Positions.CheckInPC
-        TeleportPlayer(pcPos + Vector3.new(0, 1.0, 1.0))
-        task.wait(0.12)
-        FirePrompt(pcPP, 0.6)
-        return true
+        if (now - (_AH_CheckInStepCooldowns["Computer"] or 0)) >= 3.5 then
+            _AH_CheckInStepCooldowns["Computer"] = now
+            Log("AutoCheckIn", "Processing check-in step", { step = "Computer", prompt = pcPP:GetFullName() })
+            local pcPos = GetPromptPartPosition(pcPP) or Positions.CheckInPC
+            TeleportPlayer(pcPos + Vector3.new(0, 1.0, 1.0))
+            task.wait(0.12)
+            FirePrompt(pcPP, 0.6)
+            return true
+        end
     end
 
     -- 6. Принтер (Printer)
     local printer = checkIn:FindFirstChild("Printer")
     local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
     if printerPP and printerPP.Enabled then
-        Log("AutoCheckIn", "Processing check-in step", { step = "Printer", prompt = printerPP:GetFullName() })
-        local prPos = GetPromptPartPosition(printerPP) or Positions.CheckInPrinter
-        TeleportPlayer(prPos + Vector3.new(0, 1.0, 1.0))
-        task.wait(0.12)
-        FirePrompt(printerPP, 0.35)
-        return true
+        if (now - (_AH_CheckInStepCooldowns["Printer"] or 0)) >= 2.0 then
+            _AH_CheckInStepCooldowns["Printer"] = now
+            Log("AutoCheckIn", "Processing check-in step", { step = "Printer", prompt = printerPP:GetFullName() })
+            local prPos = GetPromptPartPosition(printerPP) or Positions.CheckInPrinter
+            TeleportPlayer(prPos + Vector3.new(0, 1.0, 1.0))
+            task.wait(0.12)
+            FirePrompt(printerPP, 0.35)
+            return true
+        end
     end
 
     return false
