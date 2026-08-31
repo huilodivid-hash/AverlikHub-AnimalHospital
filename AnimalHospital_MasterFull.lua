@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL COMPLETE 1-TO-1 MASTER SUITE (V7.0 ULTIMATE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V8.0 NATIVE OBSIDIAN GUI)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -15,7 +15,7 @@ local function StopCheck()
     return not IsSessionActive()
 end
 
--- ⚙️ COMPLETE GLOBAL TOGGLES & SETTINGS
+-- ⚙️ GLOBAL TOGGLES (DIRECTLY CONTROLLED BY GUI)
 _G.AutoTreatment = _G.AutoTreatment ~= nil and _G.AutoTreatment or true
 _G.AutoCheckIn = _G.AutoCheckIn ~= nil and _G.AutoCheckIn or true
 _G.AutoAnomalyShutter = _G.AutoAnomalyShutter ~= nil and _G.AutoAnomalyShutter or true
@@ -30,7 +30,9 @@ _G.AutoFixCam = _G.AutoFixCam ~= nil and _G.AutoFixCam or true
 _G.AutoTaser = _G.AutoTaser ~= nil and _G.AutoTaser or false
 _G.AutoBuyShop = _G.AutoBuyShop ~= nil and _G.AutoBuyShop or false
 _G.UnlockThirdPerson = _G.UnlockThirdPerson ~= nil and _G.UnlockThirdPerson or true
-_G.DisableLocalAnomalies = _G.DisableLocalAnomalies ~= nil and _G.DisableLocalAnomalies or false
+_G.AntiAFK = _G.AntiAFK ~= nil and _G.AntiAFK or true
+_G.Fullbright = _G.Fullbright ~= nil and _G.Fullbright or false
+_G.WalkSpeedValue = _G.WalkSpeedValue or 16
 _G.LoopInterval = 0.15
 
 -- 📌 RUNTIME STATE & DATASETS
@@ -38,7 +40,6 @@ _G.HasActiveThreat = false
 _G.AH_TreatedPatients = setmetatable({}, { __mode = "k" })
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
 local _AH_RoomCooldowns = {}
-local _AH_FirePrompts = {}
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -124,6 +125,9 @@ local Positions = {
 -- ══════════════════════════════════════════════════════════════════════════════════
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 local function Log(prefix, msg, tbl)
@@ -379,7 +383,6 @@ end
 local function GrabItemUntilInInventory(itemName, isSurgery)
     if GetItemCount(itemName) > 0 then return true end
 
-    -- Очистить лишний инвентарь
     for _, container in ipairs(InventoryParents()) do
         for _, tool in ipairs(container:GetChildren()) do
             if tool:IsA("Tool") and NormalizeName(tool.Name) ~= NormalizeName(itemName) then
@@ -530,7 +533,6 @@ local function GetNeededTreatmentItems(roomName, isEmergency)
         end
     end
 
-    -- Fallback на текстовые TextLabel
     if #needed == 0 then
         local folder = GetRoomFolder(roomName, isEmergency)
         local room = folder and folder:FindFirstChild(roomName)
@@ -717,7 +719,6 @@ local function TreatSingleRoom(roomName, isEmergency)
             attempt = attempt + 1
             local currentItem = needed[1]
 
-            -- Проверка на устранение скинвокера (AutoKillAnomaly)
             if _G.AutoKillAnomaly and patient and patient:GetAttribute("Skinwalker") == true then
                 local allItems = isEmergency and _G.AH_SurgeryItemList or _G.AH_ItemList
                 for _, wrong in ipairs(allItems) do
@@ -791,12 +792,10 @@ end
 local function ExecuteTreatmentCycle()
     if not _G.AutoTreatment or _G.HasActiveThreat or StopCheck() then return false end
 
-    -- Приоритет реанимаций (Палаты 8, 7, 6)
     for _, r in ipairs({"Room8", "Room7", "Room6"}) do
         if TreatSingleRoom(r, true) then return true end
     end
 
-    -- Терапевтические палаты (Палаты 1 - 5)
     for i = 1, 5 do
         local r = "Room" .. tostring(i)
         if TreatSingleRoom(r, false) then return true end
@@ -929,13 +928,11 @@ local function ExecuteCheckInCycle()
         end
     end
 
-    -- 1. Бейджик уже в инвентаре -> отдать
     if HasBadgeInInventory() then
         DeliverBadgeToPatient(patient)
         return true
     end
 
-    -- 2. Готовый бейджик на стойке
     for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
         local b = checkIn:FindFirstChild(bName)
         local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
@@ -947,7 +944,6 @@ local function ExecuteCheckInCycle()
         end
     end
 
-    -- 3. Бланк (Form)
     local form = checkIn:FindFirstChild("Form")
     local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
     if formPP and formPP.Enabled then
@@ -955,7 +951,6 @@ local function ExecuteCheckInCycle()
         PressPromptNearby(formPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
     end
 
-    -- 4. Фотоаппарат (Camera)
     local cam = checkIn:FindFirstChild("Camera")
     local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
     if camPP and camPP.Enabled then
@@ -963,14 +958,12 @@ local function ExecuteCheckInCycle()
         PressPromptNearby(camPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
     end
 
-    -- 5. Компьютер (Computer — прожимаем 1 раз)
     local pc = checkIn:FindFirstChild("Computer")
     local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
     if pcPP and pcPP.Enabled then
         Log("AutoCheckIn", "Processing computer registration", { prompt = pcPP:GetFullName() })
         PressPromptNearby(pcPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
 
-        -- Ожидание принтера / бейджика
         local waitDeadline = os.clock() + 3.0
         while os.clock() < waitDeadline and not StopCheck() do
             local printer = checkIn:FindFirstChild("Printer")
@@ -988,14 +981,12 @@ local function ExecuteCheckInCycle()
         end
     end
 
-    -- 6. Принтер (Printer)
     local printer = checkIn:FindFirstChild("Printer")
     local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
     if printerPP and printerPP.Enabled then
         Log("AutoCheckIn", "Printing Badge", { prompt = printerPP:GetFullName() })
         PressPromptNearby(printerPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
 
-        -- Ожидание и забор бейджика
         local waitBadge = os.clock() + 2.5
         while os.clock() < waitBadge and not StopCheck() do
             for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
@@ -1012,7 +1003,6 @@ local function ExecuteCheckInCycle()
         end
     end
 
-    -- 7. Передача бейджика
     DeliverBadgeToPatient(patient)
     return true
 end
@@ -1065,7 +1055,6 @@ end
 local function AutoPutOutFire()
     if not _G.AutoPutOutFire or StopCheck() then return false end
 
-    -- 1. Поиск горящих пациентов (FirePP)
     local npcs = Workspace:FindFirstChild("NPCs")
     if npcs then
         for _, npc in ipairs(npcs:GetChildren()) do
@@ -1083,7 +1072,6 @@ local function AutoPutOutFire()
         end
     end
 
-    -- 2. Поиск огня в комнатах
     local rooms = Workspace:FindFirstChild("Rooms")
     if rooms then
         for _, p in ipairs(rooms:GetDescendants()) do
@@ -1195,7 +1183,6 @@ local function ProcessBarneyCoffee()
     end
     if not barneyPP then return end
 
-    -- Если кофе уже на руках
     if GetItemCount("Coffee") > 0 then
         UseInventoryTool("Coffee")
         PressPromptNearby(barneyPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.2)
@@ -1203,7 +1190,6 @@ local function ProcessBarneyCoffee()
         return
     end
 
-    -- Налить кофе в кофемашине
     local cm = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("CoffeeMachine")
     local coffeePP = cm and cm:FindFirstChild("Coffee") and (cm.Coffee:FindFirstChild("PP") or cm.Coffee:FindFirstChildWhichIsA("ProximityPrompt", true))
     if coffeePP and coffeePP.Enabled then
@@ -1308,7 +1294,6 @@ local function AutoHelpFaintedPatients()
                         Log("AutoHelpPatient", "Helping fainted patient", { npc = npc:GetFullName() })
                         PressPromptNearby(p, 0.2, Vector3.new(0, 1.0, 1.5), 0.15)
 
-                        -- Доставка на свободную койку
                         local bedPP, bedPos = FindEmptyBedPrompt()
                         if bedPP and bedPos then
                             Log("AutoHelpPatient", "Delivering patient to empty bed", { bed = bedPP:GetFullName() })
@@ -1323,23 +1308,30 @@ local function AutoHelpFaintedPatients()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🌐 18. THIRD PERSON & ANOMALY SUPPRESSION
--- ══════════════════════════════════════════════════════════════════════════════════
-if _G.UnlockThirdPerson then
-    pcall(function()
-        LocalPlayer.CameraMinZoomDistance = 0.5
-        LocalPlayer.CameraMaxZoomDistance = 128
-        LocalPlayer.CameraMode = Enum.CameraMode.Classic
-    end)
-end
-
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🌐 19. SERVER UTILITIES (SERVER HOP, REJOIN, ANTI-AFK, FULLBRIGHT, SPEED)
+-- 🌐 18. THIRD PERSON & SERVER UTILITIES
 -- ══════════════════════════════════════════════════════════════════════════════════
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
+
+local function ApplyThirdPerson(enabled)
+    if enabled then
+        pcall(function()
+            LocalPlayer.CameraMinZoomDistance = 0.5
+            LocalPlayer.CameraMaxZoomDistance = 128
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+        end)
+    else
+        pcall(function()
+            LocalPlayer.CameraMinZoomDistance = 0.5
+            LocalPlayer.CameraMaxZoomDistance = 0.5
+            LocalPlayer.CameraMode = Enum.CameraMode.LockFirstPerson
+        end)
+    end
+end
+
+ApplyThirdPerson(_G.UnlockThirdPerson)
 
 local function RejoinServer()
     Log("Teleport", "Rejoining current server...")
@@ -1430,188 +1422,385 @@ local function ToggleFullbright(enabled)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 20. OBSIDIAN LUXURY UI (RAYFIELD DESIGN SYSTEM)
+-- 🎨 19. NATIVE OBSIDIAN LUXURY GUI ENGINE (100% RELIABLE & NO EXTERNAL HTTP)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local Rayfield = nil
-pcall(function()
-    Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-end)
-
-if Rayfield then
-    local Window = Rayfield:CreateWindow({
-        Name = "🏥 Averlik Hub | Animal Hospital",
-        LoadingTitle = "Averlik Hub v7.0",
-        LoadingSubtitle = "1-to-1 Foxname Pure Replica",
-        ConfigurationSaving = {
-            Enabled = true,
-            FolderName = "AverlikHub",
-            FileName = "AnimalHospital"
-        },
-        KeySystem = false
-    })
-
-    local MainTab = Window:CreateTab("⚡ Автоматизация", 4483362458)
-    local SafeTab = Window:CreateTab("🛡️ Защита и Безопасность", 4483362458)
-    local MiscTab = Window:CreateTab("🌐 Утилиты и Сервер", 4483362458)
-
-    MainTab:CreateSection("🏥 Медицина и Пациенты")
-
-    MainTab:CreateToggle({
-        Name = "🏥 Авто-Лечение (Палаты 1 - 8)",
-        CurrentValue = _G.AutoTreatment,
-        Flag = "AutoTreatment",
-        Callback = function(Value) _G.AutoTreatment = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "🏢 Авто-Регистрация (Ресепшен)",
-        CurrentValue = _G.AutoCheckIn,
-        Flag = "AutoCheckIn",
-        Callback = function(Value) _G.AutoCheckIn = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "🚑 Спасение упавших пациентов (Укладка на койку)",
-        CurrentValue = _G.AutoHelpPatient,
-        Flag = "AutoHelpPatient",
-        Callback = function(Value) _G.AutoHelpPatient = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "🧯 Авто-Тушение пожаров и пациентов",
-        CurrentValue = _G.AutoPutOutFire,
-        Flag = "AutoPutOutFire",
-        Callback = function(Value) _G.AutoPutOutFire = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "🧼 Авто-Уборка слизи (Лужи)",
-        CurrentValue = _G.AutoCleanSlime,
-        Flag = "AutoCleanSlime",
-        Callback = function(Value) _G.AutoCleanSlime = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "📹 Авто-Починка камер безопасности",
-        CurrentValue = _G.AutoFixCam,
-        Flag = "AutoFixCam",
-        Callback = function(Value) _G.AutoFixCam = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "🛒 Авто-Покупка в магазине",
-        CurrentValue = _G.AutoBuyShop,
-        Flag = "AutoBuyShop",
-        Callback = function(Value) _G.AutoBuyShop = Value end,
-    })
-
-    SafeTab:CreateSection("🛡️ Защита и Аномалии")
-
-    SafeTab:CreateToggle({
-        Name = "🛑 Авто-Шторка от Аномалий (Скинвокеры)",
-        CurrentValue = _G.AutoAnomalyShutter,
-        Flag = "AutoAnomalyShutter",
-        Callback = function(Value) _G.AutoAnomalyShutter = Value end,
-    })
-
-    SafeTab:CreateToggle({
-        Name = "🚪 Авто-Шторка от Барни",
-        CurrentValue = _G.AutoBarneyShutter,
-        Flag = "AutoBarneyShutter",
-        Callback = function(Value) _G.AutoBarneyShutter = Value end,
-    })
-
-    SafeTab:CreateToggle({
-        Name = "🗣️ Выгонять аномалии (Ask To Leave)",
-        CurrentValue = _G.AutoAskLeaveAnomaly,
-        Flag = "AutoAskLeaveAnomaly",
-        Callback = function(Value) _G.AutoAskLeaveAnomaly = Value end,
-    })
-
-    SafeTab:CreateToggle({
-        Name = "☠️ Устранять скинвокеров (Ошибочные лекарства)",
-        CurrentValue = _G.AutoKillAnomaly,
-        Flag = "AutoKillAnomaly",
-        Callback = function(Value) _G.AutoKillAnomaly = Value end,
-    })
-
-    SafeTab:CreateToggle({
-        Name = "⚡ Авто-Тазер аномалий",
-        CurrentValue = _G.AutoTaser,
-        Flag = "AutoTaser",
-        Callback = function(Value) _G.AutoTaser = Value end,
-    })
-
-    SafeTab:CreateToggle({
-        Name = "☕ Кофе для Барни",
-        CurrentValue = _G.AutoGiveBarneyCoffee,
-        Flag = "AutoGiveBarneyCoffee",
-        Callback = function(Value) _G.AutoGiveBarneyCoffee = Value end,
-    })
-
-    MiscTab:CreateSection("🌐 Сервер и Персонаж")
-
-    MiscTab:CreateButton({
-        Name = "🔄 Rejoin (Перезайти на этот же сервер)",
-        Callback = RejoinServer,
-    })
-
-    MiscTab:CreateButton({
-        Name = "🌐 Server Hop (Случайный сервер)",
-        Callback = ServerHop,
-    })
-
-    MiscTab:CreateButton({
-        Name = "👥 Server Hop (Сервер с малым онлайном)",
-        Callback = ServerHopLowPlayer,
-    })
-
-    MiscTab:CreateToggle({
-        Name = "🛡️ Anti-AFK (Защита от кика)",
-        CurrentValue = true,
-        Flag = "AntiAFK",
-        Callback = function(Value) _G.AntiAFK = Value end,
-    })
-
-    MiscTab:CreateToggle({
-        Name = "💡 Fullbright (Яркий свет)",
-        CurrentValue = false,
-        Flag = "Fullbright",
-        Callback = ToggleFullbright,
-    })
-
-    MiscTab:CreateToggle({
-        Name = "🎥 Разблокировка 3-го лица",
-        CurrentValue = _G.UnlockThirdPerson,
-        Flag = "UnlockThirdPerson",
-        Callback = function(Value)
-            _G.UnlockThirdPerson = Value
-            if Value then
-                pcall(function()
-                    LocalPlayer.CameraMinZoomDistance = 0.5
-                    LocalPlayer.CameraMaxZoomDistance = 128
-                    LocalPlayer.CameraMode = Enum.CameraMode.Classic
-                end)
-            end
-        end,
-    })
-
-    MiscTab:CreateSlider({
-        Name = "Скорость бега (WalkSpeed)",
-        Range = {16, 120},
-        Increment = 1,
-        Suffix = " studs/s",
-        CurrentValue = 16,
-        Flag = "WalkSpeed",
-        Callback = function(Value)
-            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hum then hum.WalkSpeed = Value end
-        end,
-    })
+local GuiParent = nil
+pcall(function() GuiParent = gethui and gethui() end)
+if not GuiParent then
+    pcall(function() GuiParent = CoreGui end)
+end
+if not GuiParent then
+    GuiParent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
+-- Удалить старый UI если есть
+local oldGui = GuiParent:FindFirstChild("AverlikHub_AnimalHospital")
+if oldGui then oldGui:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AverlikHub_AnimalHospital"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = GuiParent
+
+-- Главное окно
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 560, 0, 390)
+MainFrame.Position = UDim2.new(0.5, -280, 0.5, -195)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 17, 23)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(45, 55, 75)
+MainStroke.Thickness = 1.5
+MainStroke.Parent = MainFrame
+
+-- Верхний бар (Draggable Header)
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 42)
+Header.BackgroundColor3 = Color3.fromRGB(20, 24, 33)
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 10)
+HeaderCorner.Parent = Header
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -60, 1, 0)
+Title.Position = UDim2.new(0, 16, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "🏥 Averlik Hub | Animal Hospital v8.0"
+Title.TextColor3 = Color3.fromRGB(240, 245, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+-- Dragging logic
+local dragging, dragInput, dragStart, startPos
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Header.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Левый контейнер вкладок (Sidebar)
+local Sidebar = Instance.new("Frame")
+Sidebar.Name = "Sidebar"
+Sidebar.Size = UDim2.new(0, 150, 1, -42)
+Sidebar.Position = UDim2.new(0, 0, 0, 42)
+Sidebar.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+Sidebar.BorderSizePixel = 0
+Sidebar.Parent = MainFrame
+
+local SidebarList = Instance.new("UIListLayout")
+SidebarList.Padding = UDim.new(0, 6)
+SidebarList.SortOrder = Enum.SortOrder.LayoutOrder
+SidebarList.Parent = Sidebar
+
+local SidebarPad = Instance.new("UIPadding")
+SidebarPad.PaddingTop = UDim.new(0, 10)
+SidebarPad.PaddingLeft = UDim.new(0, 10)
+SidebarPad.PaddingRight = UDim.new(0, 10)
+SidebarPad.Parent = Sidebar
+
+-- Правый контейнер контента
+local ContentArea = Instance.new("Frame")
+ContentArea.Name = "ContentArea"
+ContentArea.Size = UDim2.new(1, -150, 1, -42)
+ContentArea.Position = UDim2.new(0, 150, 0, 42)
+ContentArea.BackgroundColor3 = Color3.fromRGB(15, 17, 23)
+ContentArea.BorderSizePixel = 0
+ContentArea.Parent = MainFrame
+
+local TabFrames = {}
+local TabButtons = {}
+
+local function CreateTab(name, icon)
+    local tabBtn = Instance.new("TextButton")
+    tabBtn.Size = UDim2.new(1, 0, 0, 34)
+    tabBtn.BackgroundColor3 = Color3.fromRGB(24, 28, 38)
+    tabBtn.BorderSizePixel = 0
+    tabBtn.Text = " " .. icon .. " " .. name
+    tabBtn.TextColor3 = Color3.fromRGB(170, 185, 210)
+    tabBtn.Font = Enum.Font.GothamMedium
+    tabBtn.TextSize = 12
+    tabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    tabBtn.Parent = Sidebar
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = tabBtn
+
+    local tabContent = Instance.new("ScrollingFrame")
+    tabContent.Size = UDim2.new(1, 0, 1, 0)
+    tabContent.BackgroundTransparency = 1
+    tabContent.BorderSizePixel = 0
+    tabContent.ScrollBarThickness = 4
+    tabContent.ScrollBarImageColor3 = Color3.fromRGB(55, 65, 90)
+    tabContent.Visible = false
+    tabContent.CanvasSize = UDim2.new(0, 0, 0, 0)
+    tabContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    tabContent.Parent = ContentArea
+
+    local contentList = Instance.new("UIListLayout")
+    contentList.Padding = UDim.new(0, 8)
+    contentList.SortOrder = Enum.SortOrder.LayoutOrder
+    contentList.Parent = tabContent
+
+    local contentPad = Instance.new("UIPadding")
+    contentPad.PaddingTop = UDim.new(0, 12)
+    contentPad.PaddingBottom = UDim.new(0, 12)
+    contentPad.PaddingLeft = UDim.new(0, 14)
+    contentPad.PaddingRight = UDim.new(0, 14)
+    contentPad.Parent = tabContent
+
+    TabFrames[name] = tabContent
+    TabButtons[name] = tabBtn
+
+    tabBtn.MouseButton1Click:Connect(function()
+        for tName, f in pairs(TabFrames) do
+            f.Visible = (tName == name)
+            local b = TabButtons[tName]
+            if tName == name then
+                b.BackgroundColor3 = Color3.fromRGB(40, 75, 140)
+                b.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                b.BackgroundColor3 = Color3.fromRGB(24, 28, 38)
+                b.TextColor3 = Color3.fromRGB(170, 185, 210)
+            end
+        end
+    end)
+
+    return tabContent
+end
+
+-- Элементы UI
+local function AddToggle(parentTab, title, defaultVal, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 38)
+    frame.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
+    frame.BorderSizePixel = 0
+    frame.Parent = parentTab
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -60, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = title
+    label.TextColor3 = Color3.fromRGB(230, 235, 245)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local switch = Instance.new("TextButton")
+    switch.Size = UDim2.new(0, 44, 0, 22)
+    switch.Position = UDim2.new(1, -54, 0.5, -11)
+    switch.BackgroundColor3 = defaultVal and Color3.fromRGB(50, 168, 82) or Color3.fromRGB(45, 50, 65)
+    switch.BorderSizePixel = 0
+    switch.Text = ""
+    switch.Parent = frame
+
+    local sCorner = Instance.new("UICorner")
+    sCorner.CornerRadius = UDim.new(1, 0)
+    sCorner.Parent = switch
+
+    local circle = Instance.new("Frame")
+    circle.Size = UDim2.new(0, 16, 0, 16)
+    circle.Position = defaultVal and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    circle.BorderSizePixel = 0
+    circle.Parent = switch
+
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(1, 0)
+    cCorner.Parent = circle
+
+    local isEnabled = defaultVal
+    switch.MouseButton1Click:Connect(function()
+        isEnabled = not isEnabled
+        TweenService:Create(switch, TweenInfo.new(0.2), {
+            BackgroundColor3 = isEnabled and Color3.fromRGB(50, 168, 82) or Color3.fromRGB(45, 50, 65)
+        }):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2), {
+            Position = isEnabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+        }):Play()
+        callback(isEnabled)
+    end)
+end
+
+local function AddButton(parentTab, text, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 42, 65)
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(235, 240, 255)
+    btn.Font = Enum.Font.GothamMedium
+    btn.TextSize = 12
+    btn.Parent = parentTab
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(45, 75, 120) }):Play()
+        task.wait(0.1)
+        TweenService:Create(btn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(30, 42, 65) }):Play()
+        callback()
+    end)
+end
+
+local function AddSlider(parentTab, title, minVal, maxVal, defaultVal, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 48)
+    frame.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
+    frame.BorderSizePixel = 0
+    frame.Parent = parentTab
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -60, 0, 20)
+    label.Position = UDim2.new(0, 12, 0, 4)
+    label.BackgroundTransparency = 1
+    label.Text = title .. ": " .. tostring(defaultVal)
+    label.TextColor3 = Color3.fromRGB(230, 235, 245)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Size = UDim2.new(1, -24, 0, 8)
+    sliderBg.Position = UDim2.new(0, 12, 0, 30)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(40, 48, 65)
+    sliderBg.BorderSizePixel = 0
+    sliderBg.Parent = frame
+
+    local sCorner = Instance.new("UICorner")
+    sCorner.CornerRadius = UDim.new(1, 0)
+    sCorner.Parent = sliderBg
+
+    local fill = Instance.new("Frame")
+    local pct = (defaultVal - minVal) / (maxVal - minVal)
+    fill.Size = UDim2.new(pct, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(60, 120, 230)
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderBg
+
+    local fCorner = Instance.new("UICorner")
+    fCorner.CornerRadius = UDim.new(1, 0)
+    fCorner.Parent = fill
+
+    local sliding = false
+    local function Update(input)
+        local posX = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+        fill.Size = UDim2.new(posX, 0, 1, 0)
+        local val = math.floor(minVal + (maxVal - minVal) * posX)
+        label.Text = title .. ": " .. tostring(val)
+        callback(val)
+    end
+
+    sliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            sliding = true
+            Update(input)
+        end
+    end)
+
+    sliderBg.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            sliding = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            Update(input)
+        end
+    end)
+end
+
+-- Создаем страницы и контролы
+local TabAuto = CreateTab("Автоматизация", "⚡")
+local TabSafe = CreateTab("Защита", "🛡️")
+local TabMisc = CreateTab("Утилиты", "🌐")
+
+-- Вкладка: Автоматизация
+AddToggle(TabAuto, "🏥 Авто-Лечение (Палаты 1 - 8)", _G.AutoTreatment, function(v) _G.AutoTreatment = v end)
+AddToggle(TabAuto, "🏢 Авто-Регистрация (Ресепшен)", _G.AutoCheckIn, function(v) _G.AutoCheckIn = v end)
+AddToggle(TabAuto, "🚑 Спасение упавших пациентов", _G.AutoHelpPatient, function(v) _G.AutoHelpPatient = v end)
+AddToggle(TabAuto, "🧯 Авто-Тушение пожаров", _G.AutoPutOutFire, function(v) _G.AutoPutOutFire = v end)
+AddToggle(TabAuto, "🧼 Авто-Уборка луж слизи", _G.AutoCleanSlime, function(v) _G.AutoCleanSlime = v end)
+AddToggle(TabAuto, "📹 Авто-Починка камер", _G.AutoFixCam, function(v) _G.AutoFixCam = v end)
+AddToggle(TabAuto, "🛒 Авто-Покупка в магазине", _G.AutoBuyShop, function(v) _G.AutoBuyShop = v end)
+
+-- Вкладка: Защита и Безопасность
+AddToggle(TabSafe, "🛑 Авто-Шторка от Аномалий", _G.AutoAnomalyShutter, function(v) _G.AutoAnomalyShutter = v end)
+AddToggle(TabSafe, "🚪 Авто-Шторка от Барни", _G.AutoBarneyShutter, function(v) _G.AutoBarneyShutter = v end)
+AddToggle(TabSafe, "🗣️ Выгонять аномалии (Ask To Leave)", _G.AutoAskLeaveAnomaly, function(v) _G.AutoAskLeaveAnomaly = v end)
+AddToggle(TabSafe, "☠️ Устранять скинвокеров (Летальные)", _G.AutoKillAnomaly, function(v) _G.AutoKillAnomaly = v end)
+AddToggle(TabSafe, "⚡ Авто-Тазер аномалий", _G.AutoTaser, function(v) _G.AutoTaser = v end)
+AddToggle(TabSafe, "☕ Кофе для Барни", _G.AutoGiveBarneyCoffee, function(v) _G.AutoGiveBarneyCoffee = v end)
+
+-- Вкладка: Утилиты и Сервер
+AddButton(TabMisc, "🔄 Rejoin (Перезайти на сервер)", RejoinServer)
+AddButton(TabMisc, "🌐 Server Hop (Случайный сервер)", ServerHop)
+AddButton(TabMisc, "👥 Server Hop (Сервер с малым онлайном)", ServerHopLowPlayer)
+AddToggle(TabMisc, "🛡️ Anti-AFK (Защита от кика)", _G.AntiAFK, function(v) _G.AntiAFK = v end)
+AddToggle(TabMisc, "💡 Fullbright (Яркий свет)", _G.Fullbright, ToggleFullbright)
+AddToggle(TabMisc, "🎥 Разблокировка 3-го лица", _G.UnlockThirdPerson, ApplyThirdPerson)
+AddSlider(TabMisc, "Скорость бега", 16, 120, 16, function(v)
+    _G.WalkSpeedValue = v
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = v end
+end)
+
+-- Активировать первую вкладку
+TabButtons["Автоматизация"].BackgroundColor3 = Color3.fromRGB(40, 75, 140)
+TabButtons["Автоматизация"].TextColor3 = Color3.fromRGB(255, 255, 255)
+TabFrames["Автоматизация"].Visible = true
+
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 21. AUTONOMOUS PRIORITY SCHEDULER (NON-BLOCKING PARALLEL PIPELINE)
+-- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (NON-BLOCKING PARALLEL PIPELINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 task.spawn(function()
     Log("Loop", "Averlik Hub Animal Hospital Engine Started", { sessionId = MySession, loopInterval = _G.LoopInterval })
@@ -1621,59 +1810,66 @@ task.spawn(function()
 
         if not IsSessionActive() then break end
 
+        -- Применение WalkSpeed
+        if _G.WalkSpeedValue and _G.WalkSpeedValue ~= 16 then
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.WalkSpeed ~= _G.WalkSpeedValue then hum.WalkSpeed = _G.WalkSpeedValue end
+        end
+
         -- 1. Защита от угроз и закрытие шторок
         pcall(EvaluateCounterThreats)
 
-        -- 2. Тушение пожаров и горящих пациентов (Высший приоритет безопасности)
+        -- 2. Тушение пожаров и горящих пациентов
         local safetyWorked = false
         pcall(function() safetyWorked = AutoPutOutFire() end)
 
         if not safetyWorked then
-            -- 3. Выдворение аномалий
             pcall(function() safetyWorked = AutoAskLeaveAnomaly() end)
         end
 
         if not safetyWorked then
-            -- 4. Тазер аномалий
             pcall(function() safetyWorked = AutoTaserAnomalies() end)
         end
 
         if not safetyWorked and not _G.HasActiveThreat and not IsShutterClosed() then
-            -- 5. Лечение палат (Палаты 8, 7, 6, 1..5)
+            -- 3. Лечение палат (Палаты 8, 7, 6, 1..5)
             local worked = false
             pcall(function() worked = ExecuteTreatmentCycle() end)
 
-            -- 6. Ресепшен (Регистрация посетителей на CheckIn и CheckIn2)
+            -- 4. Ресепшен (Регистрация посетителей на CheckIn и CheckIn2)
             if not worked then
                 pcall(function() worked = ExecuteCheckInCycle() end)
             end
 
-            -- 7. Спасение упавших пациентов
+            -- 5. Спасение упавших пациентов
             if not worked then
                 pcall(AutoHelpFaintedPatients)
             end
 
-            -- 8. Починка камер безопасности
+            -- 6. Починка камер безопасности
             if not worked then
                 pcall(AutoFixCam)
             end
 
-            -- 9. Кофе для Барни
+            -- 7. Кофе для Барни
             if not worked then
                 pcall(ProcessBarneyCoffee)
             end
 
-            -- 10. Уборка луж слизи
+            -- 8. Уборка луж слизи
             if not worked then
                 pcall(CleanSlimePuddles)
             end
 
-            -- 11. Покупка в магазине
+            -- 9. Покупка в магазине
             if not worked then
                 pcall(AutoBuyShopItems)
             end
         end
     end
 
+    if ScreenGui and ScreenGui.Parent then
+        ScreenGui:Destroy()
+    end
     Log("Loop", "Session gracefully stopped", { sessionId = MySession })
 end)
