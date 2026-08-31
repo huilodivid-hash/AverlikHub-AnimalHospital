@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V23.0 CLEAN OPERATIONS)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V24.0 SANITY & COFFEE ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -18,6 +18,9 @@ end
 -- ⚙️ GLOBAL TOGGLES (DIRECTLY CONTROLLED BY GUI)
 _G.AutoTreatment = _G.AutoTreatment ~= nil and _G.AutoTreatment or true
 _G.AutoCheckIn = _G.AutoCheckIn ~= nil and _G.AutoCheckIn or true
+_G.AutoCoffee = _G.AutoCoffee ~= nil and _G.AutoCoffee or true
+_G.CoffeeSanityThreshold = _G.CoffeeSanityThreshold or 60
+_G.AutoGiveBarneyCoffee = _G.AutoGiveBarneyCoffee ~= nil and _G.AutoGiveBarneyCoffee or true
 _G.AutoAnomalyShutter = _G.AutoAnomalyShutter ~= nil and _G.AutoAnomalyShutter or true
 _G.AutoBarneyShutter = _G.AutoBarneyShutter ~= nil and _G.AutoBarneyShutter or true
 _G.AutoAskLeaveAnomaly = _G.AutoAskLeaveAnomaly ~= nil and _G.AutoAskLeaveAnomaly or true
@@ -25,7 +28,6 @@ _G.AutoKillAnomaly = _G.AutoKillAnomaly ~= nil and _G.AutoKillAnomaly or false
 _G.AutoHelpPatient = _G.AutoHelpPatient ~= nil and _G.AutoHelpPatient or true
 _G.AutoPutOutFire = _G.AutoPutOutFire ~= nil and _G.AutoPutOutFire or true
 _G.AutoCleanSlime = _G.AutoCleanSlime ~= nil and _G.AutoCleanSlime or true
-_G.AutoGiveBarneyCoffee = _G.AutoGiveBarneyCoffee ~= nil and _G.AutoGiveBarneyCoffee or true
 _G.AutoFixCam = _G.AutoFixCam ~= nil and _G.AutoFixCam or true
 _G.AutoTaser = _G.AutoTaser ~= nil and _G.AutoTaser or false
 _G.AutoBuyShop = _G.AutoBuyShop ~= nil and _G.AutoBuyShop or false
@@ -42,6 +44,8 @@ local _AH_TreatedPatients = {}
 local _AH_HandledCheckInPatients = {}
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
 local _AH_LeavingNpcs = setmetatable({}, { __mode = "k" })
+local _AH_LastCoffeeDrinkTime = 0
+local _AH_LastBarneyCoffeeTime = 0
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -494,7 +498,191 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 6. PURE FOXNAME THREAT DETECTION & SHUTTER ENGINE
+-- ☕ 6. SANITY DETECTION, COFFEE BREWING & 2-SIP ENGINE
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function GetPlayerSanity()
+    local val = LocalPlayer:GetAttribute("Sanity")
+    if typeof(val) == "string" then val = tonumber(val) end
+    if typeof(val) == "number" then return val end
+
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    local sanityLabel = pg and pg:FindFirstChild("Sanity", true)
+    if sanityLabel and sanityLabel:IsA("TextLabel") then
+        local num = tonumber(sanityLabel.Text:match("%d+"))
+        if num then return num end
+    end
+    return 100
+end
+
+local function GetCoffeeMachine()
+    local misc = Workspace:FindFirstChild("Misc")
+    local cm1 = misc and misc:FindFirstChild("CoffeeMachine")
+    if cm1 then return cm1 end
+    local cm2 = Workspace:FindFirstChild("CoffeeMachine2")
+    if cm2 then return cm2 end
+    return nil
+end
+
+local function IsCoffeeReady(machine)
+    if not machine then return false end
+    local coffee = machine:FindFirstChild("Coffee")
+    local pp = coffee and (coffee:FindFirstChild("PP") or coffee:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if not (pp and pp.Enabled) then return false end
+
+    local ui = machine:FindFirstChild("Attachment") and machine.Attachment:FindFirstChild("UI") and machine.Attachment.UI:FindFirstChild("status")
+    if ui and ui:IsA("TextLabel") then
+        local st = string.lower(tostring(ui.Text or ""))
+        if st:find("ready") then
+            return true
+        elseif st:find("brewing") then
+            return false
+        end
+    end
+    return true
+end
+
+local function GetReadyCoffeePrompt()
+    local cm = GetCoffeeMachine()
+    if cm and IsCoffeeReady(cm) then
+        local coffee = cm:FindFirstChild("Coffee")
+        local pp = coffee and (coffee:FindFirstChild("PP") or coffee:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if pp and pp.Enabled then return pp end
+    end
+    return nil
+end
+
+local function DrinkCoffeeSips(tool, sips)
+    if not tool or not tool:IsA("Tool") then return false end
+    local char, root = GetCharacter()
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+
+    hum:EquipTool(tool)
+    task.wait(0.1)
+
+    for i = 1, (sips or 1) do
+        if not tool or not tool.Parent then break end
+        Log("AutoCoffee", "Drinking coffee sip", { sip = i, totalSips = sips })
+        pcall(function() tool:Activate() end)
+        if i < (sips or 1) then
+            task.wait(1.5)
+        end
+    end
+    task.wait(0.2)
+    return true
+end
+
+local function ProcessSelfSanityCoffee()
+    if not _G.AutoCoffee or StopCheck() then return false end
+
+    local now = os.clock()
+    if now - _AH_LastCoffeeDrinkTime < 5.0 then return false end
+
+    local sanity = GetPlayerSanity()
+    local threshold = _G.CoffeeSanityThreshold or 60
+
+    if sanity < threshold then
+        local coffeeTool = GetInventoryTool("Coffee")
+        if not coffeeTool then
+            local coffeePP = GetReadyCoffeePrompt()
+            if coffeePP then
+                Log("AutoCoffee", "Sanity low, grabbing ready coffee", { sanity = sanity, threshold = threshold, prompt = coffeePP:GetFullName() })
+                PressPromptNearby(coffeePP, 0.4, Vector3.new(0, 1.0, 1.5), 0.15)
+                task.wait(0.2)
+                coffeeTool = GetInventoryTool("Coffee")
+            else
+                Log("AutoCoffee", "Sanity low but coffee is still brewing, skipping", { sanity = sanity })
+                return false
+            end
+        end
+
+        if coffeeTool then
+            Log("AutoCoffee", "Drinking coffee for sanity", { sanity = sanity })
+            _AH_LastCoffeeDrinkTime = os.clock()
+            DrinkCoffeeSips(coffeeTool, 3)
+            return true
+        end
+    end
+    return false
+end
+
+local function ProcessBarneyCoffee()
+    if not _G.AutoGiveBarneyCoffee or StopCheck() then return false end
+
+    local now = os.clock()
+    if now - _AH_LastBarneyCoffeeTime < 3.0 then return false end
+
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return false end
+
+    local targetNpc = nil
+    local targetPP = nil
+
+    -- Ищем Барни или пациента, просящего кофе
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") then
+            local isBarney = IsBarneyNpc(npc)
+            for _, p in ipairs(npc:GetDescendants()) do
+                if p:IsA("ProximityPrompt") and p.Enabled then
+                    local act = string.lower(tostring(p.ActionText or ""))
+                    if isBarney or act:find("coffee") or act:find("drink") or act:find("give") then
+                        targetNpc = npc
+                        targetPP = p
+                        break
+                    end
+                end
+            end
+            if targetNpc then break end
+        end
+    end
+
+    if not targetNpc or not targetPP then return false end
+
+    Log("AutoBarneyCoffee", "Found NPC asking for coffee", { npc = targetNpc:GetFullName(), prompt = targetPP:GetFullName() })
+
+    local coffeeTool = GetInventoryTool("Coffee")
+    if not coffeeTool then
+        local coffeePP = GetReadyCoffeePrompt()
+        if coffeePP then
+            Log("AutoBarneyCoffee", "Grabbing ready coffee from machine", { prompt = coffeePP:GetFullName() })
+            PressPromptNearby(coffeePP, 0.4, Vector3.new(0, 1.0, 1.5), 0.15)
+            task.wait(0.2)
+            coffeeTool = GetInventoryTool("Coffee")
+        else
+            Log("AutoBarneyCoffee", "Coffee is still brewing, waiting for next cycle")
+            return false
+        end
+    end
+
+    if coffeeTool then
+        -- 🌟 ВЫПИВАЕМ 2 РАЗА ПЕРЕД ОТДАЧЕЙ КЛИЕНТУ / БАРНИ
+        Log("AutoBarneyCoffee", "Drinking coffee 2 times before handing to NPC")
+        DrinkCoffeeSips(coffeeTool, 2)
+
+        coffeeTool = GetInventoryTool("Coffee")
+        if not coffeeTool then
+            Log("AutoBarneyCoffee", "Coffee fully consumed during sips")
+            return true
+        end
+
+        local char, root = GetCharacter()
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then hum:EquipTool(coffeeTool) end
+        task.wait(0.15)
+
+        _AH_LastBarneyCoffeeTime = os.clock()
+        Log("AutoBarneyCoffee", "Handing coffee to NPC", { npc = targetNpc:GetFullName(), prompt = targetPP:GetFullName() })
+        PressPromptNearby(targetPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
+        task.wait(0.2)
+        UnequipAllTools()
+        return true
+    end
+
+    return false
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 🛡️ 7. PURE FOXNAME THREAT DETECTION & SHUTTER ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetShutterPP()
     local misc = Workspace:FindFirstChild("Misc")
@@ -613,7 +801,7 @@ local function EvaluateShutterLogic()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📺 7. TV PRESCRIPTION PARSER (FOXNAME EXACT UI & STATUS CHECK)
+-- 📺 8. TV PRESCRIPTION PARSER (FOXNAME EXACT UI & STATUS CHECK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetRoomFolder(roomData)
     local rooms = Workspace:FindFirstChild("Rooms")
@@ -676,7 +864,7 @@ local function MarkPatientTreated(npc)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛏️ 8. DESIGNATED BED RESOLVER & PATIENT PLACEMENT
+-- 🛏️ 9. DESIGNATED BED RESOLVER & PATIENT PLACEMENT
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetBedPromptForPatient(patient)
     if not patient then return nil, nil end
@@ -758,7 +946,7 @@ local function GetRoomBedPrompt(roomData, minigame, patient)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 9. COMPLETE TREATMENT ENGINE (STRICT PATIENT EXISTENCE CHECK)
+-- 🏥 10. COMPLETE TREATMENT ENGINE (STRICT PATIENT EXISTENCE CHECK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientInRoom(roomData)
     local npcs = Workspace:FindFirstChild("NPCs")
@@ -970,7 +1158,7 @@ local function TreatSingleRoom(roomData)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 10. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
+-- 🏢 11. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -1186,7 +1374,7 @@ local function ExecuteCheckInCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚪 11. AUTO ASK LEAVE ANOMALY
+-- 🚪 12. AUTO ASK LEAVE ANOMALY
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoAskLeaveAnomaly()
     if not _G.AutoAskLeaveAnomaly or StopCheck() then return false end
@@ -1213,7 +1401,7 @@ local function AutoAskLeaveAnomaly()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧯 12. AUTO PUT OUT FIRE (WITH AUTOMATIC EXTINGUISHER RETURN)
+-- 🧯 13. AUTO PUT OUT FIRE (WITH AUTOMATIC EXTINGUISHER RETURN)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function EquipExtinguisher()
     if GetItemCount("Extinguisher") > 0 then
@@ -1296,7 +1484,7 @@ local function AutoPutOutFire()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📹 13. AUTO FIX SECURITY CAMERAS
+-- 📹 14. AUTO FIX SECURITY CAMERAS
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoFixCam()
     if not _G.AutoFixCam or StopCheck() then return false end
@@ -1318,7 +1506,7 @@ local function AutoFixCam()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ⚡ 14. AUTO TASER ANOMALIES
+-- ⚡ 15. AUTO TASER ANOMALIES
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function EquipTaser()
     if GetItemCount("Taser") > 0 then
@@ -1358,53 +1546,6 @@ local function AutoTaserAnomalies()
         end
     end
     return false
-end
-
--- ══════════════════════════════════════════════════════════════════════════════════
--- ☕ 15. AUTO BARNEY COFFEE
--- ══════════════════════════════════════════════════════════════════════════════════
-local function ProcessBarneyCoffee()
-    if not _G.AutoGiveBarneyCoffee or StopCheck() then return end
-
-    local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return end
-
-    local barney = nil
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsBarneyNpc(npc) then
-            barney = npc
-            break
-        end
-    end
-    if not barney then return end
-
-    local barneyPP = nil
-    for _, p in ipairs(barney:GetDescendants()) do
-        if p:IsA("ProximityPrompt") and p.Enabled then
-            barneyPP = p
-            break
-        end
-    end
-    if not barneyPP then return end
-
-    if GetItemCount("Coffee") > 0 then
-        UseInventoryTool("Coffee")
-        PressPromptNearby(barneyPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.2)
-        UnequipAllTools()
-        return
-    end
-
-    local cm = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("CoffeeMachine")
-    local coffeePP = cm and cm:FindFirstChild("Coffee") and (cm.Coffee:FindFirstChild("PP") or cm.Coffee:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if coffeePP and coffeePP.Enabled then
-        Log("AutoCoffee", "Brewing coffee for Barney")
-        PressPromptNearby(coffeePP, 0.3, Vector3.new(0, 1.0, 1.5), 0.2)
-        if GetItemCount("Coffee") > 0 then
-            UseInventoryTool("Coffee")
-            PressPromptNearby(barneyPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.2)
-            UnequipAllTools()
-        end
-    end
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -1658,7 +1799,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v23.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v24.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -1975,8 +2116,11 @@ local TabMisc = CreateTab("Утилиты", "🌐")
 -- Вкладка: Автоматизация
 AddToggle(TabAuto, "🏥 Авто-Лечение (Палаты 1 - 8)", _G.AutoTreatment, function(v) _G.AutoTreatment = v end)
 AddToggle(TabAuto, "🏢 Авто-Регистрация (Ресепшен)", _G.AutoCheckIn, function(v) _G.AutoCheckIn = v end)
+AddToggle(TabAuto, "☕ Авто-Кофе (Пополнение рассудка)", _G.AutoCoffee, function(v) _G.AutoCoffee = v end)
+AddSlider(TabAuto, "Порог рассудка для кофе (%)", 20, 90, 60, function(v) _G.CoffeeSanityThreshold = v end)
+AddToggle(TabAuto, "☕ Кофе для Барни/Пациента (2 глотка)", _G.AutoGiveBarneyCoffee, function(v) _G.AutoGiveBarneyCoffee = v end)
 AddToggle(TabAuto, "🚑 Спасение упавших пациентов", _G.AutoHelpPatient, function(v) _G.AutoHelpPatient = v end)
-AddToggle(TabAuto, "🧯 Авто-Тушение пожаров", _G.AutoPutOutFire, function(v) _G.AutoPutOutFire = v end)
+AddToggle(TabAuto, "🧯 Авто-Тушение пожаров (С возвратом)", _G.AutoPutOutFire, function(v) _G.AutoPutOutFire = v end)
 AddToggle(TabAuto, "🧼 Авто-Уборка слизи", _G.AutoCleanSlime, function(v) _G.AutoCleanSlime = v end)
 AddToggle(TabAuto, "📹 Авто-Починка камер", _G.AutoFixCam, function(v) _G.AutoFixCam = v end)
 AddToggle(TabAuto, "🛒 Авто-Покупка в магазине", _G.AutoBuyShop, function(v) _G.AutoBuyShop = v end)
@@ -1987,7 +2131,6 @@ AddToggle(TabSafe, "🚪 Авто-Шторка от Барни", _G.AutoBarneySh
 AddToggle(TabSafe, "🗣️ Выгонять аномалии (Ask To Leave)", _G.AutoAskLeaveAnomaly, function(v) _G.AutoAskLeaveAnomaly = v end)
 AddToggle(TabSafe, "☠️ Устранять скинвокеров (Летальные)", _G.AutoKillAnomaly, function(v) _G.AutoKillAnomaly = v end)
 AddToggle(TabSafe, "⚡ Авто-Тазер аномалий", _G.AutoTaser, function(v) _G.AutoTaser = v end)
-AddToggle(TabSafe, "☕ Кофе для Барни", _G.AutoGiveBarneyCoffee, function(v) _G.AutoGiveBarneyCoffee = v end)
 
 -- Вкладка: Утилиты и Сервер
 AddButton(TabMisc, "🔄 Rejoin (Перезайти на сервер)", RejoinServer)
@@ -2065,7 +2208,17 @@ task.spawn(function()
             RunTaskExclusively("AutoTaserAnomalies", AutoTaserAnomalies)
         end
 
-        -- 5. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8)
+        -- 5. АВТО-КОФЕ ДЛЯ ПОПОЛНЕНИЯ РАССУДКА ИГРОКА
+        if _G.AutoCoffee and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoCoffeeSanity", ProcessSelfSanityCoffee)
+        end
+
+        -- 6. КОФЕ ДЛЯ БАРНИ И ПАЦИЕНТОВ (С 2 ГЛОТКАМИ ПЕРЕД ОТДАЧЕЙ)
+        if _G.AutoGiveBarneyCoffee and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoGiveBarneyCoffee", ProcessBarneyCoffee)
+        end
+
+        -- 7. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8)
         if _G.AutoTreatment and now >= nextGeneralTreatment and not _AH_IsPerformingTask then
             nextGeneralTreatment = now + 0.6
             for idx = 1, 8 do
@@ -2076,37 +2229,32 @@ task.spawn(function()
             end
         end
 
-        -- 6. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
+        -- 8. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
         if not _AH_IsPerformingTask then
             pcall(EvaluateShutterLogic)
         end
 
-        -- 7. РЕСЕПШЕН (Регистрация посетителей от начала до конца)
+        -- 9. РЕСЕПШЕН (Регистрация посетителей от начала до конца)
         if _G.AutoCheckIn and not _G.HasActiveThreat and IsShutterClosed() ~= true and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCheckIn", ExecuteCheckInCycle)
         end
 
-        -- 8. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ (Точная доставка на койку назначенной палаты)
+        -- 10. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ (Точная доставка на койку назначенной палаты)
         if _G.AutoHelpPatient and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoHelpPatient", AutoHelpFaintedPatients)
         end
 
-        -- 9. ПОЧИНКА КАМЕР
+        -- 11. ПОЧИНКА КАМЕР
         if _G.AutoFixCam and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoFixCam", AutoFixCam)
         end
 
-        -- 10. КОФЕ ДЛЯ БАРНИ
-        if _G.AutoGiveBarneyCoffee and not _AH_IsPerformingTask then
-            RunTaskExclusively("AutoGiveBarneyCoffee", ProcessBarneyCoffee)
-        end
-
-        -- 11. УБОРКА СЛИЗИ
+        -- 12. УБОРКА СЛИЗИ
         if _G.AutoCleanSlime and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCleanSlime", CleanSlimePuddles)
         end
 
-        -- 12. МАГАЗИН
+        -- 13. МАГАЗИН
         if _G.AutoBuyShop and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoBuyShop", AutoBuyShopItems)
         end
