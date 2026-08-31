@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V30.0 PERFECT CHECK-IN & RECEPTION ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V31.0 EXACT ATTRIBUTE FILTER EDITION)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -162,6 +162,7 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local CollectionService = game:GetService("CollectionService")
 local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
@@ -217,14 +218,23 @@ end
 
 local function IsBarneyNpc(npc)
     if not npc then return false end
-    return string.find(string.lower(npc.Name), "barney") ~= nil
+    return string.find(string.lower(tostring(npc.Name or "")), "barney") ~= nil
 end
 
+-- 🌟 ТОЧНЫЙ АТРИБУТНЫЙ ФИЛЬТР ПАЦИЕНТОВ ИЗ FOXNAME HUB
 local function IsValidPatient(npc)
     if not npc or not npc:IsA("Model") then return false end
-    local name = npc.Name
-    if name == "Barney" or name == "Cleaner" or name == "Guard" or name == "Security" then return false end
-    return true
+    if npc:GetAttribute("IsVisitor") == true then return true end
+    if npc:GetAttribute("Skinwalker") == true then return true end
+    if npc:GetAttribute("IsPatient") == true then return true end
+    if CollectionService and (CollectionService:HasTag(npc, "VisitorAtCheckIn") or CollectionService:HasTag(npc, "VisitorAtCheckIn2")) then
+        return true
+    end
+    return false
+end
+
+local function IsNormalCheckInPatient(npc)
+    return npc and not IsBarneyNpc(npc) and npc:GetAttribute("Skinwalker") ~= true and IsValidPatient(npc)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -902,7 +912,7 @@ local function GetClosestCounterNpc()
 
     local center = Positions.CheckInCounter
     local closestNpc = nil
-    local closestDist = 28.0
+    local closestDist = 20.0
     local isThreat = false
 
     for _, npc in ipairs(npcs:GetChildren()) do
@@ -1339,7 +1349,7 @@ local function TreatSingleRoom(roomData)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 12. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-LOOP CHECK-IN FLOW)
+-- 🏢 12. COMPLETE RECEPTION ENGINE (EXACT PATIENT ATTRIBUTE FILTER)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -1373,16 +1383,16 @@ local function GetPatientAtCounter()
     if not npcs then return nil, nil end
 
     for _, station in ipairs(GetCheckInStations()) do
-        local pc = station:FindFirstChild("Computer")
-        local center = (pc and GetPromptPosition(pc)) or Positions.CheckInCounter
+        local cam = station:FindFirstChild("Camera")
+        local handle = cam and cam:FindFirstChild("Handle")
+        local center = (handle and handle:IsA("BasePart") and handle.Position) or (station:FindFirstChild("Computer") and GetPromptPosition(station.Computer)) or Positions.CheckInCounter
 
         for _, npc in ipairs(npcs:GetChildren()) do
-            if npc:IsA("Model") and IsValidPatient(npc) and not IsRecentlyHandledCheckInPatient(npc) then
-                if not IsNpcThreat(npc) then
-                    local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-                    if root and (root.Position - center).Magnitude <= 28 then
-                        return npc, station
-                    end
+            -- 🛑 СТРОГИЙ ФИЛЬТР: ТОЛЬКО РЕАЛЬНЫЕ ПАЦИЕНТЫ И ПОСЕТИТЕЛИ (НЕ ДОКТОРА И НЕ ПЕРСОНАЛ!)
+            if IsNormalCheckInPatient(npc) and not IsRecentlyHandledCheckInPatient(npc) then
+                local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+                if root and (root.Position - center).Magnitude <= 15.0 then
+                    return npc, station
                 end
             end
         end
@@ -1960,7 +1970,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v30.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v31.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
