@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V28.0 SEAMLESS COMPLETE MEDICAL PIPELINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V29.0 ZERO-NIL SCOPE-SAFE EDITION)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -215,6 +215,18 @@ local function GetPromptPosition(prompt)
     return nil
 end
 
+local function IsBarneyNpc(npc)
+    if not npc then return false end
+    return string.find(string.lower(npc.Name), "barney") ~= nil
+end
+
+local function IsValidPatient(npc)
+    if not npc or not npc:IsA("Model") then return false end
+    local name = npc.Name
+    if name == "Barney" or name == "Cleaner" or name == "Guard" or name == "Security" then return false end
+    return true
+end
+
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- ⚡ 3. BULLETPROOF PROXIMITY PROMPT ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -407,6 +419,36 @@ local function GetWrongInventoryTool(targetItem)
         end
     end
     return nil
+end
+
+local function EquipExtinguisher()
+    if GetItemCount("Extinguisher") > 0 then
+        return UseInventoryTool("Extinguisher")
+    end
+
+    local misc = Workspace:FindFirstChild("Misc")
+    local extStation = misc and misc:FindFirstChild("ExtinguisherStation")
+    local extPP = extStation and extStation:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if extPP and extPP.Enabled then
+        Log("AutoPutOutFire", "Grabbing Extinguisher from station")
+        PressPromptNearby(extPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        return UseInventoryTool("Extinguisher")
+    end
+    return false
+end
+
+local function ReturnExtinguisher()
+    if GetItemCount("Extinguisher") == 0 then return end
+    local misc = Workspace:FindFirstChild("Misc")
+    local extStation = misc and misc:FindFirstChild("ExtinguisherStation")
+    local extPP = extStation and extStation:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if extPP and extPP.Enabled then
+        Log("AutoPutOutFire", "Returning Extinguisher back to station")
+        UseInventoryTool("Extinguisher")
+        task.wait(0.1)
+        PressPromptNearby(extPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        UnequipAllTools()
+    end
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -826,18 +868,6 @@ local function SetShutterClosed(shouldBeClosed)
 
     Log("AutoShutter", shouldBeClosed and "Closing shutter" or "Opening shutter")
     PressPromptNearby(pp, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
-    return true
-end
-
-local function IsBarneyNpc(npc)
-    if not npc then return false end
-    return string.find(string.lower(npc.Name), "barney") ~= nil
-end
-
-local function IsValidPatient(npc)
-    if not npc or not npc:IsA("Model") then return false end
-    local name = npc.Name
-    if name == "Barney" or name == "Cleaner" or name == "Guard" or name == "Security" then return false end
     return true
 end
 
@@ -1552,38 +1582,8 @@ local function AutoAskLeaveAnomaly()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧯 14. AUTO PUT OUT FIRE (WITH AUTOMATIC EXTINGUISHER RETURN)
+-- 🧯 14. AUTO PUT OUT FIRE
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function EquipExtinguisher()
-    if GetItemCount("Extinguisher") > 0 then
-        return UseInventoryTool("Extinguisher")
-    end
-
-    local misc = Workspace:FindFirstChild("Misc")
-    local extStation = misc and misc:FindFirstChild("ExtinguisherStation")
-    local extPP = extStation and extStation:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if extPP and extPP.Enabled then
-        Log("AutoPutOutFire", "Grabbing Extinguisher from station")
-        PressPromptNearby(extPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        return UseInventoryTool("Extinguisher")
-    end
-    return false
-end
-
-local function ReturnExtinguisher()
-    if GetItemCount("Extinguisher") == 0 then return end
-    local misc = Workspace:FindFirstChild("Misc")
-    local extStation = misc and misc:FindFirstChild("ExtinguisherStation")
-    local extPP = extStation and extStation:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if extPP and extPP.Enabled then
-        Log("AutoPutOutFire", "Returning Extinguisher back to station")
-        UseInventoryTool("Extinguisher")
-        task.wait(0.1)
-        PressPromptNearby(extPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        UnequipAllTools()
-    end
-end
-
 local function AutoPutOutFire()
     if not _G.AutoPutOutFire or StopCheck() then return false end
 
@@ -1950,7 +1950,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v28.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v29.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
