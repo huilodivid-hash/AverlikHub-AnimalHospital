@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V18.0 PURE THREAT & SHUTTER)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V19.0 COMPLETE CHECK-IN ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -575,10 +575,7 @@ local function HasNormalPatientAtCheckIn()
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return false end
 
-    local misc = Workspace:FindFirstChild("Misc")
-    local checkIn = misc and misc:FindFirstChild("CheckIn")
     local center = Positions.CheckInCounter
-
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and IsValidPatient(npc) and not IsNpcThreat(npc) then
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
@@ -913,7 +910,7 @@ local function ExecuteTreatmentCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 9. COMPLETE RECEPTION ENGINE (ZERO-SPAM & NON-TELEPORT SCAN)
+-- 🏢 9. COMPLETE RECEPTION ENGINE (EXACT FOXNAME REPLICA)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -968,25 +965,22 @@ end
 local function GetNpcTalkPrompt(npc)
     if not npc then return nil end
     for _, p in ipairs(npc:GetDescendants()) do
-        if p:IsA("ProximityPrompt") and p.Enabled then
-            local act = string.lower(tostring(p.ActionText or ""))
-            if act:find("talk") or act:find("speak") or act:find("badge") or act:find("give") or act:find("interact") or act == "" then
-                return p
-            end
+        if p:IsA("ProximityPrompt") and string.find(string.lower(p.ActionText or ""), "talk") and p.Enabled then
+            return p
         end
     end
     return nil
 end
 
 local function GetNpcCheckInPrompt(npc)
-    if not npc or IsBarneyNpc(npc) or npc.Name == "Cleaner" or npc.Name == "Guard" then return nil end
+    if not npc or IsBarneyNpc(npc) or npc:GetAttribute("Skinwalker") == true then return nil end
     local talk = GetNpcTalkPrompt(npc)
     if talk then return talk end
 
     for _, p in ipairs(npc:GetDescendants()) do
         if p:IsA("ProximityPrompt") and p.Enabled then
             local act = string.lower(tostring(p.ActionText or ""))
-            if not act:find("carry") and not act:find("help") and not act:find("faint") then
+            if act ~= "" and not act:find("carry") and not act:find("help") and not act:find("faint") then
                 return p
             end
         end
@@ -994,42 +988,30 @@ local function GetNpcCheckInPrompt(npc)
     return nil
 end
 
-local function EquipBadgeIfInInventory()
-    for _, c in ipairs(InventoryParents()) do
-        for _, t in ipairs(c:GetChildren()) do
-            if t:IsA("Tool") and (string.lower(t.Name):find("badge") or string.lower(t.Name):find("card") or string.lower(t.Name):find("id")) then
-                UseInventoryTool(t.Name)
-                return t
-            end
-        end
-    end
-    return nil
-end
+local function FinishPatientCheckIn(patient)
+    if not patient or StopCheck() then return false end
+    local prompt = GetNpcCheckInPrompt(patient)
+    if not prompt or not prompt.Enabled then return false end
 
-local function HasBadgeInInventory()
-    return EquipBadgeIfInInventory() ~= nil
-end
+    Log("AutoCheckIn", "Giving badge / talking to finish check-in", { patient = patient:GetFullName(), prompt = prompt:GetFullName() })
 
-local function DeliverBadgeToPatient(patient)
-    if not patient then return false end
-    if not HasBadgeInInventory() then return false end
-
-    EquipBadgeIfInInventory()
-
-    local pPos = (patient:FindFirstChild("HumanoidRootPart") and patient.HumanoidRootPart.Position) or patient:GetPivot().Position
-    TeleportPlayer(pPos + Vector3.new(0, 1.0, 1.5))
-    task.wait(0.2)
-
-    local npcPrompt = GetNpcCheckInPrompt(patient)
-    if npcPrompt and npcPrompt.Enabled then
-        Log("AutoCheckIn", "Giving badge to patient", { patient = patient:GetFullName() })
-        PressPromptNearby(npcPrompt, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
+    local pPos = GetPromptPosition(prompt) or (patient:FindFirstChild("HumanoidRootPart") and patient.HumanoidRootPart.Position)
+    if pPos then
+        TeleportPlayer(pPos + Vector3.new(0, 1.2, 1.5))
+        task.wait(0.15)
     end
 
-    UnequipAllTools()
-    MarkCheckInPatientHandled(patient)
-    Log("AutoCheckIn", "Successfully finished check-in for patient", { patient = patient:GetFullName() })
-    return true
+    local pressed = PressPP(prompt, 0.4)
+    if pressed then
+        pcall(function()
+            patient:SetAttribute("CompletedCheckIn", LocalPlayer.Name)
+            patient:SetAttribute("FoxnameCheckInPromptHandled", true)
+        end)
+        MarkCheckInPatientHandled(patient)
+        Log("AutoCheckIn", "Successfully finished check-in for patient", { patient = patient:GetFullName() })
+        return true
+    end
+    return false
 end
 
 local function ExecuteCheckInCycle()
@@ -1051,11 +1033,8 @@ local function ExecuteCheckInCycle()
         end
     end
 
-    -- 1. Если бейджик на руках -> вручаем
-    if HasBadgeInInventory() then
-        DeliverBadgeToPatient(patient)
-        return true
-    end
+    -- 1. Если NPC уже готов завершить регистрацию -> говорим сразу!
+    if FinishPatientCheckIn(patient) then return true end
 
     -- 2. Готовый напечатанный бейджик на стойке
     for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
@@ -1063,15 +1042,11 @@ local function ExecuteCheckInCycle()
         local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
         if bPP and bPP.Enabled then
             Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
-            PressPromptNearby(bPP, 0.2, Vector3.new(0, 1.0, 1.5), 0.15)
-            if HasBadgeInInventory() then
-                DeliverBadgeToPatient(patient)
-                return true
-            end
+            PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
+            task.wait(0.2)
+            if FinishPatientCheckIn(patient) then return true end
         end
     end
-
-    local didAnyWork = false
 
     -- 3. Бланк (Form)
     local form = checkIn:FindFirstChild("Form")
@@ -1079,7 +1054,8 @@ local function ExecuteCheckInCycle()
     if formPP and formPP.Enabled then
         Log("AutoCheckIn", "Stamping Form", { prompt = formPP:GetFullName() })
         PressPromptNearby(formPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        didAnyWork = true
+        task.wait(0.15)
+        if FinishPatientCheckIn(patient) then return true end
     end
 
     -- 4. Фотоаппарат (Camera)
@@ -1088,32 +1064,18 @@ local function ExecuteCheckInCycle()
     if camPP and camPP.Enabled then
         Log("AutoCheckIn", "Taking Photo", { prompt = camPP:GetFullName() })
         PressPromptNearby(camPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        didAnyWork = true
+        task.wait(0.15)
+        if FinishPatientCheckIn(patient) then return true end
     end
 
-    -- 5. Компьютер (Computer — прожимаем 1 раз)
+    -- 5. Компьютер (Computer)
     local pc = checkIn:FindFirstChild("Computer")
     local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
     if pcPP and pcPP.Enabled then
         Log("AutoCheckIn", "Processing computer registration", { prompt = pcPP:GetFullName() })
         PressPromptNearby(pcPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        didAnyWork = true
-
-        local waitDeadline = os.clock() + 3.0
-        while os.clock() < waitDeadline and not StopCheck() do
-            local printer = checkIn:FindFirstChild("Printer")
-            local prPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-            if prPP and prPP.Enabled then break end
-
-            local foundBadge = false
-            for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
-                local b = checkIn:FindFirstChild(bName)
-                local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
-                if bPP and bPP.Enabled then foundBadge = true break end
-            end
-            if foundBadge then break end
-            task.wait(0.15)
-        end
+        task.wait(0.2)
+        if FinishPatientCheckIn(patient) then return true end
     end
 
     -- 6. Принтер (Printer)
@@ -1122,31 +1084,28 @@ local function ExecuteCheckInCycle()
     if printerPP and printerPP.Enabled then
         Log("AutoCheckIn", "Printing Badge", { prompt = printerPP:GetFullName() })
         PressPromptNearby(printerPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
-        didAnyWork = true
 
-        local waitBadge = os.clock() + 2.5
-        while os.clock() < waitBadge and not StopCheck() do
+        local waitDeadline = os.clock() + 3.0
+        while os.clock() < waitDeadline and not StopCheck() do
             for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
                 local b = checkIn:FindFirstChild(bName)
                 local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
                 if bPP and bPP.Enabled then
                     Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
-                    PressPromptNearby(bPP, 0.2, Vector3.new(0, 1.0, 1.5), 0.15)
+                    PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
+                    task.wait(0.2)
+                    if FinishPatientCheckIn(patient) then return true end
                     break
                 end
             end
-            if HasBadgeInInventory() then break end
+            if FinishPatientCheckIn(patient) then return true end
             task.wait(0.15)
         end
     end
 
-    -- 7. Если бейджик на руках после принтера -> вручаем
-    if HasBadgeInInventory() then
-        DeliverBadgeToPatient(patient)
-        return true
-    end
+    if FinishPatientCheckIn(patient) then return true end
 
-    return didAnyWork
+    return false
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -1620,7 +1579,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v18.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v19.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
