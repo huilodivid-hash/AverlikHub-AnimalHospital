@@ -1201,7 +1201,7 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (ACCURATE PIPELINE WITH AUTOMATIC BADGE HANDOVER)
+-- 🏢 11. AUTO CHECK IN (PERFECT FOXNAME-GRADE RECEPTION PIPELINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientAtCounter()
     if _G.IsShutterClosed or _G.HasActiveThreat then return nil end
@@ -1240,17 +1240,58 @@ local function GetNpcCheckInPrompt(npc)
     return nil
 end
 
-local function ExecuteCheckInCycle()
-    if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return false end
-
+local function GetNextDeskPrompt()
     local misc = Workspace:FindFirstChild("Misc")
     local checkIn = misc and misc:FindFirstChild("CheckIn")
-    if not checkIn then return false end
+    if not checkIn then return nil, nil end
+
+    -- 1. Бейдж готов на столе (PatientBadgeBase, VisitorBadgeBase, PrintedBadge)
+    for _, bName in ipairs({"PatientBadgeBase", "VisitorBadgeBase", "PrintedBadge"}) do
+        local b = checkIn:FindFirstChild(bName)
+        local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if bPP and bPP.Enabled then
+            return bPP, "Badge"
+        end
+    end
+
+    -- 2. Принтер (Printer)
+    local printer = checkIn:FindFirstChild("Printer")
+    local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if printerPP and printerPP.Enabled then
+        return printerPP, "Printer"
+    end
+
+    -- 3. Компьютер (Computer)
+    local pc = checkIn:FindFirstChild("Computer")
+    local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if pcPP and pcPP.Enabled then
+        return pcPP, "Computer"
+    end
+
+    -- 4. Фотоаппарат (Camera)
+    local cam = checkIn:FindFirstChild("Camera")
+    local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if camPP and camPP.Enabled then
+        return camPP, "Camera"
+    end
+
+    -- 5. Бланк (Form)
+    local form = checkIn:FindFirstChild("Form")
+    local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if formPP and formPP.Enabled then
+        return formPP, "Form"
+    end
+
+    return nil, nil
+end
+
+local function ExecuteCheckInCycle()
+    if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return false end
 
     local patient = GetPatientAtCounter()
     if not patient then return false end
 
-    -- 1. Если у NPC есть активный промпт (отдать бейдж / поговорить) -> сразу отдаем!
+    -- Проверяем, есть ли промпт отдать бейдж прямо сейчас на клиенте
     local npcPrompt = GetNpcCheckInPrompt(patient)
     if npcPrompt and npcPrompt.Enabled then
         for _, c in ipairs(InventoryContainers()) do
@@ -1265,78 +1306,54 @@ local function ExecuteCheckInCycle()
         Log("AutoCheckIn", "Handing badge to patient", { patient = patient:GetFullName(), prompt = npcPrompt:GetFullName() })
         local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
         if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 2.0)) end
-        task.wait(0.25)
+        task.wait(0.2)
         FirePrompt(npcPrompt)
-        task.wait(0.5)
+        task.wait(0.4)
         UnequipAllTools()
         MarkPatientTreated(patient)
         return true
     end
 
-    -- 2. Бланк (Form)
-    local form = checkIn:FindFirstChild("Form")
-    local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if formPP and formPP.Enabled then
-        Log("AutoCheckIn", "Stamping check-in form", { prompt = formPP:GetFullName() })
-        TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.3)
-        task.wait(0.4)
-        return true
+    -- Ищем активный промпт на столе
+    local deskPP, deskType = GetNextDeskPrompt()
+    if not deskPP or not deskPP.Enabled then
+        return false
     end
 
-    -- 3. Фотоаппарат (Camera)
-    local cam = checkIn:FindFirstChild("Camera")
-    local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if camPP and camPP.Enabled then
-        Log("AutoCheckIn", "Taking patient photo", { prompt = camPP:GetFullName() })
-        TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.3)
-        task.wait(0.4)
-        return true
+    Log("AutoCheckIn", "Processing check-in step", { step = deskType, prompt = deskPP:GetFullName() })
+    local pPos = GetPromptPartPosition(deskPP)
+    if pPos then
+        TeleportPlayer(pPos + Vector3.new(0, 1.0, 1.5))
+        task.wait(0.2)
     end
+    FirePrompt(deskPP)
+    task.wait(0.4)
 
-    -- 4. Компьютер (Computer)
-    local pc = checkIn:FindFirstChild("Computer")
-    local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if pcPP and pcPP.Enabled then
-        Log("AutoCheckIn", "Registering on computer", { prompt = pcPP:GetFullName() })
-        TeleportAndFirePrompt(pcPP, Positions.CheckInPC, 0.3)
-        task.wait(0.5)
-        return true
-    end
-
-    -- 5. Принтер (Printer)
-    local printer = checkIn:FindFirstChild("Printer")
-    local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if printerPP and printerPP.Enabled then
-        Log("AutoCheckIn", "Printing badge", { prompt = printerPP:GetFullName() })
-        TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.3)
-        task.wait(0.6)
-        return true
-    end
-
-    -- 6. Забрать напечатанный бейдж (PrintedBadge / PatientBadgeBase / VisitorBadgeBase)
-    local printedBadge = checkIn:FindFirstChild("PrintedBadge") or checkIn:FindFirstChild("PatientBadgeBase") or checkIn:FindFirstChild("VisitorBadgeBase")
-    local badgePP = printedBadge and (printedBadge:FindFirstChild("PP") or printedBadge:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if badgePP and badgePP.Enabled then
-        Log("AutoCheckIn", "Taking printed badge from desk", { prompt = badgePP:GetFullName() })
-        TeleportAndFirePrompt(badgePP, Positions.CheckInBadge, 0.3)
-        task.wait(0.4)
-
-        -- Сразу передаем бейдж пациенту
+    -- Если взяли бейдж, сразу отдаем пациенту
+    if deskType == "Badge" then
+        task.wait(0.2)
         npcPrompt = GetNpcCheckInPrompt(patient)
         if npcPrompt and npcPrompt.Enabled then
-            Log("AutoCheckIn", "Handing badge to patient immediately", { patient = patient:GetFullName() })
+            for _, c in ipairs(InventoryContainers()) do
+                for _, t in ipairs(c:GetChildren()) do
+                    if t:IsA("Tool") then
+                        UseInventoryTool(t.Name)
+                        break
+                    end
+                end
+            end
+            Log("AutoCheckIn", "Giving taken badge to patient", { patient = patient:GetFullName() })
             local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
             if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 2.0)) end
             task.wait(0.2)
             FirePrompt(npcPrompt)
-            task.wait(0.5)
+            task.wait(0.4)
             UnequipAllTools()
             MarkPatientTreated(patient)
         end
-        return true
     end
 
-    return false
+    return true
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
