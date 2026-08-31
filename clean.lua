@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V24.0 SANITY & COFFEE ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V25.0 UNIVERSAL PHARMACY & MONITOR THROTTLE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -46,6 +46,7 @@ local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
 local _AH_LeavingNpcs = setmetatable({}, { __mode = "k" })
 local _AH_LastCoffeeDrinkTime = 0
 local _AH_LastBarneyCoffeeTime = 0
+local _AH_LastMonitorPressTime = {}
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -390,7 +391,7 @@ local function GetWrongInventoryTool(targetItem)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔍 5. EXACT ANCESTOR MODEL PROMPT INDEXER (FOXNAME ENGINE)
+-- 🔍 5. EXACT ANCESTOR MODEL PROMPT INDEXER (UNIVERSAL PHARMACY ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local _AH_ItemIndexTable = {}
 local _AH_IndexedOnce = false
@@ -401,22 +402,12 @@ local function GetBlacklistedContainer()
     return nil
 end
 
-local function IsDescendantOfBlacklist(prompt)
-    local bl = GetBlacklistedContainer()
-    if bl and prompt:IsDescendantOf(bl) then return true end
-    local fullName = prompt:GetFullName()
-    if fullName:find("Room8.Minigame.Medicine") or fullName:find("Emergency.Room8") then
-        return true
-    end
-    return false
-end
-
 local function IndexTreatmentPrompt(prompt)
     if not prompt:IsA("ProximityPrompt") then return end
     local current = prompt.Parent
     while current and current ~= Workspace do
         local cName = current.Name
-        if _G.AH_ItemSet[cName] and not _G.AH_BlacklistedItemNames[cName] and (current:IsA("Model") or current:IsA("BasePart")) then
+        if (_G.AH_ItemSet[cName] or _G.AH_SurgeryItemSet[cName]) and not _G.AH_BlacklistedItemNames[cName] and (current:IsA("Model") or current:IsA("BasePart")) then
             local tbl = _AH_ItemIndexTable[cName]
             if not tbl then tbl = {} _AH_ItemIndexTable[cName] = tbl end
             tbl[prompt] = true
@@ -444,7 +435,7 @@ local function GetSurgeryItemPP(itemName)
     local ok, med = pcall(function() return Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
     if ok and med then
         for _, d in ipairs(med:GetDescendants()) do
-            if d:IsA("ProximityPrompt") and d.Parent and d.Parent.Name == itemName then
+            if d:IsA("ProximityPrompt") and d.Parent and d.Parent.Name == itemName and d.Enabled then
                 return d
             end
         end
@@ -453,12 +444,11 @@ local function GetSurgeryItemPP(itemName)
 end
 
 local function GetItemPP(itemName)
-    if not _G.AH_ItemSet[itemName] or _G.AH_BlacklistedItemNames[itemName] then return nil end
     InitTreatmentIndex()
     local promptSet = _AH_ItemIndexTable[itemName]
     if promptSet then
         for prompt in pairs(promptSet) do
-            if prompt.Parent and prompt.Enabled and not IsDescendantOfBlacklist(prompt) then
+            if prompt.Parent and prompt.Enabled then
                 return prompt
             end
         end
@@ -466,22 +456,45 @@ local function GetItemPP(itemName)
     return nil
 end
 
-local function GrabItemUntilInInventory(itemName, isSurgery)
+local function GetItemPromptForTreatment(itemName, roomName)
+    -- 1. Если палата 8 или это чисто хирургический предмет -> сначала ищем в шкафу Room8
+    if roomName == "Room8" or _G.AH_SurgeryItemSet[itemName] then
+        local surgPP = GetSurgeryItemPP(itemName)
+        if surgPP and surgPP.Enabled then
+            return surgPP
+        end
+    end
+
+    -- 2. Ищем на обычных аптечных стеллажах (Herbs, Pills, Eye Drops, Medkit и т.д.)
+    local regPP = GetItemPP(itemName)
+    if regPP and regPP.Enabled then
+        return regPP
+    end
+
+    -- 3. Резервный динамический поиск по имени модели в Workspace
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") and obj.Enabled then
+            local pName = obj.Parent and obj.Parent.Name or ""
+            if NormalizeName(pName) == NormalizeName(itemName) then
+                return obj
+            end
+        end
+    end
+
+    return nil
+end
+
+local function GrabItemUntilInInventory(itemName, roomName)
     if GetItemCount(itemName) > 0 then return true end
 
     -- Очистка посторонних инструментов
     local wrong = GetWrongInventoryTool(itemName)
     if wrong then DiscardToolAtTrash(wrong) end
 
-    local prompt = nil
-    if isSurgery then
-        prompt = GetSurgeryItemPP(itemName)
-    else
-        prompt = GetItemPP(itemName)
-    end
+    local prompt = GetItemPromptForTreatment(itemName, roomName)
 
     if prompt then
-        Log("AutoTreatment", "Grabbing treatment item", { targetItem = itemName, prompt = prompt:GetFullName(), countBefore = GetItemCount(itemName) })
+        Log("AutoTreatment", "Grabbing treatment item", { targetItem = itemName, room = roomName, prompt = prompt:GetFullName(), countBefore = GetItemCount(itemName) })
         local countBefore = GetItemCount(itemName)
         PressTreatmentPromptNearbyUntil(prompt, 0.12, 1.5, function() return GetItemCount(itemName) > countBefore end)
         local t = os.clock()
@@ -491,7 +504,7 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
         end
         task.wait(0.1)
     else
-        Log("AutoTreatment", "Prescription shelf prompt not found", { item = itemName })
+        Log("AutoTreatment", "Prescription shelf prompt not found", { item = itemName, room = roomName })
     end
 
     return GetItemCount(itemName) > 0
@@ -955,12 +968,13 @@ local function GetPatientInRoom(roomData)
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and not npc:GetAttribute("IsVisitor") and (npc:GetAttribute("IsPatient") == true or npc:GetAttribute("Skinwalker") == true) then
             local desRoom = npc:GetAttribute("DesignatedRoom")
-            if desRoom == roomData.Name then
-                return npc
-            end
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root and (root.Position - roomData.Position).Magnitude <= 28 then
-                return npc
+            if root then
+                local dist = (root.Position - roomData.Position).Magnitude
+                -- Пациент должен быть в палате (или на койке), а не на ресепшене!
+                if (desRoom == roomData.Name and (npc:GetAttribute("InBed") == true or dist <= 26)) or dist <= 24 then
+                    return npc
+                end
             end
         end
     end
@@ -1036,16 +1050,20 @@ local function TreatSingleRoom(roomData)
         end
     end
 
-    -- 4. Monitor Process Prompt (PP2) - Нажимаем только если в рецепте еще нет предметов
+    -- 4. Monitor Process Prompt (PP2) - Нажимаем только если в рецепте еще нет предметов и с кулдауном 4 сек
     local neededBefore = GetNeededTreatmentItems(roomData)
-    if #neededBefore == 0 then
+    local now = os.clock()
+    local lastMonPress = _AH_LastMonitorPressTime[roomData.Name] or 0
+
+    if #neededBefore == 0 and (now - lastMonPress >= 4.0) then
         local monitor = minigame:FindFirstChild("Monitor")
         local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
         if monitorPP2 and monitorPP2.Enabled then
+            _AH_LastMonitorPressTime[roomData.Name] = now
             Log("AutoTreatment", "Processing monitor results", { room = roomData.Name, prompt = monitorPP2:GetFullName() })
             PressPromptNearby(monitorPP2, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
             didAction = true
-            task.wait(0.3)
+            task.wait(0.4)
         end
     end
 
@@ -1098,7 +1116,7 @@ local function TreatSingleRoom(roomData)
             end
 
             if GetItemCount(currentItem) == 0 then
-                GrabItemUntilInInventory(currentItem, roomData.Emergency)
+                GrabItemUntilInInventory(currentItem, roomData.Name)
             end
 
             if GetItemCount(currentItem) > 0 then
@@ -1799,7 +1817,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v24.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v25.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
