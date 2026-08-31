@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V27.0 DIRECT AILMENT & BURN TREATMENT)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V28.0 SEAMLESS COMPLETE MEDICAL PIPELINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -530,7 +530,7 @@ local function GrabItemUntilInInventory(itemName, roomName)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🩹 6. DIRECT PATIENT AILMENT & BURN TREATMENT ENGINE (IMAGE / DECAL PARSER)
+-- 🩹 6. DIRECT PATIENT AILMENT & BURN RESOLVER
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientAilmentItem(npc)
     if not npc or not npc:IsA("Model") then return nil end
@@ -568,77 +568,51 @@ local function GetPatientAilmentItem(npc)
     return nil
 end
 
-local function AutoTreatBurnsAndDirectAilments()
-    if not _G.AutoTreatment or StopCheck() then return false end
+local function ProcessPatientDirectBurnAndAilment(npc, roomName)
+    if not npc or not npc:IsA("Model") or StopCheck() then return false end
 
-    local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return false end
+    local firePP = npc:FindFirstChild("FirePP") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not firePP or not firePP.Enabled then return false end
 
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and not npc:GetAttribute("IsVisitor") then
-            local firePP = npc:FindFirstChild("FirePP") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
-            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
+    local actText = string.lower(tostring(firePP.ActionText or ""))
 
-            if firePP and firePP.Enabled then
-                local actText = string.lower(tostring(firePP.ActionText or ""))
+    -- Если пациент горит -> тушим огнетушителем
+    if actText ~= "treat burns" and (actText:find("fire") or actText:find("extinguish") or actText:find("burn")) then
+        Log("AutoTreatment", "Extinguishing burning patient in room", { npc = npc:GetFullName(), room = roomName })
+        EquipExtinguisher()
+        PressPromptNearby(firePP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        task.wait(0.3)
+        ReturnExtinguisher()
+        return true
+    end
 
-                -- Если пациент всё ещё горит -> тушим
-                if actText ~= "treat burns" and (actText:find("fire") or actText:find("extinguish") or actText:find("burn")) then
-                    Log("AutoTreatment", "Extinguishing burning patient first", { npc = npc:GetFullName(), prompt = firePP:GetFullName() })
-                    EquipExtinguisher()
-                    PressPromptNearby(firePP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-                    task.wait(0.3)
-                    ReturnExtinguisher()
-                    return true
-                end
+    -- Если пациент потушен и требует нанесения мази / бинтов (Treat Burns / Heal / Ointment)
+    if actText == "treat burns" or actText:find("burn") or actText:find("treat") or actText:find("apply") or actText:find("ointment") or actText:find("heal") then
+        local neededItem = GetPatientAilmentItem(npc) or "Ointment"
 
-                -- Если пациент потушен и требует лечения ожогов / мази / бинтов
-                if actText == "treat burns" or actText:find("burn") or actText:find("treat") or actText:find("apply") or actText:find("ointment") or actText:find("heal") then
-                    local neededItem = GetPatientAilmentItem(npc) or "Ointment"
+        Log("AutoTreatment", "Applying direct burn/ailment remedy to patient", {
+            npc = npc:GetFullName(),
+            neededItem = neededItem,
+            room = roomName
+        })
 
-                    Log("AutoTreatment", "Detected patient needing direct burn/ailment treatment", {
-                        npc = npc:GetFullName(),
-                        neededItem = neededItem,
-                        prompt = firePP:GetFullName()
-                    })
+        if GetItemCount(neededItem) == 0 then
+            GrabItemUntilInInventory(neededItem, roomName)
+        end
 
-                    -- Берем нужное лекарство со стеллажа (Ointment, Bandages, Medkit и т.д.)
-                    if GetItemCount(neededItem) == 0 then
-                        GrabItemUntilInInventory(neededItem, "General")
-                    end
+        if GetItemCount(neededItem) > 0 then
+            UseInventoryTool(neededItem)
+            task.wait(0.1)
 
-                    if GetItemCount(neededItem) > 0 then
-                        UseInventoryTool(neededItem)
-                        task.wait(0.1)
+            PressTreatmentPromptNearbyUntil(firePP, 0.2, 3.0, function()
+                return not firePP.Parent or not firePP.Enabled or GetItemCount(neededItem) == 0 or string.lower(tostring(firePP.ActionText or "")) ~= "treat burns"
+            end)
 
-                        Log("AutoTreatment", "Applying ailment item to patient", { npc = npc:GetFullName(), item = neededItem })
-                        PressTreatmentPromptNearbyUntil(firePP, 0.2, 3.0, function()
-                            return not firePP.Parent or not firePP.Enabled or GetItemCount(neededItem) == 0 or string.lower(tostring(firePP.ActionText or "")) ~= "treat burns"
-                        end)
-
-                        UnequipAllTools()
-                        local wrong = GetWrongInventoryTool("")
-                        if wrong then DiscardToolAtTrash(wrong) end
-                        return true
-                    else
-                        -- Резервный перебор всех предметов из инвентаря
-                        Log("AutoTreatment", "Specific item not found, trying all available medical items on patient", { npc = npc:GetFullName() })
-                        for _, item in ipairs(_G.AH_ItemList) do
-                            if GetItemCount(item) > 0 then
-                                UseInventoryTool(item)
-                                task.wait(0.1)
-                                if firePP and firePP.Enabled then
-                                    PressTreatmentPromptNearbyUntil(firePP, 0.2, 2.0, function()
-                                        return not firePP.Parent or not firePP.Enabled
-                                    end)
-                                    UnequipAllTools()
-                                    return true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
+            UnequipAllTools()
+            local wrong = GetWrongInventoryTool("")
+            if wrong then DiscardToolAtTrash(wrong) end
+            task.wait(0.3)
+            return true
         end
     end
 
@@ -1110,7 +1084,7 @@ local function GetRoomBedPrompt(roomData, minigame, patient)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 11. COMPLETE ROOM TREATMENT ENGINE (STRICT PATIENT EXISTENCE CHECK)
+-- 🏥 11. COMPLETE ROOM TREATMENT ENGINE (SEAMLESS OINTMENT -> DNA -> MONITOR -> CURE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientInRoom(roomData)
     local npcs = Workspace:FindFirstChild("NPCs")
@@ -1163,12 +1137,20 @@ local function TreatSingleRoom(roomData)
         end
     end
 
-    -- 1. DNA Sample Prompt (на пациенте)
+    -- 🌟 1. ПЕРВИЧНАЯ ОБРАБОТКА ОЖОГОВ / НАНЕСЕНИЕ МАЗИ (Ointment / Treat Burns)
+    -- Не прерываем функцию! Сразу после нанесения мази продолжаем брать ДНК!
+    local burnCured = ProcessPatientDirectBurnAndAilment(patient, roomData.Name)
+    if burnCured then
+        didAction = true
+        task.wait(0.2)
+    end
+
+    -- 🧬 2. ВЗЯТИЕ ОБРАЗЦА ДНК (DNA Sample Prompt на пациенте)
     for _, p in ipairs(patient:GetDescendants()) do
         if p:IsA("ProximityPrompt") and p.Enabled then
             local act = string.lower(p.ActionText or "")
             if act:find("sample") or act:find("dna") or act:find("take") or act:find("prepare") then
-                Log("AutoTreatment", "Taking DNA sample", { room = roomData.Name, prompt = p:GetFullName() })
+                Log("AutoTreatment", "Taking DNA sample after initial care", { room = roomData.Name, prompt = p:GetFullName() })
                 PressPromptNearby(p, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
                 didAction = true
                 task.wait(0.3)
@@ -1177,7 +1159,7 @@ local function TreatSingleRoom(roomData)
         end
     end
 
-    -- 2. Analyzer Prompt (Rooms 1 - 5)
+    -- 🔬 3. АНАЛИЗАТОР ДНК (Analyzer Prompt в Rooms 1 - 5)
     local analyzer = minigame:FindFirstChild("Analyzer")
     local analyzerPP = analyzer and (analyzer:FindFirstChild("PP") or analyzer:FindFirstChildWhichIsA("ProximityPrompt", true))
     if analyzerPP and analyzerPP.Enabled then
@@ -1187,7 +1169,7 @@ local function TreatSingleRoom(roomData)
         task.wait(0.3)
     end
 
-    -- 3. X-Ray Start Prompt (Room 6 xrayMonitor)
+    -- 🩻 4. X-RAY СКАНЕР (Room 6 xrayMonitor)
     if roomData.Name == "Room6" then
         local xrayMonitor = minigame:FindFirstChild("xrayMonitor")
         local xrayPP = xrayMonitor and (xrayMonitor:FindFirstChild("PP") or xrayMonitor:FindFirstChildWhichIsA("ProximityPrompt", true))
@@ -1201,7 +1183,7 @@ local function TreatSingleRoom(roomData)
         end
     end
 
-    -- 4. Monitor Process Prompt (PP2) - Нажимаем только если в рецепте еще нет предметов и с кулдауном 4 сек
+    -- 🖥️ 5. МОНИТОР РЕЗУЛЬТАТОВ (Monitor PP2) - нажимаем для вывода рецепта на ТВ
     local neededBefore = GetNeededTreatmentItems(roomData)
     local now = os.clock()
     local lastMonPress = _AH_LastMonitorPressTime[roomData.Name] or 0
@@ -1218,7 +1200,7 @@ local function TreatSingleRoom(roomData)
         end
     end
 
-    -- 5. Printed X-Ray Result (PrintedXRay / xresult)
+    -- 📄 6. СБОР СНИМКА X-RAY (PrintedXRay / xresult)
     local xresult = minigame:FindFirstChild("PrintedXRay") or minigame:FindFirstChild("xresult") or minigame:FindFirstChild("PrintedXRay", true) or minigame:FindFirstChild("xresult", true)
     local xresultPP = xresult and (xresult:FindFirstChild("PP") or xresult:FindFirstChildWhichIsA("ProximityPrompt", true))
     if xresultPP and xresultPP.Enabled then
@@ -1228,7 +1210,7 @@ local function TreatSingleRoom(roomData)
         task.wait(0.3)
     end
 
-    -- 6. Доставка медикаментов по рецепту (ATOMIC EXECUTION)
+    -- 💊 7. ДОСТАВКА МЕДИКАМЕНТОВ ПО РЕЦЕПТУ (ATOMIC EXECUTION)
     local needed = GetNeededTreatmentItems(roomData)
     if #needed > 0 then
         Log("AutoTreatment", "Starting patient prescription delivery", {
@@ -1968,7 +1950,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v27.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v28.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -2284,7 +2266,6 @@ local TabMisc = CreateTab("Утилиты", "🌐")
 
 -- Вкладка: Автоматизация
 AddToggle(TabAuto, "🏥 Авто-Лечение (Палаты 1 - 8)", _G.AutoTreatment, function(v) _G.AutoTreatment = v end)
-AddToggle(TabAuto, "🩹 Лечение ожогов и прямых травм", _G.AutoTreatment, function(v) _G.AutoTreatment = v end)
 AddToggle(TabAuto, "🏢 Авто-Регистрация (Ресепшен)", _G.AutoCheckIn, function(v) _G.AutoCheckIn = v end)
 AddToggle(TabAuto, "☕ Авто-Кофе (Пополнение рассудка)", _G.AutoCoffee, function(v) _G.AutoCoffee = v end)
 AddSlider(TabAuto, "Порог рассудка для кофе (%)", 20, 90, 60, function(v) _G.CoffeeSanityThreshold = v end)
@@ -2338,7 +2319,6 @@ task.spawn(function()
 
     local nextUrgentCheck = 0
     local nextGeneralTreatment = 0
-    local nextBurnCheck = 0
 
     while IsSessionActive() do
         task.wait(_G.LoopInterval or 0.15)
@@ -2353,15 +2333,9 @@ task.spawn(function()
 
         local now = os.clock()
 
-        -- 1. ЛЕЧЕНИЕ ОЖОГОВ И ПРЯМЫХ ТРАВМ (Ointment, Bandages и иконки на теле пациента)
-        if _G.AutoTreatment and now >= nextBurnCheck and not _AH_IsPerformingTask then
-            nextBurnCheck = now + 0.35
-            RunTaskExclusively("AutoTreatBurnsAndDirectAilments", AutoTreatBurnsAndDirectAilments)
-        end
-
-        -- 2. СРОЧНОЕ ЛЕЧЕНИЕ РЕАНИМАЦИЙ (Палаты 8, 7, 6)
+        -- 1. СРОЧНОЕ ЛЕЧЕНИЕ РЕАНИМАЦИЙ (Палаты 8, 7, 6)
         if _G.AutoTreatment and now >= nextUrgentCheck and not _AH_IsPerformingTask then
-            nextUrgentCheck = now + 0.4
+            nextUrgentCheck = now + 0.35
             for _, idx in ipairs({8, 7, 6}) do
                 local roomData = _G.AH_RoomData[idx]
                 if RunTaskExclusively("UrgentTreatment_" .. roomData.Name, function() return TreatSingleRoom(roomData) end) then
@@ -2370,32 +2344,32 @@ task.spawn(function()
             end
         end
 
-        -- 3. ВЫГОН АНОМАЛИЙ (Ask to leave)
+        -- 2. ВЫГОН АНОМАЛИЙ (Ask to leave)
         if _G.AutoAskLeaveAnomaly and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoAskLeaveAnomaly", AutoAskLeaveAnomaly)
         end
 
-        -- 4. ТУШЕНИЕ ПОЖАРОВ (Без прерывания)
+        -- 3. ТУШЕНИЕ ПОЖАРОВ (Без прерывания)
         if _G.AutoPutOutFire and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoPutOutFire", AutoPutOutFire)
         end
 
-        -- 5. ТАЗЕР АНОМАЛИЙ
+        -- 4. ТАЗЕР АНОМАЛИЙ
         if _G.AutoTaser and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoTaserAnomalies", AutoTaserAnomalies)
         end
 
-        -- 6. АВТО-КОФЕ ДЛЯ ПОПОЛНЕНИЯ РАССУДКА ИГРОКА
+        -- 5. АВТО-КОФЕ ДЛЯ ПОПОЛНЕНИЯ РАССУДКА ИГРОКА
         if _G.AutoCoffee and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCoffeeSanity", ProcessSelfSanityCoffee)
         end
 
-        -- 7. КОФЕ ДЛЯ БАРНИ И ПАЦИЕНТОВ (С 2 ГЛОТКАМИ ПЕРЕД ОТДАЧЕЙ)
+        -- 6. КОФЕ ДЛЯ БАРНИ И ПАЦИЕНТОВ (С 2 ГЛОТКАМИ ПЕРЕД ОТДАЧЕЙ)
         if _G.AutoGiveBarneyCoffee and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoGiveBarneyCoffee", ProcessBarneyCoffee)
         end
 
-        -- 8. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8)
+        -- 7. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8: ПОЛНЫЙ ЦИКЛ МАЗЬ -> ДНК -> АНАЛИЗАТОР -> МОНИТОР -> ЛЕКАРСТВА)
         if _G.AutoTreatment and now >= nextGeneralTreatment and not _AH_IsPerformingTask then
             nextGeneralTreatment = now + 0.6
             for idx = 1, 8 do
@@ -2406,32 +2380,32 @@ task.spawn(function()
             end
         end
 
-        -- 9. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
+        -- 8. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
         if not _AH_IsPerformingTask then
             pcall(EvaluateShutterLogic)
         end
 
-        -- 10. РЕСЕПШЕН (Регистрация посетителей от начала до конца)
+        -- 9. РЕСЕПШЕН (Регистрация посетителей от начала до конца)
         if _G.AutoCheckIn and not _G.HasActiveThreat and IsShutterClosed() ~= true and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCheckIn", ExecuteCheckInCycle)
         end
 
-        -- 11. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ (Точная доставка на койку назначенной палаты)
+        -- 10. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ (Точная доставка на койку назначенной палаты)
         if _G.AutoHelpPatient and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoHelpPatient", AutoHelpFaintedPatients)
         end
 
-        -- 12. ПОЧИНКА КАМЕР
+        -- 11. ПОЧИНКА КАМЕР
         if _G.AutoFixCam and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoFixCam", AutoFixCam)
         end
 
-        -- 13. УБОРКА СЛИЗИ
+        -- 12. УБОРКА СЛИЗИ
         if _G.AutoCleanSlime and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCleanSlime", CleanSlimePuddles)
         end
 
-        -- 14. МАГАЗИН
+        -- 13. МАГАЗИН
         if _G.AutoBuyShop and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoBuyShop", AutoBuyShopItems)
         end
