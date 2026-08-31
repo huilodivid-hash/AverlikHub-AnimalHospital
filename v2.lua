@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V16.0 PURE FOXNAME ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V17.0 BED INTERACTION ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -371,6 +371,18 @@ local function DiscardToolAtTrash(tool)
     end
 end
 
+local function GetWrongInventoryTool(targetItem)
+    local target = NormalizeName(targetItem)
+    for _, container in ipairs(InventoryParents()) do
+        for _, tool in ipairs(container:GetChildren()) do
+            if tool:IsA("Tool") and NormalizeName(tool.Name) ~= target and (_G.AH_ItemSet[tool.Name] or _G.AH_SurgeryItemSet[tool.Name] or _G.AH_BlacklistedItemNames[tool.Name]) then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🔍 5. EXACT ANCESTOR MODEL PROMPT INDEXER (FOXNAME ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -379,8 +391,18 @@ local _AH_IndexedOnce = false
 
 local function GetBlacklistedContainer()
     local ok, res = pcall(function() return Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
-    if ok then return res end
+    if ok and res then return res end
     return nil
+end
+
+local function IsDescendantOfBlacklist(prompt)
+    local bl = GetBlacklistedContainer()
+    if bl and prompt:IsDescendantOf(bl) then return true end
+    local fullName = prompt:GetFullName()
+    if fullName:find("Room8.Minigame.Medicine") or fullName:find("Emergency.Room8") then
+        return true
+    end
+    return false
 end
 
 local function IndexTreatmentPrompt(prompt)
@@ -427,15 +449,30 @@ end
 local function GetItemPP(itemName)
     if not _G.AH_ItemSet[itemName] or _G.AH_BlacklistedItemNames[itemName] then return nil end
     InitTreatmentIndex()
-    local blacklisted = GetBlacklistedContainer()
     local promptSet = _AH_ItemIndexTable[itemName]
     if promptSet then
         for prompt in pairs(promptSet) do
-            if prompt.Parent and prompt.Enabled and not (blacklisted and prompt:IsDescendantOf(blacklisted)) then
+            if prompt.Parent and prompt.Enabled and not IsDescendantOfBlacklist(prompt) then
                 return prompt
             end
         end
     end
+
+    -- Deep scan fallback for pharmacy shelves
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") and desc.Enabled and not IsDescendantOfBlacklist(desc) then
+            local curr = desc.Parent
+            while curr and curr ~= Workspace do
+                if curr.Name == itemName and not _G.AH_BlacklistedItemNames[curr.Name] then
+                    if not _AH_ItemIndexTable[itemName] then _AH_ItemIndexTable[itemName] = {} end
+                    _AH_ItemIndexTable[itemName][desc] = true
+                    return desc
+                end
+                curr = curr.Parent
+            end
+        end
+    end
+
     return nil
 end
 
@@ -443,13 +480,8 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
     if GetItemCount(itemName) > 0 then return true end
 
     -- Очистка посторонних инструментов
-    for _, container in ipairs(InventoryParents()) do
-        for _, tool in ipairs(container:GetChildren()) do
-            if tool:IsA("Tool") and NormalizeName(tool.Name) ~= NormalizeName(itemName) then
-                DiscardToolAtTrash(tool)
-            end
-        end
-    end
+    local wrong = GetWrongInventoryTool(itemName)
+    if wrong then DiscardToolAtTrash(wrong) end
 
     local prompt = nil
     if isSurgery then
@@ -668,8 +700,15 @@ local function TreatSingleRoom(roomData)
     if not minigame then return false end
 
     local patient = GetPatientInRoom(roomData)
-    local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
-    local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
+
+    -- Резолвер целевого промпта (в Room6 - пациент, во всех остальных - кровать InBed.PP)
+    local bedPP = nil
+    if roomData.Name == "Room6" then
+        bedPP = patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))
+    else
+        local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+        bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
+    end
 
     local didAction = false
 
@@ -742,7 +781,7 @@ local function TreatSingleRoom(roomData)
         local attempt = 0
         local appliedAny = false
 
-        while _G.AutoTreatment and not StopCheck() and attempt < 12 do
+        while _G.AutoTreatment and not StopCheck() and attempt < 15 do
             if IsRoomRecovering(roomData) then
                 Log("AutoTreatment", "Patient is recovering, completed", { room = roomData.Name })
                 break
@@ -773,12 +812,18 @@ local function TreatSingleRoom(roomData)
 
             if GetItemCount(currentItem) > 0 then
                 UseInventoryTool(currentItem)
-                local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or bedPP
+                task.wait(0.05)
 
-                if treatPP and treatPP.Enabled then
-                    Log("AutoTreatment", "Delivering treatment item to bed", { room = roomData.Name, targetItem = currentItem, prompt = treatPP:GetFullName() })
-                    PressTreatmentPromptNearbyUntil(treatPP, 0.15, 2.0, function()
-                        return GetItemCount(currentItem) == 0 or not treatPP.Parent or not treatPP.Enabled
+                local targetPrompt = bedPP
+                if patient and patient:GetAttribute("Skinwalker") == true then
+                    local npPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if npPP and npPP.Enabled then targetPrompt = npPP end
+                end
+
+                if targetPrompt and targetPrompt.Enabled then
+                    Log("AutoTreatment", "Delivering treatment item to bed", { room = roomData.Name, targetItem = currentItem, prompt = targetPrompt:GetFullName() })
+                    PressTreatmentPromptNearbyUntil(targetPrompt, 0.15, 2.0, function()
+                        return GetItemCount(currentItem) == 0 or not targetPrompt.Parent or not targetPrompt.Enabled
                     end)
 
                     UnequipAllTools()
@@ -798,17 +843,16 @@ local function TreatSingleRoom(roomData)
                         end
                         task.wait(0.2)
                     end
+                else
+                    Log("AutoTreatment", "Target bed/patient prompt not available", { room = roomData.Name })
                 end
             else
                 task.wait(0.4)
             end
         end
 
-        for _, container in ipairs(InventoryParents()) do
-            for _, tool in ipairs(container:GetChildren()) do
-                if tool:IsA("Tool") then DiscardToolAtTrash(tool) end
-            end
-        end
+        local wrong = GetWrongInventoryTool("")
+        if wrong then DiscardToolAtTrash(wrong) end
 
         if appliedAny or IsRoomRecovering(roomData) then
             if patient then MarkPatientTreated(patient) end
@@ -1546,7 +1590,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v16.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v17.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
