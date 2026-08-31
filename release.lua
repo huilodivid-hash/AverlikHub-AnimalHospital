@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V12.0 AUTONOMOUS MEDICAL & DESK)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V13.0 BULLETPROOF PROMPTS)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -40,6 +40,7 @@ _G.HasActiveThreat = false
 local _AH_TreatedPatients = {}
 local _AH_HandledCheckInPatients = {}
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
+local _AH_ItemPrompts = {}
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -175,7 +176,7 @@ local function TeleportPlayer(pos)
     end
 end
 
-local function GetPromptPartPosition(prompt)
+local function GetPromptPosition(prompt)
     if not prompt then return nil end
     local p = prompt.Parent
     if not p then return nil end
@@ -193,16 +194,16 @@ local function GetPromptPartPosition(prompt)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ⚡ 3. PROXIMITY PROMPT ENGINE
+-- ⚡ 3. BULLETPROOF MULTI-EXECUTOR PROXIMITY PROMPT ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function FirePrompt(prompt, minHold)
+local function PressPP(prompt, holdTime)
     if not prompt or not prompt.Parent or not prompt.Enabled or StopCheck() then return false end
 
     local now = os.clock()
     local hold = (prompt:IsA("ProximityPrompt") and prompt.HoldDuration > 0 and (prompt.HoldDuration + 0.1)) or 0
-    local requiredWait = math.max(minHold or 0.35, hold)
+    local waitTime = math.max(holdTime or 0.35, hold)
 
-    if _AH_PromptCooldowns[prompt] and (now - _AH_PromptCooldowns[prompt] < requiredWait) then
+    if _AH_PromptCooldowns[prompt] and (now - _AH_PromptCooldowns[prompt] < waitTime) then
         return false
     end
     _AH_PromptCooldowns[prompt] = now
@@ -213,36 +214,43 @@ local function FirePrompt(prompt, minHold)
         prompt = prompt:GetFullName()
     })
 
-    if type(fireproximityprompt) == "function" then
-        pcall(fireproximityprompt, prompt)
-        return true
-    elseif prompt.InputHoldBegin and prompt.InputHoldEnd then
-        task.spawn(function()
+    -- 1. Native Executor API Calls
+    pcall(function()
+        if type(fireproximityprompt) == "function" then
+            fireproximityprompt(prompt)
+            fireproximityprompt(prompt, 0)
+            fireproximityprompt(prompt, 1, true)
+        end
+    end)
+
+    -- 2. InputHold API Fallback
+    pcall(function()
+        if prompt.InputHoldBegin and prompt.InputHoldEnd then
             prompt:InputHoldBegin()
-            task.wait(math.max(0.1, (prompt.HoldDuration or 0) + 0.05))
+            task.wait(math.max(0.05, (prompt.HoldDuration or 0) + 0.05))
             prompt:InputHoldEnd()
-        end)
-        return true
-    end
-    return false
+        end
+    end)
+
+    return true
 end
 
 local function PressPromptNearby(prompt, waitAfter, offset, waitBefore)
     if not prompt or not prompt.Enabled or StopCheck() then return false end
-    local pos = GetPromptPartPosition(prompt)
+    local pos = GetPromptPosition(prompt)
     if pos then
         TeleportPlayer(pos + (offset or Vector3.new(0, 1.0, 1.5)))
         task.wait(waitBefore or 0.15)
         if StopCheck() then return false end
     end
-    local res = FirePrompt(prompt)
+    local res = PressPP(prompt)
     task.wait(waitAfter or 0.3)
     return res
 end
 
 local function PressPromptNearbyUntil(prompt, interval, timeout, condition, offset)
     if not prompt or not prompt.Enabled or StopCheck() then return false end
-    local pos = GetPromptPartPosition(prompt)
+    local pos = GetPromptPosition(prompt)
     if pos then
         TeleportPlayer(pos + (offset or Vector3.new(0, 1.0, 1.5)))
         task.wait(0.15)
@@ -254,7 +262,7 @@ local function PressPromptNearbyUntil(prompt, interval, timeout, condition, offs
         if condition and condition() then return true end
         if not prompt.Enabled then return true end
 
-        FirePrompt(prompt, interval or 0.35)
+        PressPP(prompt, interval or 0.35)
         task.wait(interval or 0.25)
     end
     if condition then return condition() == true end
@@ -334,7 +342,7 @@ local function DiscardToolAtTrash(tool)
 
     local trash = Workspace:FindFirstChild("Trash")
     local trashPP = trash and (trash:FindFirstChild("PP") or trash:FindFirstChildWhichIsA("ProximityPrompt", true))
-    local trashPos = (trashPP and GetPromptPartPosition(trashPP)) or Positions.Trash
+    local trashPos = (trashPP and GetPromptPosition(trashPP)) or Positions.Trash
 
     TeleportPlayer(trashPos)
     task.wait(0.15)
@@ -347,8 +355,31 @@ local function DiscardToolAtTrash(tool)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔍 5. DYNAMIC ITEM PROMPT RESOLVER
+-- 🔍 5. DYNAMIC ITEM PROMPT RESOLVER & PROMPT INDEXER
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function IndexItemPrompts()
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") and desc.Parent then
+            local pName = desc.Parent.Name
+            if _G.AH_ItemSet[pName] or _G.AH_SurgeryItemSet[pName] then
+                if not _AH_ItemPrompts[pName] then _AH_ItemPrompts[pName] = {} end
+                _AH_ItemPrompts[pName][desc] = true
+            end
+        end
+    end
+end
+
+IndexItemPrompts()
+Workspace.DescendantAdded:Connect(function(desc)
+    if desc:IsA("ProximityPrompt") and desc.Parent then
+        local pName = desc.Parent.Name
+        if _G.AH_ItemSet[pName] or _G.AH_SurgeryItemSet[pName] then
+            if not _AH_ItemPrompts[pName] then _AH_ItemPrompts[pName] = {} end
+            _AH_ItemPrompts[pName][desc] = true
+        end
+    end
+end)
+
 local function GetItemPrompt(itemName, isSurgery)
     local target = NormalizeName(itemName)
 
@@ -367,24 +398,24 @@ local function GetItemPrompt(itemName, isSurgery)
         end
     end
 
-    -- 2. Общие медикаменты
-    local searchContainers = {}
-    local mItems = Workspace:FindFirstChild("Model") and Workspace.Model:FindFirstChild("Items")
-    if mItems then table.insert(searchContainers, mItems) end
-    local dItems = Workspace:FindFirstChild("Items")
-    if dItems then table.insert(searchContainers, dItems) end
-    local misc = Workspace:FindFirstChild("Misc")
-    if misc then table.insert(searchContainers, misc) end
+    -- 2. Индексированные промпты полок
+    if _AH_ItemPrompts[itemName] then
+        for p in pairs(_AH_ItemPrompts[itemName]) do
+            if p.Parent and p.Enabled then
+                return p
+            end
+        end
+    end
 
-    for _, container in ipairs(searchContainers) do
-        for _, prompt in ipairs(container:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                local pName = NormalizeName(prompt.Parent and prompt.Parent.Name or "")
-                local act = NormalizeName(prompt.ActionText or "")
-                local obj = NormalizeName(prompt.ObjectText or "")
-                if pName == target or pName:find(target) or act == target or act:find(target) or obj == target or obj:find(target) then
-                    return prompt
-                end
+    -- 3. Общий поиск по всей карте
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") and desc.Enabled and desc.Parent then
+            local pName = NormalizeName(desc.Parent.Name)
+            local act = NormalizeName(desc.ActionText or "")
+            if pName == target or pName:find(target) or act == target or act:find(target) then
+                if not _AH_ItemPrompts[itemName] then _AH_ItemPrompts[itemName] = {} end
+                _AH_ItemPrompts[itemName][desc] = true
+                return desc
             end
         end
     end
@@ -404,7 +435,7 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
     end
 
     local prompt = GetItemPrompt(itemName, isSurgery)
-    local shelfPos = (prompt and GetPromptPartPosition(prompt)) or Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")]
+    local shelfPos = (prompt and GetPromptPosition(prompt)) or Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")]
 
     if shelfPos then
         Log("AutoTreatment", "Grabbing prescription item", { item = itemName, prompt = prompt and prompt:GetFullName() or "Static" })
@@ -413,7 +444,7 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
 
         local countBefore = GetItemCount(itemName)
         if prompt and prompt.Enabled then
-            FirePrompt(prompt, 0.35)
+            PressPP(prompt, 0.35)
         end
 
         local t = os.clock()
@@ -725,13 +756,13 @@ local function TreatSingleRoom(roomData)
             if GetItemCount(currentItem) > 0 then
                 UseInventoryTool(currentItem)
                 local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or bedPP
-                local treatPos = (treatPP and GetPromptPartPosition(treatPP)) or roomData.Position
+                local treatPos = (treatPP and GetPromptPosition(treatPP)) or roomData.Position
 
                 TeleportPlayer(treatPos + Vector3.new(0, 1.0, 1.0))
                 task.wait(0.15)
 
                 if treatPP and treatPP.Enabled then
-                    FirePrompt(treatPP, 0.35)
+                    PressPP(treatPP, 0.35)
                     task.wait(0.3)
                     UnequipAllTools()
                     appliedAny = true
@@ -827,7 +858,7 @@ local function GetPatientAtCounter()
 
     for _, station in ipairs(GetCheckInStations()) do
         local pc = station:FindFirstChild("Computer")
-        local center = (pc and GetPromptPartPosition(pc)) or Positions.CheckInCounter
+        local center = (pc and GetPromptPosition(pc)) or Positions.CheckInCounter
 
         for _, npc in ipairs(npcs:GetChildren()) do
             if npc:IsA("Model") and IsValidPatient(npc) and not IsRecentlyHandledCheckInPatient(npc) then
@@ -1278,7 +1309,7 @@ local function FindEmptyBedPrompt()
                 local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
                 local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
                 if bedPP and bedPP.Enabled then
-                    return bedPP, GetPromptPartPosition(bedPP) or Positions["Room" .. tostring(i) .. "_Bed"]
+                    return bedPP, GetPromptPosition(bedPP) or Positions["Room" .. tostring(i) .. "_Bed"]
                 end
             end
         end
@@ -1293,7 +1324,7 @@ local function FindEmptyBedPrompt()
                 local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
                 local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
                 if bedPP and bedPP.Enabled then
-                    return bedPP, GetPromptPartPosition(bedPP) or Positions[rData.Name .. "_Bed"]
+                    return bedPP, GetPromptPosition(bedPP) or Positions[rData.Name .. "_Bed"]
                 end
             end
         end
@@ -1498,7 +1529,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v12.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v13.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
