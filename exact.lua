@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V26.0 PERFECT SHUTTER ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V27.0 DIRECT AILMENT & BURN TREATMENT)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -67,6 +67,25 @@ _G.AH_BlacklistedItemNames = {
     ["Coffee"] = true,
     ["Taser"] = true,
     ["Extinguisher"] = true
+}
+
+-- 🖼️ EXACT AILMENT ASSET ID TO ITEM MAP (FROM ROBLOX ASSETS)
+local _AH_AssetToItemMap = {
+    ["139637091303873"] = "Eye Drops",
+    ["118311058179090"] = "IV Drops",
+    ["88750936127655"]  = "Medkit",
+    ["138334905913311"] = "Thermometer",
+    ["75884870805308"]  = "Ointment",
+    ["125453071439049"] = "Bandages",
+    ["135236061613718"] = "Medicine",
+    ["113912761080559"] = "Maple Syrup",
+    ["120895273610611"] = "Cough Syrup",
+    ["94559086254344"]  = "Herbs",
+    ["132258407294719"] = "Antibiotics",
+    ["102550407034117"] = "Organ",
+    ["137637637347521"] = "Transplant",
+    ["93721219255457"]  = "Scalpel",
+    ["97305931082100"]  = "Scissors"
 }
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -465,7 +484,7 @@ local function GetItemPromptForTreatment(itemName, roomName)
         end
     end
 
-    -- 2. Ищем на обычных аптечных стеллажах (Herbs, Pills, Eye Drops, Medkit и т.д.)
+    -- 2. Ищем на обычных аптечных стеллажах (Herbs, Pills, Eye Drops, Medkit, Ointment и т.д.)
     local regPP = GetItemPP(itemName)
     if regPP and regPP.Enabled then
         return regPP
@@ -494,7 +513,7 @@ local function GrabItemUntilInInventory(itemName, roomName)
     local prompt = GetItemPromptForTreatment(itemName, roomName)
 
     if prompt then
-        Log("AutoTreatment", "Grabbing treatment item", { targetItem = itemName, room = roomName, prompt = prompt:GetFullName(), countBefore = GetItemCount(itemName) })
+        Log("AutoTreatment", "Grabbing treatment item", { targetItem = itemName, room = roomName or "General", prompt = prompt:GetFullName(), countBefore = GetItemCount(itemName) })
         local countBefore = GetItemCount(itemName)
         PressTreatmentPromptNearbyUntil(prompt, 0.12, 1.5, function() return GetItemCount(itemName) > countBefore end)
         local t = os.clock()
@@ -504,14 +523,130 @@ local function GrabItemUntilInInventory(itemName, roomName)
         end
         task.wait(0.1)
     else
-        Log("AutoTreatment", "Prescription shelf prompt not found", { item = itemName, room = roomName })
+        Log("AutoTreatment", "Prescription shelf prompt not found", { item = itemName, room = roomName or "General" })
     end
 
     return GetItemCount(itemName) > 0
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ☕ 6. SANITY DETECTION, COFFEE BREWING & 2-SIP ENGINE
+-- 🩹 6. DIRECT PATIENT AILMENT & BURN TREATMENT ENGINE (IMAGE / DECAL PARSER)
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function GetPatientAilmentItem(npc)
+    if not npc or not npc:IsA("Model") then return nil end
+
+    -- 1. Counter UI в HumanoidRootPart
+    local hrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
+    local counterUI = hrp and hrp:FindFirstChild("Counter") and hrp.Counter:FindFirstChild("UI")
+    local img = counterUI and counterUI:FindFirstChild("Image")
+
+    local candidateUris = {}
+    if img and img:IsA("ImageLabel") and img.Image ~= "" then
+        table.insert(candidateUris, img.Image)
+    end
+
+    -- 2. Все ImageLabel / Decal внутри NPC
+    for _, desc in ipairs(npc:GetDescendants()) do
+        if desc:IsA("ImageLabel") and desc.Image ~= "" then
+            table.insert(candidateUris, desc.Image)
+        elseif desc:IsA("Decal") and desc.Texture ~= "" then
+            table.insert(candidateUris, desc.Texture)
+        end
+    end
+
+    for _, uri in ipairs(candidateUris) do
+        local assetId = string.match(tostring(uri), "%d+")
+        if assetId then
+            for mapAsset, itemName in pairs(_AH_AssetToItemMap) do
+                if string.find(mapAsset, assetId) or string.find(assetId, mapAsset) then
+                    return itemName
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function AutoTreatBurnsAndDirectAilments()
+    if not _G.AutoTreatment or StopCheck() then return false end
+
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return false end
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") and not npc:GetAttribute("IsVisitor") then
+            local firePP = npc:FindFirstChild("FirePP") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
+
+            if firePP and firePP.Enabled then
+                local actText = string.lower(tostring(firePP.ActionText or ""))
+
+                -- Если пациент всё ещё горит -> тушим
+                if actText ~= "treat burns" and (actText:find("fire") or actText:find("extinguish") or actText:find("burn")) then
+                    Log("AutoTreatment", "Extinguishing burning patient first", { npc = npc:GetFullName(), prompt = firePP:GetFullName() })
+                    EquipExtinguisher()
+                    PressPromptNearby(firePP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+                    task.wait(0.3)
+                    ReturnExtinguisher()
+                    return true
+                end
+
+                -- Если пациент потушен и требует лечения ожогов / мази / бинтов
+                if actText == "treat burns" or actText:find("burn") or actText:find("treat") or actText:find("apply") or actText:find("ointment") or actText:find("heal") then
+                    local neededItem = GetPatientAilmentItem(npc) or "Ointment"
+
+                    Log("AutoTreatment", "Detected patient needing direct burn/ailment treatment", {
+                        npc = npc:GetFullName(),
+                        neededItem = neededItem,
+                        prompt = firePP:GetFullName()
+                    })
+
+                    -- Берем нужное лекарство со стеллажа (Ointment, Bandages, Medkit и т.д.)
+                    if GetItemCount(neededItem) == 0 then
+                        GrabItemUntilInInventory(neededItem, "General")
+                    end
+
+                    if GetItemCount(neededItem) > 0 then
+                        UseInventoryTool(neededItem)
+                        task.wait(0.1)
+
+                        Log("AutoTreatment", "Applying ailment item to patient", { npc = npc:GetFullName(), item = neededItem })
+                        PressTreatmentPromptNearbyUntil(firePP, 0.2, 3.0, function()
+                            return not firePP.Parent or not firePP.Enabled or GetItemCount(neededItem) == 0 or string.lower(tostring(firePP.ActionText or "")) ~= "treat burns"
+                        end)
+
+                        UnequipAllTools()
+                        local wrong = GetWrongInventoryTool("")
+                        if wrong then DiscardToolAtTrash(wrong) end
+                        return true
+                    else
+                        -- Резервный перебор всех предметов из инвентаря
+                        Log("AutoTreatment", "Specific item not found, trying all available medical items on patient", { npc = npc:GetFullName() })
+                        for _, item in ipairs(_G.AH_ItemList) do
+                            if GetItemCount(item) > 0 then
+                                UseInventoryTool(item)
+                                task.wait(0.1)
+                                if firePP and firePP.Enabled then
+                                    PressTreatmentPromptNearbyUntil(firePP, 0.2, 2.0, function()
+                                        return not firePP.Parent or not firePP.Enabled
+                                    end)
+                                    UnequipAllTools()
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- ☕ 7. SANITY DETECTION, COFFEE BREWING & 2-SIP ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPlayerSanity()
     local val = LocalPlayer:GetAttribute("Sanity")
@@ -695,7 +830,7 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 7. PURE ACCURATE SHUTTER ENGINE (ZERO FALSE CLOSURES)
+-- 🛡️ 8. PURE ACCURATE SHUTTER ENGINE (ZERO FALSE CLOSURES)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetShutterPP()
     local misc = Workspace:FindFirstChild("Misc")
@@ -734,7 +869,6 @@ end
 
 local function IsNpcThreat(npc)
     if not npc or not npc:IsA("Model") then return false end
-    -- Истинные угрозы: строго Skinwalker == true или монстр Barney при включенных чекбоксах
     if _G.AutoBarneyShutter and IsBarneyNpc(npc) then return true end
     if _G.AutoAnomalyShutter and npc:GetAttribute("Skinwalker") == true then return true end
     return false
@@ -831,7 +965,7 @@ local function EvaluateShutterLogic()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📺 8. TV PRESCRIPTION PARSER (FOXNAME EXACT UI & STATUS CHECK)
+-- 📺 9. TV PRESCRIPTION PARSER (FOXNAME EXACT UI & STATUS CHECK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetRoomFolder(roomData)
     local rooms = Workspace:FindFirstChild("Rooms")
@@ -894,7 +1028,7 @@ local function MarkPatientTreated(npc)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛏️ 9. DESIGNATED BED RESOLVER & PATIENT PLACEMENT
+-- 🛏️ 10. DESIGNATED BED RESOLVER & PATIENT PLACEMENT
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetBedPromptForPatient(patient)
     if not patient then return nil, nil end
@@ -976,7 +1110,7 @@ local function GetRoomBedPrompt(roomData, minigame, patient)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 10. COMPLETE TREATMENT ENGINE (STRICT PATIENT EXISTENCE CHECK)
+-- 🏥 11. COMPLETE ROOM TREATMENT ENGINE (STRICT PATIENT EXISTENCE CHECK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientInRoom(roomData)
     local npcs = Workspace:FindFirstChild("NPCs")
@@ -1193,7 +1327,7 @@ local function TreatSingleRoom(roomData)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
+-- 🏢 12. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -1409,7 +1543,7 @@ local function ExecuteCheckInCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚪 12. AUTO ASK LEAVE ANOMALY
+-- 🚪 13. AUTO ASK LEAVE ANOMALY
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoAskLeaveAnomaly()
     if not _G.AutoAskLeaveAnomaly or StopCheck() then return false end
@@ -1436,7 +1570,7 @@ local function AutoAskLeaveAnomaly()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧯 13. AUTO PUT OUT FIRE (WITH AUTOMATIC EXTINGUISHER RETURN)
+-- 🧯 14. AUTO PUT OUT FIRE (WITH AUTOMATIC EXTINGUISHER RETURN)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function EquipExtinguisher()
     if GetItemCount("Extinguisher") > 0 then
@@ -1479,7 +1613,7 @@ local function AutoPutOutFire()
             local firePP = npc:FindFirstChild("FirePP") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
             if firePP and firePP.Enabled then
                 local act = string.lower(firePP.ActionText or "")
-                if act:find("fire") or act:find("extinguish") or act:find("burn") then
+                if act ~= "treat burns" and (act:find("fire") or act:find("extinguish") or act:find("burn")) then
                     EquipExtinguisher()
                     Log("AutoPutOutFire", "Extinguishing burning patient", { npc = npc:GetFullName() })
                     PressPromptNearby(firePP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
@@ -1519,7 +1653,7 @@ local function AutoPutOutFire()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📹 14. AUTO FIX SECURITY CAMERAS
+-- 📹 15. AUTO FIX SECURITY CAMERAS
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoFixCam()
     if not _G.AutoFixCam or StopCheck() then return false end
@@ -1541,7 +1675,7 @@ local function AutoFixCam()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ⚡ 15. AUTO TASER ANOMALIES
+-- ⚡ 16. AUTO TASER ANOMALIES
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function EquipTaser()
     if GetItemCount("Taser") > 0 then
@@ -1584,7 +1718,7 @@ local function AutoTaserAnomalies()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧼 16. AUTO CLEAN SLIME
+-- 🧼 17. AUTO CLEAN SLIME
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function CleanSlimePuddles()
     if not _G.AutoCleanSlime or StopCheck() then return end
@@ -1605,7 +1739,7 @@ local function CleanSlimePuddles()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛒 17. AUTO BUY SHOP
+-- 🛒 18. AUTO BUY SHOP
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoBuyShopItems()
     if not _G.AutoBuyShop or StopCheck() then return end
@@ -1622,7 +1756,7 @@ local function AutoBuyShopItems()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚑 18. AUTO HELP FAINTED PATIENTS (PICKUP & DESIGNATED BED PLACEMENT)
+-- 🚑 19. AUTO HELP FAINTED PATIENTS (PICKUP & DESIGNATED BED PLACEMENT)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoHelpFaintedPatients()
     if not _G.AutoHelpPatient or StopCheck() then return false end
@@ -1667,7 +1801,7 @@ local function AutoHelpFaintedPatients()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🌐 19. THIRD PERSON & SERVER UTILITIES
+-- 🌐 20. THIRD PERSON & SERVER UTILITIES
 -- ══════════════════════════════════════════════════════════════════════════════════
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -1781,7 +1915,7 @@ local function ToggleFullbright(enabled)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 20. NATIVE OBSIDIAN LUXURY GUI ENGINE & KEYBINDS (P: MOUSE, G: TOGGLE GUI)
+-- 🎨 21. NATIVE OBSIDIAN LUXURY GUI ENGINE & KEYBINDS (P: MOUSE, G: TOGGLE GUI)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local GuiParent = nil
 pcall(function() GuiParent = gethui and gethui() end)
@@ -1834,7 +1968,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v26.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v27.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -2150,6 +2284,7 @@ local TabMisc = CreateTab("Утилиты", "🌐")
 
 -- Вкладка: Автоматизация
 AddToggle(TabAuto, "🏥 Авто-Лечение (Палаты 1 - 8)", _G.AutoTreatment, function(v) _G.AutoTreatment = v end)
+AddToggle(TabAuto, "🩹 Лечение ожогов и прямых травм", _G.AutoTreatment, function(v) _G.AutoTreatment = v end)
 AddToggle(TabAuto, "🏢 Авто-Регистрация (Ресепшен)", _G.AutoCheckIn, function(v) _G.AutoCheckIn = v end)
 AddToggle(TabAuto, "☕ Авто-Кофе (Пополнение рассудка)", _G.AutoCoffee, function(v) _G.AutoCoffee = v end)
 AddSlider(TabAuto, "Порог рассудка для кофе (%)", 20, 90, 60, function(v) _G.CoffeeSanityThreshold = v end)
@@ -2185,7 +2320,7 @@ TabButtons["Автоматизация"].TextColor3 = Color3.fromRGB(255, 255, 2
 TabFrames["Автоматизация"].Visible = true
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 21. AUTONOMOUS PRIORITY SCHEDULER (ATOMIC TASK MUTEX LOCK)
+-- 🔄 22. AUTONOMOUS PRIORITY SCHEDULER (ATOMIC TASK MUTEX LOCK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function RunTaskExclusively(taskName, taskFunc)
     if _AH_IsPerformingTask or StopCheck() then return false end
@@ -2203,6 +2338,7 @@ task.spawn(function()
 
     local nextUrgentCheck = 0
     local nextGeneralTreatment = 0
+    local nextBurnCheck = 0
 
     while IsSessionActive() do
         task.wait(_G.LoopInterval or 0.15)
@@ -2217,9 +2353,15 @@ task.spawn(function()
 
         local now = os.clock()
 
-        -- 1. СРОЧНОЕ ЛЕЧЕНИЕ РЕАНИМАЦИЙ (Палаты 8, 7, 6)
+        -- 1. ЛЕЧЕНИЕ ОЖОГОВ И ПРЯМЫХ ТРАВМ (Ointment, Bandages и иконки на теле пациента)
+        if _G.AutoTreatment and now >= nextBurnCheck and not _AH_IsPerformingTask then
+            nextBurnCheck = now + 0.35
+            RunTaskExclusively("AutoTreatBurnsAndDirectAilments", AutoTreatBurnsAndDirectAilments)
+        end
+
+        -- 2. СРОЧНОЕ ЛЕЧЕНИЕ РЕАНИМАЦИЙ (Палаты 8, 7, 6)
         if _G.AutoTreatment and now >= nextUrgentCheck and not _AH_IsPerformingTask then
-            nextUrgentCheck = now + 0.35
+            nextUrgentCheck = now + 0.4
             for _, idx in ipairs({8, 7, 6}) do
                 local roomData = _G.AH_RoomData[idx]
                 if RunTaskExclusively("UrgentTreatment_" .. roomData.Name, function() return TreatSingleRoom(roomData) end) then
@@ -2228,32 +2370,32 @@ task.spawn(function()
             end
         end
 
-        -- 2. ВЫГОН АНОМАЛИЙ (Ask to leave)
+        -- 3. ВЫГОН АНОМАЛИЙ (Ask to leave)
         if _G.AutoAskLeaveAnomaly and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoAskLeaveAnomaly", AutoAskLeaveAnomaly)
         end
 
-        -- 3. ТУШЕНИЕ ПОЖАРОВ (Без прерывания)
+        -- 4. ТУШЕНИЕ ПОЖАРОВ (Без прерывания)
         if _G.AutoPutOutFire and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoPutOutFire", AutoPutOutFire)
         end
 
-        -- 4. ТАЗЕР АНОМАЛИЙ
+        -- 5. ТАЗЕР АНОМАЛИЙ
         if _G.AutoTaser and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoTaserAnomalies", AutoTaserAnomalies)
         end
 
-        -- 5. АВТО-КОФЕ ДЛЯ ПОПОЛНЕНИЯ РАССУДКА ИГРОКА
+        -- 6. АВТО-КОФЕ ДЛЯ ПОПОЛНЕНИЯ РАССУДКА ИГРОКА
         if _G.AutoCoffee and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCoffeeSanity", ProcessSelfSanityCoffee)
         end
 
-        -- 6. КОФЕ ДЛЯ БАРНИ И ПАЦИЕНТОВ (С 2 ГЛОТКАМИ ПЕРЕД ОТДАЧЕЙ)
+        -- 7. КОФЕ ДЛЯ БАРНИ И ПАЦИЕНТОВ (С 2 ГЛОТКАМИ ПЕРЕД ОТДАЧЕЙ)
         if _G.AutoGiveBarneyCoffee and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoGiveBarneyCoffee", ProcessBarneyCoffee)
         end
 
-        -- 7. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8)
+        -- 8. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8)
         if _G.AutoTreatment and now >= nextGeneralTreatment and not _AH_IsPerformingTask then
             nextGeneralTreatment = now + 0.6
             for idx = 1, 8 do
@@ -2264,32 +2406,32 @@ task.spawn(function()
             end
         end
 
-        -- 8. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
+        -- 9. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
         if not _AH_IsPerformingTask then
             pcall(EvaluateShutterLogic)
         end
 
-        -- 9. РЕСЕПШЕН (Регистрация посетителей от начала до конца)
+        -- 10. РЕСЕПШЕН (Регистрация посетителей от начала до конца)
         if _G.AutoCheckIn and not _G.HasActiveThreat and IsShutterClosed() ~= true and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCheckIn", ExecuteCheckInCycle)
         end
 
-        -- 10. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ (Точная доставка на койку назначенной палаты)
+        -- 11. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ (Точная доставка на койку назначенной палаты)
         if _G.AutoHelpPatient and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoHelpPatient", AutoHelpFaintedPatients)
         end
 
-        -- 11. ПОЧИНКА КАМЕР
+        -- 12. ПОЧИНКА КАМЕР
         if _G.AutoFixCam and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoFixCam", AutoFixCam)
         end
 
-        -- 12. УБОРКА СЛИЗИ
+        -- 13. УБОРКА СЛИЗИ
         if _G.AutoCleanSlime and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoCleanSlime", CleanSlimePuddles)
         end
 
-        -- 13. МАГАЗИН
+        -- 14. МАГАЗИН
         if _G.AutoBuyShop and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoBuyShop", AutoBuyShopItems)
         end
