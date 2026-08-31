@@ -117,33 +117,35 @@ local function Log(category, message, details)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔍 3. ANOMALY & THREAT RECOGNITION (ACCURATE - NO FALSE POSITIVES)
+-- 🔍 3. ANOMALY & THREAT RECOGNITION (100% ACCURATE GAME ENGINE TAGS)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local ThreatNames = {
-    ["SlimeWalker"] = true,
-    ["Skinwalker"] = true,
-    ["Anomaly"] = true
-}
-
 local function IsValidPatient(npc)
     if not npc or not npc:IsA("Model") then return false end
-    local name = npc.Name
-    if name == "Barney" or name == "Cleaner" or name == "Guard" then return false end
+    local name = string.lower(npc.Name)
+    if name:find("barney") or name == "cleaner" or name == "guard" then return false end
     return true
+end
+
+local function IsBarney(npc)
+    if not npc or not npc:IsA("Model") then return false end
+    return string.find(string.lower(npc.Name), "barney") ~= nil
 end
 
 local function IsNpcThreat(npc)
     if not npc or not npc:IsA("Model") then return false end
-    if npc.Name == "Barney" or npc.Name == "Cleaner" or npc.Name == "Guard" then return false end
 
-    -- Проверка встроенных атрибутов игры
-    if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
-        return true
+    if IsBarney(npc) then
+        return _G.AutoBarneyShutter == true
     end
 
-    -- Проверка имени модели
-    if ThreatNames[npc.Name] then
-        return true
+    if _G.AutoAnomalyShutter then
+        if npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true then
+            return true
+        end
+        local name = string.lower(npc.Name)
+        if name:find("skinwalker") or name:find("slimewalker") or name:find("anomaly") then
+            return true
+        end
     end
 
     return false
@@ -1125,8 +1127,42 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚪 10. AUTO SHUTTER & ANOMALY EVALUATION
+-- 🚪 10. AUTO SHUTTER & ANOMALY EVALUATION (STATE-AWARE PROMPT LOGIC)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function IsShutterClosed()
+    local btn = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton")
+    local pp = btn and (btn:FindFirstChild("PP") or btn:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if pp then
+        local act = string.lower(tostring(pp.ActionText or ""))
+        return act:find("open") ~= nil
+    end
+    return false
+end
+
+local function SetShutterState(shouldBeClosed, reasonNpc)
+    local btn = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton")
+    local pp = btn and (btn:FindFirstChild("PP") or btn:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if not pp or not pp.Enabled then return false end
+
+    local currentlyClosed = IsShutterClosed()
+    if currentlyClosed == shouldBeClosed then
+        return false
+    end
+
+    if shouldBeClosed then
+        Log("AutoShutter", "Closed shutter for threat", { npc = reasonNpc and reasonNpc:GetFullName() or "Unknown" })
+    else
+        Log("AutoShutter", "Opening shutter for normal patients")
+    end
+
+    local pPos = GetPromptPartPosition(pp) or Positions.ShutterButton
+    TeleportPlayer(pPos + Vector3.new(0, 1.0, 1.5))
+    task.wait(0.15)
+    FirePrompt(pp)
+    task.wait(0.5)
+    return true
+end
+
 local function GetClosestCounterNpc()
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return nil, false end
@@ -1136,7 +1172,7 @@ local function GetClosestCounterNpc()
     local minDistance = math.huge
 
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsValidPatient(npc) then
+        if npc:IsA("Model") and (IsValidPatient(npc) or IsBarney(npc)) then
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
             if root then
                 local dist = (root.Position - counterPos).Magnitude
@@ -1159,18 +1195,12 @@ end
 local function EvaluateCounterThreats()
     if not _G.AutoAnomalyShutter and not _G.AutoBarneyShutter then return end
 
-    local shutterPP = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShutterButton") and Workspace.Misc.ShutterButton:FindFirstChild("PP")
     local counterNpc, isThreat = GetClosestCounterNpc()
 
     if counterNpc then
         if isThreat then
             _G.HasActiveThreat = true
-            if shutterPP and shutterPP.Enabled and not _G.IsShutterClosed then
-                Log("AutoShutter", "Closed shutter for threat", { npc = counterNpc:GetFullName() })
-                TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
-                _G.IsShutterClosed = true
-                task.wait(0.5)
-            end
+            SetShutterState(true, counterNpc)
 
             if _G.AutoAskLeaveAnomaly then
                 local askPP = counterNpc:FindFirstChild("PP") or counterNpc:FindFirstChildWhichIsA("ProximityPrompt", true)
@@ -1182,31 +1212,21 @@ local function EvaluateCounterThreats()
             end
         else
             _G.HasActiveThreat = false
-            if shutterPP and shutterPP.Enabled and _G.IsShutterClosed then
-                Log("AutoShutter", "Opening shutter for normal patient at check-in")
-                TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
-                _G.IsShutterClosed = false
-                task.wait(0.5)
-            end
+            SetShutterState(false, counterNpc)
         end
     else
         _G.HasActiveThreat = false
-        if shutterPP and shutterPP.Enabled and _G.IsShutterClosed then
-            Log("AutoShutter", "Opening shutter after threat left check-in")
-            TeleportAndFirePrompt(shutterPP, Positions.ShutterButton, 0.3)
-            _G.IsShutterClosed = false
-            task.wait(0.5)
+        if IsShutterClosed() then
+            SetShutterState(false)
         end
     end
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (ACCURATE NON-SPAMMING RECEPTION ROUTER)
+-- 🏢 11. AUTO CHECK IN (ACCURATE PIPELINE WITH PROMPT RETRY & SMOOTH STEPPING)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local DeskPromptCooldowns = {}
-
 local function GetPatientAtCounter()
-    if _G.IsShutterClosed or _G.HasActiveThreat then return nil end
+    if IsShutterClosed() or _G.HasActiveThreat then return nil end
 
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return nil end
@@ -1229,7 +1249,7 @@ local function GetPatientAtCounter()
 end
 
 local function GetNpcCheckInPrompt(npc)
-    if not npc or npc.Name == "Barney" or npc.Name == "Cleaner" or npc.Name == "Guard" then return nil end
+    if not npc or IsBarney(npc) or npc.Name == "Cleaner" or npc.Name == "Guard" then return nil end
     for _, p in ipairs(npc:GetDescendants()) do
         if p:IsA("ProximityPrompt") and p.Enabled then
             local act = string.lower(tostring(p.ActionText or ""))
@@ -1241,73 +1261,17 @@ local function GetNpcCheckInPrompt(npc)
     return nil
 end
 
-local function IsPromptOnCooldown(pp)
-    if not pp then return true end
-    local cd = DeskPromptCooldowns[pp]
-    if cd and os.clock() < cd then
-        return true
-    end
-    return false
-end
+local function ExecuteCheckInCycle()
+    if not _G.AutoCheckIn or IsShutterClosed() or _G.HasActiveThreat or _G.AH_IsTreating then return false end
 
-local function SetPromptCooldown(pp, duration)
-    if pp then
-        DeskPromptCooldowns[pp] = os.clock() + (duration or 1.5)
-    end
-end
-
-local function GetNextDeskPrompt()
     local misc = Workspace:FindFirstChild("Misc")
     local checkIn = misc and misc:FindFirstChild("CheckIn")
-    if not checkIn then return nil, nil end
-
-    -- 1. Бейдж готов на столе (PatientBadgeBase, VisitorBadgeBase, PrintedBadge)
-    for _, bName in ipairs({"PatientBadgeBase", "VisitorBadgeBase", "PrintedBadge"}) do
-        local b = checkIn:FindFirstChild(bName)
-        local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if bPP and bPP.Enabled and not IsPromptOnCooldown(bPP) then
-            return bPP, "Badge"
-        end
-    end
-
-    -- 2. Принтер (Printer)
-    local printer = checkIn:FindFirstChild("Printer")
-    local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if printerPP and printerPP.Enabled and not IsPromptOnCooldown(printerPP) then
-        return printerPP, "Printer"
-    end
-
-    -- 3. Компьютер (Computer)
-    local pc = checkIn:FindFirstChild("Computer")
-    local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if pcPP and pcPP.Enabled and not IsPromptOnCooldown(pcPP) then
-        return pcPP, "Computer"
-    end
-
-    -- 4. Фотоаппарат (Camera)
-    local cam = checkIn:FindFirstChild("Camera")
-    local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if camPP and camPP.Enabled and not IsPromptOnCooldown(camPP) then
-        return camPP, "Camera"
-    end
-
-    -- 5. Бланк (Form)
-    local form = checkIn:FindFirstChild("Form")
-    local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if formPP and formPP.Enabled and not IsPromptOnCooldown(formPP) then
-        return formPP, "Form"
-    end
-
-    return nil, nil
-end
-
-local function ExecuteCheckInCycle()
-    if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return false end
+    if not checkIn then return false end
 
     local patient = GetPatientAtCounter()
     if not patient then return false end
 
-    -- 1. Проверяем, есть ли промпт отдать бейдж прямо сейчас на клиенте
+    -- 1. Проверяем бейдж в руках/инвентаре для передачи пациенту
     local npcPrompt = GetNpcCheckInPrompt(patient)
     if npcPrompt and npcPrompt.Enabled then
         for _, c in ipairs(InventoryContainers()) do
@@ -1330,48 +1294,93 @@ local function ExecuteCheckInCycle()
         return true
     end
 
-    -- 2. Ищем активный промпт на столе стойки
-    local deskPP, deskType = GetNextDeskPrompt()
-    if not deskPP or not deskPP.Enabled then
-        return false
-    end
+    -- 2. Проверяем готовый бейдж на стойке (PatientBadgeBase, VisitorBadgeBase, PrintedBadge)
+    for _, bName in ipairs({"PatientBadgeBase", "VisitorBadgeBase", "PrintedBadge"}) do
+        local b = checkIn:FindFirstChild(bName)
+        local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if bPP and bPP.Enabled then
+            Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
+            local bPos = GetPromptPartPosition(bPP) or Positions.CheckInBadge
+            TeleportPlayer(bPos + Vector3.new(0, 1.0, 1.5))
+            task.wait(0.2)
+            FirePrompt(bPP)
+            task.wait(0.3)
 
-    Log("AutoCheckIn", "Processing check-in step", { step = deskType, prompt = deskPP:GetFullName() })
-    local pPos = GetPromptPartPosition(deskPP)
-    if pPos then
-        TeleportPlayer(pPos + Vector3.new(0, 1.0, 1.5))
-        task.wait(0.2)
-    end
-
-    FirePrompt(deskPP)
-    SetPromptCooldown(deskPP, 1.5)
-    task.wait(0.4)
-
-    -- Если взяли бейдж, сразу отдаем пациенту
-    if deskType == "Badge" then
-        task.wait(0.2)
-        npcPrompt = GetNpcCheckInPrompt(patient)
-        if npcPrompt and npcPrompt.Enabled then
-            for _, c in ipairs(InventoryContainers()) do
-                for _, t in ipairs(c:GetChildren()) do
-                    if t:IsA("Tool") then
-                        UseInventoryTool(t.Name)
-                        break
+            npcPrompt = GetNpcCheckInPrompt(patient)
+            if npcPrompt and npcPrompt.Enabled then
+                for _, c in ipairs(InventoryContainers()) do
+                    for _, t in ipairs(c:GetChildren()) do
+                        if t:IsA("Tool") then
+                            UseInventoryTool(t.Name)
+                            break
+                        end
                     end
                 end
+                Log("AutoCheckIn", "Giving taken badge to patient", { patient = patient:GetFullName() })
+                local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
+                if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 2.0)) end
+                task.wait(0.2)
+                FirePrompt(npcPrompt)
+                task.wait(0.4)
+                UnequipAllTools()
+                MarkPatientTreated(patient)
             end
-            Log("AutoCheckIn", "Giving taken badge to patient", { patient = patient:GetFullName() })
-            local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
-            if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 2.0)) end
-            task.wait(0.2)
-            FirePrompt(npcPrompt)
-            task.wait(0.4)
-            UnequipAllTools()
-            MarkPatientTreated(patient)
+            return true
         end
     end
 
-    return true
+    -- 3. Принтер (Printer)
+    local printer = checkIn:FindFirstChild("Printer")
+    local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if printerPP and printerPP.Enabled then
+        Log("AutoCheckIn", "Printing badge", { prompt = printerPP:GetFullName() })
+        TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4)
+        task.wait(1.5)
+        return true
+    end
+
+    -- 4. Компьютер (Computer)
+    local pc = checkIn:FindFirstChild("Computer")
+    local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if pcPP and pcPP.Enabled then
+        Log("AutoCheckIn", "Registering on computer", { prompt = pcPP:GetFullName() })
+        TeleportAndFirePrompt(pcPP, Positions.CheckInPC, 0.4)
+
+        -- Ожидаем завершения регистрации на компьютере (пока не появится принтер или бейдж)
+        local t = os.clock()
+        while os.clock() - t < 3.0 and not StopCheck() do
+            local pr = checkIn:FindFirstChild("Printer")
+            local prPP = pr and (pr:FindFirstChild("PP") or pr:FindFirstChildWhichIsA("ProximityPrompt", true))
+            if prPP and prPP.Enabled then break end
+            local bdg = checkIn:FindFirstChild("PatientBadgeBase") or checkIn:FindFirstChild("VisitorBadgeBase") or checkIn:FindFirstChild("PrintedBadge")
+            local bdgPP = bdg and (bdg:FindFirstChild("PP") or bdg:FindFirstChildWhichIsA("ProximityPrompt", true))
+            if bdgPP and bdgPP.Enabled then break end
+            task.wait(0.2)
+        end
+        return true
+    end
+
+    -- 5. Фотоаппарат (Camera)
+    local cam = checkIn:FindFirstChild("Camera")
+    local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if camPP and camPP.Enabled then
+        Log("AutoCheckIn", "Taking patient photo", { prompt = camPP:GetFullName() })
+        TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.4)
+        task.wait(0.5)
+        return true
+    end
+
+    -- 6. Бланк (Form)
+    local form = checkIn:FindFirstChild("Form")
+    local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if formPP and formPP.Enabled then
+        Log("AutoCheckIn", "Stamping check-in form", { prompt = formPP:GetFullName() })
+        TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.4)
+        task.wait(0.5)
+        return true
+    end
+
+    return false
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
