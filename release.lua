@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V11.0 PERFECT TREATMENT & DESK)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V12.0 AUTONOMOUS MEDICAL & DESK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -40,7 +40,6 @@ _G.HasActiveThreat = false
 local _AH_TreatedPatients = {}
 local _AH_HandledCheckInPatients = {}
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
-local _AH_RoomCooldowns = {}
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -775,7 +774,7 @@ local function TreatSingleRoom(roomData)
 end
 
 local function ExecuteTreatmentCycle()
-    if not _G.AutoTreatment or _G.HasActiveThreat or StopCheck() then return false end
+    if not _G.AutoTreatment or StopCheck() then return false end
 
     -- Приоритет реанимаций (Палаты 8, 7, 6)
     for _, idx in ipairs({8, 7, 6}) do
@@ -1499,7 +1498,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v11.0 [P: Мышь | G: Скрыть]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v12.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -1848,72 +1847,96 @@ TabButtons["Автоматизация"].TextColor3 = Color3.fromRGB(255, 255, 2
 TabFrames["Автоматизация"].Visible = true
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (TREATMENT PRIORITY & NO-SPAM CHECKIN)
+-- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (FOXNAME EXACT ORDER)
 -- ══════════════════════════════════════════════════════════════════════════════════
 task.spawn(function()
     Log("Loop", "Averlik Hub Animal Hospital Engine Started", { sessionId = MySession, loopInterval = _G.LoopInterval })
+
+    local nextUrgentCheck = 0
+    local nextGeneralTreatment = 0
 
     while IsSessionActive() do
         task.wait(_G.LoopInterval or 0.15)
 
         if not IsSessionActive() then break end
 
-        -- Применение WalkSpeed
+        -- WalkSpeed
         if _G.WalkSpeedValue and _G.WalkSpeedValue ~= 16 then
             local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
             if hum and hum.WalkSpeed ~= _G.WalkSpeedValue then hum.WalkSpeed = _G.WalkSpeedValue end
         end
 
-        -- 1. Защита от угроз и закрытие шторок
+        local now = os.clock()
+
+        -- 1. СРОЧНОЕ ЛЕЧЕНИЕ (Палаты 8, 7, 6 каждые 0.25с)
+        if _G.AutoTreatment and now >= nextUrgentCheck then
+            nextUrgentCheck = now + 0.25
+            for _, idx in ipairs({8, 7, 6}) do
+                local roomData = _G.AH_RoomData[idx]
+                local ok, did = pcall(function() return TreatSingleRoom(roomData) end)
+                if ok and did then break end
+            end
+        end
+
+        -- 2. ВЫГОН АНОМАЛИЙ
+        local anomalyHandled = false
+        if _G.AutoAskLeaveAnomaly then
+            pcall(function() anomalyHandled = AutoAskLeaveAnomaly() end)
+        end
+
+        -- 3. ТУШЕНИЕ ПОЖАРОВ
+        local fireHandled = false
+        if not anomalyHandled and _G.AutoPutOutFire then
+            pcall(function() fireHandled = AutoPutOutFire() end)
+        end
+
+        -- 4. ТАЗЕР АНОМАЛИЙ
+        local taserHandled = false
+        if not anomalyHandled and not fireHandled and _G.AutoTaser then
+            pcall(function() taserHandled = AutoTaserAnomalies() end)
+        end
+
+        -- 5. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8 каждые 0.6с)
+        if _G.AutoTreatment and now >= nextGeneralTreatment then
+            nextGeneralTreatment = now + 0.6
+            for idx = 1, 8 do
+                local roomData = _G.AH_RoomData[idx]
+                local ok, did = pcall(function() return TreatSingleRoom(roomData) end)
+                if ok and did then break end
+            end
+        end
+
+        -- 6. ШТОРКА
         pcall(EvaluateCounterThreats)
 
-        -- 2. Тушение пожаров и горящих пациентов
-        local safetyWorked = false
-        pcall(function() safetyWorked = AutoPutOutFire() end)
-
-        if not safetyWorked then
-            pcall(function() safetyWorked = AutoAskLeaveAnomaly() end)
+        -- 7. РЕСЕПШЕН (Регистрация посетителей)
+        if _G.AutoCheckIn and not _G.HasActiveThreat and not IsShutterClosed() then
+            pcall(ExecuteCheckInCycle)
         end
 
-        if not safetyWorked then
-            pcall(function() safetyWorked = AutoTaserAnomalies() end)
+        -- 8. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ
+        if _G.AutoHelpPatient then
+            pcall(AutoHelpFaintedPatients)
         end
 
-        if not safetyWorked and not _G.HasActiveThreat and not IsShutterClosed() then
-            -- 3. ПЕРВООЧЕРЕДНОЕ ЛЕЧЕНИЕ ПАЦИЕНТОВ В ПАЛАТАХ (Палаты 8, 7, 6, 1..5)
-            local treated = false
-            pcall(function() treated = ExecuteTreatmentCycle() end)
+        -- 9. ПОЧИНКА КАМЕР
+        if _G.AutoFixCam then
+            pcall(AutoFixCam)
+        end
 
-            -- 4. Ресепшен (Регистрация посетителей на CheckIn и CheckIn2 только если лечение не активно)
-            local checkedIn = false
-            if not treated then
-                pcall(function() checkedIn = ExecuteCheckInCycle() end)
-            end
+        -- 10. КОФЕ ДЛЯ БАРНИ
+        if _G.AutoGiveBarneyCoffee then
+            pcall(ProcessBarneyCoffee)
+        end
 
-            -- 5. Спасение упавших пациентов
-            if not treated and not checkedIn then
-                pcall(AutoHelpFaintedPatients)
-            end
+        -- 11. УБОРКА СЛИЗИ
+        if _G.AutoCleanSlime then
+            pcall(CleanSlimePuddles)
+        end
 
-            -- 6. Починка камер безопасности
-            if not treated and not checkedIn then
-                pcall(AutoFixCam)
-            end
-
-            -- 7. Кофе для Барни
-            if not treated and not checkedIn then
-                pcall(ProcessBarneyCoffee)
-            end
-
-            -- 8. Уборка луж слизи
-            if not treated and not checkedIn then
-                pcall(CleanSlimePuddles)
-            end
-
-            -- 9. Покупка в магазине
-            if not treated and not checkedIn then
-                pcall(AutoBuyShopItems)
-            end
+        -- 12. МАГАЗИН
+        if _G.AutoBuyShop then
+            pcall(AutoBuyShopItems)
         end
     end
 
