@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V21.0 DESIGNATED BED ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V22.0 ROOM 6 X-RAY ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -733,7 +733,10 @@ end
 
 local function GetRoomBedPrompt(roomData, minigame, patient)
     if roomData.Name == "Room6" then
-        return patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if patient then
+            local npPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if npPP and npPP.Enabled then return npPP end
+        end
     end
 
     local bed = minigame:FindFirstChild("Bed")
@@ -755,7 +758,7 @@ local function GetRoomBedPrompt(roomData, minigame, patient)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 9. COMPLETE TREATMENT ENGINE (ATOMIC FULL ROOM COMPLETION)
+-- 🏥 9. COMPLETE TREATMENT ENGINE (ROOM 6 X-RAY & ALL ROOMS COMPLETE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientInRoom(roomData)
     local npcs = Workspace:FindFirstChild("NPCs")
@@ -791,7 +794,7 @@ local function TreatSingleRoom(roomData)
     local patient = GetPatientInRoom(roomData)
     local didAction = false
 
-    -- 0. Если пациент возле палаты, но не на койке -> нажимаем PP2 (Place Patient in Bed)
+    -- 0. Если пациент возле палаты, но не на койке (для комнат 1-5, 7, 8)
     if patient and roomData.Name ~= "Room6" and patient:GetAttribute("InBed") ~= true then
         local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
         local placePP = inBed and inBed:FindFirstChild("PP2")
@@ -834,8 +837,10 @@ local function TreatSingleRoom(roomData)
     local xrayMonitor = minigame:FindFirstChild("xrayMonitor")
     local xrayPP = xrayMonitor and (xrayMonitor:FindFirstChild("PP") or xrayMonitor:FindFirstChildWhichIsA("ProximityPrompt", true))
     if xrayPP and xrayPP.Enabled then
-        Log("AutoTreatment", "Starting X-Ray scan", { room = roomData.Name, prompt = xrayPP:GetFullName() })
-        PressPromptNearby(xrayPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
+        Log("AutoTreatment", "Starting X-Ray scan in Room 6", { room = roomData.Name, prompt = xrayPP:GetFullName() })
+        PressTreatmentPromptNearbyUntil(xrayPP, 0.25, 3.0, function()
+            return not xrayPP.Parent or not xrayPP.Enabled or #GetNeededTreatmentItems(roomData) > 0
+        end)
         didAction = true
         task.wait(0.3)
     end
@@ -843,18 +848,23 @@ local function TreatSingleRoom(roomData)
     -- 4. Monitor Process Prompt (PP2)
     local monitor = minigame:FindFirstChild("Monitor")
     local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if monitorPP2 and monitorPP2.Enabled then
-        Log("AutoTreatment", "Processing monitor results", { room = roomData.Name, prompt = monitorPP2:GetFullName() })
-        PressPromptNearby(monitorPP2, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
-        didAction = true
-        task.wait(0.3)
+    if monitorPP2 then
+        if roomData.Name == "Room6" or not monitorPP2.Enabled then
+            pcall(function() monitorPP2.Enabled = true end)
+        end
+        if monitorPP2.Enabled then
+            Log("AutoTreatment", "Processing monitor results", { room = roomData.Name, prompt = monitorPP2:GetFullName() })
+            PressPromptNearby(monitorPP2, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
+            didAction = true
+            task.wait(0.3)
+        end
     end
 
-    -- 5. Printed X-Ray Result (xresult / PrintedXRay)
-    local xresult = minigame:FindFirstChild("xresult") or minigame:FindFirstChild("PrintedXRay")
+    -- 5. Printed X-Ray Result (PrintedXRay / xresult)
+    local xresult = minigame:FindFirstChild("PrintedXRay") or minigame:FindFirstChild("xresult") or minigame:FindFirstChild("PrintedXRay", true) or minigame:FindFirstChild("xresult", true)
     local xresultPP = xresult and (xresult:FindFirstChild("PP") or xresult:FindFirstChildWhichIsA("ProximityPrompt", true))
     if xresultPP and xresultPP.Enabled then
-        Log("AutoTreatment", "Taking X-Ray result", { room = roomData.Name, prompt = xresultPP:GetFullName() })
+        Log("AutoTreatment", "Taking X-Ray result sheet", { room = roomData.Name, prompt = xresultPP:GetFullName() })
         PressPromptNearby(xresultPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
         didAction = true
         task.wait(0.3)
@@ -913,7 +923,7 @@ local function TreatSingleRoom(roomData)
                 end
 
                 if targetPrompt and targetPrompt.Enabled then
-                    Log("AutoTreatment", "Delivering treatment item to bed", { room = roomData.Name, targetItem = currentItem, prompt = targetPrompt:GetFullName() })
+                    Log("AutoTreatment", "Delivering treatment item to room/bed", { room = roomData.Name, targetItem = currentItem, prompt = targetPrompt:GetFullName() })
                     PressTreatmentPromptNearbyUntil(targetPrompt, 0.15, 2.5, function()
                         return GetItemCount(currentItem) == 0 or not targetPrompt.Parent or not targetPrompt.Enabled
                     end)
@@ -1627,7 +1637,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v21.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v22.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
