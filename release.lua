@@ -1201,7 +1201,7 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (ACCURATE & NON-GLITCHING PIPELINE)
+-- 🏢 11. AUTO CHECK IN (ACCURATE PIPELINE WITH AUTOMATIC BADGE HANDOVER)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientAtCounter()
     if _G.IsShutterClosed or _G.HasActiveThreat then return nil end
@@ -1227,6 +1227,19 @@ local function GetPatientAtCounter()
     return nil
 end
 
+local function GetNpcCheckInPrompt(npc)
+    if not npc or npc.Name == "Barney" or npc.Name == "Cleaner" or npc.Name == "Guard" then return nil end
+    for _, p in ipairs(npc:GetDescendants()) do
+        if p:IsA("ProximityPrompt") and p.Enabled then
+            local act = string.lower(tostring(p.ActionText or ""))
+            if act ~= "" and not act:find("carry") and not act:find("help") and not act:find("ask") then
+                return p
+            end
+        end
+    end
+    return nil
+end
+
 local function ExecuteCheckInCycle()
     if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return false end
 
@@ -1235,23 +1248,32 @@ local function ExecuteCheckInCycle()
     if not checkIn then return false end
 
     local patient = GetPatientAtCounter()
+    if not patient then return false end
 
-    local badgeTool = FindToolInInventory("Badge") or FindToolInInventory("PrintedBadge")
-    if badgeTool and patient then
-        UseInventoryTool(badgeTool.Name)
-        local patientPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
-        if patientPP and patientPP.Enabled then
-            Log("AutoCheckIn", "Giving badge to patient", { patient = patient:GetFullName(), prompt = patientPP:GetFullName() })
-            local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
-            if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 1.5)) end
-            task.wait(0.2)
-            FirePrompt(patientPP)
-            task.wait(0.4)
-            UnequipAllTools()
-            return true
+    -- 1. Если у NPC есть активный промпт (отдать бейдж / поговорить) -> сразу отдаем!
+    local npcPrompt = GetNpcCheckInPrompt(patient)
+    if npcPrompt and npcPrompt.Enabled then
+        for _, c in ipairs(InventoryContainers()) do
+            for _, t in ipairs(c:GetChildren()) do
+                if t:IsA("Tool") and (string.lower(t.Name):find("badge") or string.lower(t.Name):find("card") or string.lower(t.Name):find("id")) then
+                    UseInventoryTool(t.Name)
+                    break
+                end
+            end
         end
+
+        Log("AutoCheckIn", "Handing badge to patient", { patient = patient:GetFullName(), prompt = npcPrompt:GetFullName() })
+        local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
+        if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 2.0)) end
+        task.wait(0.25)
+        FirePrompt(npcPrompt)
+        task.wait(0.5)
+        UnequipAllTools()
+        MarkPatientTreated(patient)
+        return true
     end
 
+    -- 2. Бланк (Form)
     local form = checkIn:FindFirstChild("Form")
     local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
     if formPP and formPP.Enabled then
@@ -1261,6 +1283,7 @@ local function ExecuteCheckInCycle()
         return true
     end
 
+    -- 3. Фотоаппарат (Camera)
     local cam = checkIn:FindFirstChild("Camera")
     local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
     if camPP and camPP.Enabled then
@@ -1270,6 +1293,7 @@ local function ExecuteCheckInCycle()
         return true
     end
 
+    -- 4. Компьютер (Computer)
     local pc = checkIn:FindFirstChild("Computer")
     local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
     if pcPP and pcPP.Enabled then
@@ -1279,21 +1303,36 @@ local function ExecuteCheckInCycle()
         return true
     end
 
+    -- 5. Принтер (Printer)
     local printer = checkIn:FindFirstChild("Printer")
     local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
     if printerPP and printerPP.Enabled then
         Log("AutoCheckIn", "Printing badge", { prompt = printerPP:GetFullName() })
         TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.3)
-        task.wait(0.5)
+        task.wait(0.6)
         return true
     end
 
-    local printedBadge = checkIn:FindFirstChild("PrintedBadge")
+    -- 6. Забрать напечатанный бейдж (PrintedBadge / PatientBadgeBase / VisitorBadgeBase)
+    local printedBadge = checkIn:FindFirstChild("PrintedBadge") or checkIn:FindFirstChild("PatientBadgeBase") or checkIn:FindFirstChild("VisitorBadgeBase")
     local badgePP = printedBadge and (printedBadge:FindFirstChild("PP") or printedBadge:FindFirstChildWhichIsA("ProximityPrompt", true))
     if badgePP and badgePP.Enabled then
-        Log("AutoCheckIn", "Taking printed badge", { prompt = badgePP:GetFullName() })
+        Log("AutoCheckIn", "Taking printed badge from desk", { prompt = badgePP:GetFullName() })
         TeleportAndFirePrompt(badgePP, Positions.CheckInBadge, 0.3)
-        task.wait(0.5)
+        task.wait(0.4)
+
+        -- Сразу передаем бейдж пациенту
+        npcPrompt = GetNpcCheckInPrompt(patient)
+        if npcPrompt and npcPrompt.Enabled then
+            Log("AutoCheckIn", "Handing badge to patient immediately", { patient = patient:GetFullName() })
+            local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
+            if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 2.0)) end
+            task.wait(0.2)
+            FirePrompt(npcPrompt)
+            task.wait(0.5)
+            UnequipAllTools()
+            MarkPatientTreated(patient)
+        end
         return true
     end
 
