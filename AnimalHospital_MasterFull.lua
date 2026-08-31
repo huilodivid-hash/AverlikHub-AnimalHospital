@@ -1,20 +1,18 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE MASTER SUITE (V3.0 HYPER-REACTIVE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE MASTER SUITE (V3.1 BULLETPROOF)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
--- 🛑 SINGLE-INSTANCE EXECUTION GUARD (PREVENTS MULTI-SCRIPT INJECTION CONFLICTS)
-if _G.AH_CleanupPrevious then
-    pcall(_G.AH_CleanupPrevious)
-    task.wait(0.3)
+-- 🛑 BULLETPROOF SINGLE-INSTANCE GUARD (INTEGER COUNTER ENGINE)
+_G.AH_SessionCounter = (_G.AH_SessionCounter or 0) + 1
+local MySession = _G.AH_SessionCounter
+_G.AH_ActiveSession = MySession
+
+local function IsSessionActive()
+    return _G.AH_ActiveSession == MySession
 end
 
-local CurrentSessionId = tick()
-_G.AH_CurrentSession = CurrentSessionId
-_G.AH_CleanupPrevious = function()
-    _G.AH_CurrentSession = nil
-    _G.AH_MasterRunning = false
-end
-_G.AH_MasterRunning = true
+-- StopCheck defined at top
+
 
 -- ⚙️ GLOBAL TOGGLES & SETTINGS
 _G.AutoCheckIn = _G.AutoCheckIn ~= nil and _G.AutoCheckIn or true
@@ -1822,39 +1820,38 @@ if Rayfield then
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
+-- ══════════════════════════════════════════════════════════════════════════════════
 -- 🔄 16. MAIN HIGH-PRECISION AUTOMATION LOOP
 -- ══════════════════════════════════════════════════════════════════════════════════
 task.spawn(function()
-    Log("Loop", "Averlik Hub Animal Hospital Engine Started", { loopInterval = _G.LoopInterval })
+    Log("Loop", "Averlik Hub Animal Hospital Engine Started", { sessionId = MySession, loopInterval = _G.LoopInterval or 0.15 })
 
-    while _G.AH_MasterRunning and _G.AH_CurrentSession == CurrentSessionId do
-        task.wait(_G.LoopInterval)
+    while IsSessionActive() do
+        task.wait(_G.LoopInterval or 0.15)
 
-        local s, err = pcall(function()
-            -- 1. Оценка угроз и шторки
-            EvaluateCounterThreats()
+        if not IsSessionActive() then break end
 
-            -- 2. Приоритетное лечение во всех палатах (1 - 8)
-            ExecuteTreatmentCycle()
+        -- 1. Оценка угроз и шторки
+        pcall(EvaluateCounterThreats)
 
-            -- 3. Регистрация клиентов
-            ExecuteCheckInCycle()
+        -- 2. Приоритетное лечение во всех палатах (1 - 8)
+        pcall(ExecuteTreatmentCycle)
 
-            -- 4. Кофе для Барни
-            ProcessBarneyCoffee()
+        -- 3. Регистрация клиентов на ресепшене
+        pcall(ExecuteCheckInCycle)
 
-            -- 5. Уборка слизи
-            CleanSlimePuddles()
+        -- 4. Кофе для Барни
+        pcall(ProcessBarneyCoffee)
 
-            -- 6. Помощь упавшим пациентам (поднятие и доставка в койку)
-            AutoHelpFaintedPatients()
+        -- 5. Уборка слизи
+        pcall(CleanSlimePuddles)
 
-            -- 7. Авто-покупка в магазине
-            AutoBuyShopItems()
-        end)
+        -- 6. Помощь упавшим пациентам (поднятие и доставка в койку)
+        pcall(AutoHelpFaintedPatients)
 
-        if not s then
-            Log("Error", "Loop iteration exception", { error = tostring(err) })
-        end
+        -- 7. Авто-покупка в магазине
+        pcall(AutoBuyShopItems)
     end
+
+    Log("Loop", "Previous session gracefully stopped", { sessionId = MySession })
 end)
