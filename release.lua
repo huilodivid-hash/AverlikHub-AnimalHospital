@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V29.0 ZERO-NIL SCOPE-SAFE EDITION)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V30.0 PERFECT CHECK-IN & RECEPTION ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -1339,7 +1339,7 @@ local function TreatSingleRoom(roomData)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 12. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
+-- 🏢 12. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-LOOP CHECK-IN FLOW)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -1443,6 +1443,37 @@ local function FinishPatientCheckIn(patient)
     return false
 end
 
+local function IsCheckInStepActive(container)
+    if not container then return false end
+    local highlight = container:FindFirstChild("CheckStepHighlight") or container:FindFirstChildWhichIsA("Highlight", true)
+    if highlight and highlight:IsA("Highlight") then
+        return highlight.Enabled == true
+    end
+    return true
+end
+
+local function GetDeskBadgePP(checkIn)
+    if not checkIn then return nil end
+    for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
+        local b = checkIn:FindFirstChild(bName) or (Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild(bName, true))
+        local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if bPP and bPP.Enabled then
+            return bPP
+        end
+    end
+    return nil
+end
+
+local function WaitForPrintedBadge(checkIn, timeout)
+    local deadline = os.clock() + (timeout or 2.5)
+    while os.clock() < deadline and not StopCheck() do
+        local bPP = GetDeskBadgePP(checkIn)
+        if bPP then return bPP end
+        task.wait(0.15)
+    end
+    return nil
+end
+
 local function ExecuteCheckInCycle()
     if not _G.AutoCheckIn or IsShutterClosed() == true or _G.HasActiveThreat or StopCheck() then
         return false
@@ -1464,94 +1495,73 @@ local function ExecuteCheckInCycle()
 
     Log("AutoCheckIn", "Starting check-in cycle for patient", { patient = patient:GetFullName() })
 
-    local maxSteps = 10
-    local step = 0
-    while not StopCheck() and step < maxSteps do
-        step = step + 1
+    -- 1. Если NPC уже готов завершить регистрацию (висит диалог/передача бейджика)
+    if FinishPatientCheckIn(patient) then return true end
 
-        -- 1. Если NPC уже готов завершить регистрацию -> говорим сразу!
+    -- 2. Готовый напечатанный бейджик на стойке
+    local badgePP = GetDeskBadgePP(checkIn)
+    if badgePP then
+        Log("AutoCheckIn", "Taking printed badge from desk", { prompt = badgePP:GetFullName() })
+        PressPromptNearby(badgePP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
+        task.wait(0.2)
         if FinishPatientCheckIn(patient) then return true end
+    end
 
-        -- 2. Готовый напечатанный бейджик на стойке
-        for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
-            local b = checkIn:FindFirstChild(bName)
-            local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
-            if bPP and bPP.Enabled then
-                Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
-                PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
-                task.wait(0.2)
-                if FinishPatientCheckIn(patient) then return true end
-            end
-        end
+    -- 3. Бланк (Form)
+    local form = checkIn:FindFirstChild("Form")
+    local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if formPP and formPP.Enabled and IsCheckInStepActive(form) then
+        Log("AutoCheckIn", "Stamping Form", { prompt = formPP:GetFullName() })
+        PressPromptNearby(formPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        task.wait(0.2)
+        if FinishPatientCheckIn(patient) then return true end
+    end
 
-        local didAnyAction = false
+    -- 4. Фотоаппарат (Camera)
+    local cam = checkIn:FindFirstChild("Camera")
+    local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if camPP and camPP.Enabled and IsCheckInStepActive(cam) then
+        Log("AutoCheckIn", "Taking Photo", { prompt = camPP:GetFullName() })
+        PressPromptNearby(camPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        task.wait(0.2)
+        if FinishPatientCheckIn(patient) then return true end
+    end
 
-        -- 3. Бланк (Form)
-        local form = checkIn:FindFirstChild("Form")
-        local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if formPP and formPP.Enabled then
-            Log("AutoCheckIn", "Stamping Form", { prompt = formPP:GetFullName() })
-            PressPromptNearby(formPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-            didAnyAction = true
-            task.wait(0.15)
-            if FinishPatientCheckIn(patient) then return true end
-        end
+    -- 5. Компьютер (Computer) - выполняем 1 раз за цикл
+    local pc = checkIn:FindFirstChild("Computer")
+    local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if pcPP and pcPP.Enabled and IsCheckInStepActive(pc) then
+        Log("AutoCheckIn", "Processing computer registration", { prompt = pcPP:GetFullName() })
+        PressPromptNearby(pcPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
+        task.wait(0.25)
+        if FinishPatientCheckIn(patient) then return true end
+    end
 
-        -- 4. Фотоаппарат (Camera)
-        local cam = checkIn:FindFirstChild("Camera")
-        local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if camPP and camPP.Enabled then
-            Log("AutoCheckIn", "Taking Photo", { prompt = camPP:GetFullName() })
-            PressPromptNearby(camPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-            didAnyAction = true
-            task.wait(0.15)
-            if FinishPatientCheckIn(patient) then return true end
-        end
+    -- 6. Принтер (Printer)
+    local printer = checkIn:FindFirstChild("Printer")
+    local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if printerPP and printerPP.Enabled and IsCheckInStepActive(printer) then
+        Log("AutoCheckIn", "Printing Badge", { prompt = printerPP:GetFullName() })
+        PressPromptNearby(printerPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
 
-        -- 5. Компьютер (Computer)
-        local pc = checkIn:FindFirstChild("Computer")
-        local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if pcPP and pcPP.Enabled then
-            Log("AutoCheckIn", "Processing computer registration", { prompt = pcPP:GetFullName() })
-            PressPromptNearby(pcPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-            didAnyAction = true
+        local printedBadgePP = WaitForPrintedBadge(checkIn, 3.0)
+        if printedBadgePP then
+            Log("AutoCheckIn", "Taking printed badge from desk", { prompt = printedBadgePP:GetFullName() })
+            PressPromptNearby(printedBadgePP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
             task.wait(0.2)
             if FinishPatientCheckIn(patient) then return true end
         end
-
-        -- 6. Принтер (Printer)
-        local printer = checkIn:FindFirstChild("Printer")
-        local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if printerPP and printerPP.Enabled then
-            Log("AutoCheckIn", "Printing Badge", { prompt = printerPP:GetFullName() })
-            PressPromptNearby(printerPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
-            didAnyAction = true
-
-            local waitDeadline = os.clock() + 3.0
-            while os.clock() < waitDeadline and not StopCheck() do
-                for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
-                    local b = checkIn:FindFirstChild(bName)
-                    local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
-                    if bPP and bPP.Enabled then
-                        Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
-                        PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
-                        task.wait(0.2)
-                        if FinishPatientCheckIn(patient) then return true end
-                        break
-                    end
-                end
-                if FinishPatientCheckIn(patient) then return true end
-                task.wait(0.15)
-            end
-        end
-
-        if FinishPatientCheckIn(patient) then return true end
-        if not didAnyAction then break end
-        task.wait(0.15)
     end
 
-    if FinishPatientCheckIn(patient) then return true end
-    return false
+    -- 7. Финальная попытка отдать бейдж
+    if FinishPatientCheckIn(patient) then
+        return true
+    else
+        -- Помечаем пациента, чтобы не циклиться на одном месте
+        MarkCheckInPatientHandled(patient)
+    end
+
+    return true
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -1950,7 +1960,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v29.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v30.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
