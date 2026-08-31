@@ -1820,3 +1820,41 @@ if Rayfield then
         end,
     })
 end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 🔄 16. MAIN HIGH-PRECISION AUTOMATION LOOP
+-- ══════════════════════════════════════════════════════════════════════════════════
+task.spawn(function()
+    Log("Loop", "Averlik Hub Animal Hospital Engine Started", { loopInterval = _G.LoopInterval })
+
+    while _G.AH_MasterRunning and _G.AH_CurrentSession == CurrentSessionId do
+        task.wait(_G.LoopInterval)
+
+        local s, err = pcall(function()
+            -- 1. Оценка угроз и шторки
+            EvaluateCounterThreats()
+
+            -- 2. Приоритетное лечение во всех палатах (1 - 8)
+            ExecuteTreatmentCycle()
+
+            -- 3. Регистрация клиентов
+            ExecuteCheckInCycle()
+
+            -- 4. Кофе для Барни
+            ProcessBarneyCoffee()
+
+            -- 5. Уборка слизи
+            CleanSlimePuddles()
+
+            -- 6. Помощь упавшим пациентам (поднятие и доставка в койку)
+            AutoHelpFaintedPatients()
+
+            -- 7. Авто-покупка в магазине
+            AutoBuyShopItems()
+        end)
+
+        if not s then
+            Log("Error", "Loop iteration exception", { error = tostring(err) })
+        end
+    end
+end)
