@@ -560,8 +560,42 @@ local function GetPatientInRoom(roomName, bedPos)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🩺 8. MULTI-WARD SAFE TREATMENT ENGINE
+-- 🩺 8. MULTI-WARD SAFE TREATMENT ENGINE (WITH COMPLETE PATIENT CACHE SAFETY)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function IsPatientAlreadyTreated(npc)
+    if not npc then return false end
+    local t = _G.AH_TreatedPatients[npc]
+    if t then
+        if type(t) == "boolean" and t == true then return true end
+        if type(t) == "number" and os.clock() < t then return true end
+    end
+    return false
+end
+
+local function MarkPatientTreated(npc)
+    if not npc then return end
+    _G.AH_TreatedPatients[npc] = os.clock() + 45.0 -- 45 секунд кэша, пока пациент не покинет больницу
+end
+
+local function GetPatientInRoom(roomName, bedPos)
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return nil end
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") and IsValidPatient(npc) then
+            if not IsPatientAlreadyTreated(npc) then
+                local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+                if root then
+                    local dist = (root.Position - bedPos).Magnitude
+                    if dist <= 12 then
+                        return npc
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
 
 -- Палата 8 (Хирургия)
 local function TreatRoom8Surgery()
@@ -631,7 +665,6 @@ local function TreatRoom8Surgery()
                 task.wait(0.4)
                 UnequipAllTools()
 
-                -- Ожидаем подтверждения снятия предмета с ТВ-экрана!
                 local waitTimeout = os.clock() + 4.0
                 while os.clock() < waitTimeout and not StopCheck() do
                     if IsRoomRecovering(room8) then break end
@@ -651,7 +684,7 @@ local function TreatRoom8Surgery()
     end
 
     if attempt > 0 or IsRoomRecovering(room8) then
-        if patient then _G.AH_TreatedPatients[patient] = true end
+        if patient then MarkPatientTreated(patient) end
         _G.AH_IsTreating = false
         Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Workspace.NPCs.Patient", room = "Room8" })
         return true
@@ -669,7 +702,7 @@ local function TreatRoom7Emergency()
     local minigame = room7:FindFirstChild("Minigame")
     if not minigame then return false end
 
-    local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+    local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
     local bedPP2 = inBed and inBed:FindFirstChild("PP2")
     local needed = ResolveNeededTreatmentItems("Room7")
     local patient = GetPatientInRoom("Room7", Positions.Room7_Bed)
@@ -755,7 +788,7 @@ local function TreatRoom7Emergency()
             end
         end
 
-        if patient then _G.AH_TreatedPatients[patient] = true end
+        if patient then MarkPatientTreated(patient) end
         _G.AH_IsTreating = false
         return true
     end
@@ -784,7 +817,7 @@ local function TreatRoom6Emergency()
     local npcsFolder = Workspace:FindFirstChild("NPCs")
     if npcsFolder then
         for _, npc in ipairs(npcsFolder:GetChildren()) do
-            if npc:IsA("Model") and IsValidPatient(npc) then
+            if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
                 local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
                 if root and (root.Position - patientPos).Magnitude <= 18 then
                     patient = npc
@@ -878,7 +911,7 @@ local function TreatRoom6Emergency()
             end
         end
 
-        if patient then _G.AH_TreatedPatients[patient] = true end
+        if patient then MarkPatientTreated(patient) end
         _G.AH_IsTreating = false
         Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or "Room6.Patient", room = "Room6" })
         return true
@@ -888,7 +921,7 @@ local function TreatRoom6Emergency()
     return false
 end
 
--- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & RECOVERY SAFEGUARD)
+-- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & CACHE PROTECTION)
 local function TreatMedicalRooms()
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
@@ -910,7 +943,7 @@ local function TreatMedicalRooms()
                 local npcsFolder = Workspace:FindFirstChild("NPCs")
                 if npcsFolder then
                     for _, npc in ipairs(npcsFolder:GetChildren()) do
-                        if npc:IsA("Model") and IsValidPatient(npc) then
+                        if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
                             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
                             if root and (root.Position - inBedPos).Magnitude <= 10 then
                                 patient = npc
@@ -922,8 +955,8 @@ local function TreatMedicalRooms()
 
                 local needed = ResolveNeededTreatmentItems(roomName)
 
-                -- Если есть пациент, но рецепта на ТВ нет и комната НЕ восстанавливается -> проводим диагностику
-                if #needed == 0 and patient and not IsRoomRecovering(room) then
+                -- Если есть НЕОБРАБОТАННЫЙ пациент, но рецепта на ТВ нет -> проводим диагностику
+                if #needed == 0 and patient and not IsPatientAlreadyTreated(patient) and not IsRoomRecovering(room) then
                     local dnaPP = nil
                     for _, p in ipairs(patient:GetDescendants()) do
                         if p:IsA("ProximityPrompt") and p.Enabled and (string.lower(p.ActionText or ""):find("dna") or string.lower(p.ActionText or ""):find("sample")) then
@@ -975,12 +1008,12 @@ local function TreatMedicalRooms()
                 end
 
                 -- Доставка лекарств по рецепту ТВ (например, Herbs)
-                if #needed > 0 then
+                if #needed > 0 and patient and not IsPatientAlreadyTreated(patient) then
                     _G.AH_IsTreating = true
                     Log("AutoTreatment", "Starting patient treatment", {
                         emergency = "false",
                         neededItems = table.concat(needed, ", "),
-                        npc = patient and patient:GetFullName() or inBed:GetFullName(),
+                        npc = patient:GetFullName(),
                         room = roomName
                     })
 
@@ -1007,7 +1040,7 @@ local function TreatMedicalRooms()
                             isSkinwalker = "false",
                             medicineCount = GetMedicineItemCount(),
                             neededItems = neededStr,
-                            npc = patient and patient:GetFullName() or inBed:GetFullName(),
+                            npc = patient:GetFullName(),
                             room = roomName,
                             shouldKill = "false"
                         })
@@ -1034,7 +1067,6 @@ local function TreatMedicalRooms()
                                 task.wait(0.4)
                                 UnequipAllTools()
 
-                                -- Ожидаем подтверждения снятия предмета с ТВ-экрана перед следующим лекарством!
                                 local waitTimeout = os.clock() + 4.0
                                 while os.clock() < waitTimeout and not StopCheck() do
                                     if IsRoomRecovering(room) then break end
@@ -1062,9 +1094,9 @@ local function TreatMedicalRooms()
                         end
                     end
 
-                    if patient then _G.AH_TreatedPatients[patient] = true end
+                    if patient then MarkPatientTreated(patient) end
                     _G.AH_IsTreating = false
-                    Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or inBed:GetFullName(), room = roomName })
+                    Log("AutoTreatment", "Finished patient treatment", { npc = patient:GetFullName(), room = roomName })
                     return true
                 end
             end
@@ -1114,7 +1146,7 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚪 10. AUTO SHUTTER & ANOMALY EVALUATION (RADIUS 25)
+-- 🚪 10. AUTO SHUTTER & ANOMALY EVALUATION
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetClosestCounterNpc()
     local npcs = Workspace:FindFirstChild("NPCs")
@@ -1152,8 +1184,6 @@ local function EvaluateCounterThreats()
     local counterNpc, isThreat = GetClosestCounterNpc()
 
     if counterNpc then
-        Log("AutoShutter", "Evaluating counter NPC", { isThreat = tostring(isThreat), npc = counterNpc:GetFullName() })
-
         if isThreat then
             _G.HasActiveThreat = true
             if shutterPP and shutterPP.Enabled and not _G.IsShutterClosed then
@@ -1192,7 +1222,7 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 11. AUTO CHECK IN (RADIUS 25 & FAST BADGE ISSUANCE)
+-- 🏢 11. AUTO CHECK IN (ACCURATE & NON-GLITCHING PIPELINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientAtCounter()
     if _G.IsShutterClosed or _G.HasActiveThreat then return nil end
@@ -1202,7 +1232,7 @@ local function GetPatientAtCounter()
 
     local counterSpot = Vector3.new(-103.91, 3.41, -0.40)
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsValidPatient(npc) then
+        if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
             local isThreat = (npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("Threat") == true or npc:GetAttribute("Anomaly") == true)
             if not isThreat then
                 local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
@@ -1219,263 +1249,82 @@ local function GetPatientAtCounter()
 end
 
 local function ExecuteCheckInCycle()
-    if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return end
+    if not _G.AutoCheckIn or _G.IsShutterClosed or _G.HasActiveThreat or _G.AH_IsTreating then return false end
 
     local misc = Workspace:FindFirstChild("Misc")
     local checkIn = misc and misc:FindFirstChild("CheckIn")
-    if not checkIn then return end
+    if not checkIn then return false end
 
     local patient = GetPatientAtCounter()
-    local pcPP = checkIn:FindFirstChild("Computer") and (checkIn.Computer:FindFirstChild("PP") or checkIn.Computer:FindFirstChildWhichIsA("ProximityPrompt", true))
-    local formPP = checkIn:FindFirstChild("Form") and (checkIn.Form:FindFirstChild("PP") or checkIn.Form:FindFirstChildWhichIsA("ProximityPrompt", true))
-    local camPP = checkIn:FindFirstChild("Camera") and (checkIn.Camera:FindFirstChild("PP") or checkIn.Camera:FindFirstChildWhichIsA("ProximityPrompt", true))
-    local printerPP = checkIn:FindFirstChild("Printer") and (checkIn.Printer:FindFirstChild("PP") or checkIn.Printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-    local badgePP = checkIn:FindFirstChild("PrintedBadge") and (checkIn.PrintedBadge:FindFirstChild("PP") or checkIn.PrintedBadge:FindFirstChildWhichIsA("ProximityPrompt", true))
 
-    if not patient and not (formPP and formPP.Enabled) and not (camPP and camPP.Enabled) and not (pcPP and pcPP.Enabled) and not (printerPP and printerPP.Enabled) and not (badgePP and badgePP.Enabled) then
-        return
-    end
-
-    Log("AutoCheckIn", "Starting check-in cycle")
-
-    -- 1. Stamp Forms
-    if formPP and formPP.Enabled then
-        TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.4)
-        task.wait(0.4)
-    end
-
-    -- 2. Take Photo
-    if camPP and camPP.Enabled then
-        TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.4)
-        task.wait(0.4)
-    end
-
-    -- 3. Register on Computer
-    if pcPP and pcPP.Enabled then
-        local pcPos = GetPromptPartPosition(pcPP) or Positions.CheckInPC
-        TeleportPlayer(pcPos + Vector3.new(0, 0, 1.5))
-        task.wait(0.2)
-        FirePrompt(pcPP)
-        task.wait(0.5)
-    end
-
-    -- 4. Print Badge
-    printerPP = checkIn:FindFirstChild("Printer") and (checkIn.Printer:FindFirstChild("PP") or checkIn.Printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if printerPP and printerPP.Enabled then
-        Log("AutoCheckIn", "Printing badge", { attempt = 1, patient = patient and patient:GetFullName() or "Workspace.NPCs.Patient", prompt = printerPP:GetFullName() })
-        TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.4)
-        task.wait(2.0)
-    end
-
-    -- 5. Take Badge
-    badgePP = checkIn:FindFirstChild("PrintedBadge") and (checkIn.PrintedBadge:FindFirstChild("PP") or checkIn.PrintedBadge:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if badgePP and badgePP.Enabled then
-        TeleportAndFirePrompt(badgePP, Positions.PrintedBadge, 0.4)
-        task.wait(0.5)
-    end
-
-    -- 6. Give Badge to Patient
-    if patient then
-        local givePP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
-        if givePP and givePP.Enabled then
-            TeleportAndFirePrompt(givePP, Positions.CheckInCounter, 0.4)
-            task.wait(0.5)
-        end
-    end
-end
-
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🧼 12. AUTO CLEAN SLIME
--- ══════════════════════════════════════════════════════════════════════════════════
-local function CleanSlimePuddles()
-    if not _G.AutoCleanSlime or _G.AH_IsTreating then return end
-
-    local puddles = Workspace:FindFirstChild("Puddles") or Workspace:FindFirstChild("Slime") or Workspace:FindFirstChild("Misc")
-    if not puddles then return end
-
-    for _, p in ipairs(puddles:GetDescendants()) do
-        if p:IsA("ProximityPrompt") and p.Enabled and (string.lower(p.ActionText or ""):find("clean") or string.lower(p.ObjectText or ""):find("slime") or string.lower(p.Parent.Name):find("slime")) then
-            Log("AutoCleanSlime", "Cleaning slime puddle", { prompt = p:GetFullName() })
-            TeleportAndFirePrompt(p, nil, 0.3)
+    -- Если у нас уже есть бейдж в инвентаре -> отдаем пациенту
+    local badgeTool = FindToolInInventory("Badge") or FindToolInInventory("PrintedBadge")
+    if badgeTool and patient then
+        UseInventoryTool(badgeTool.Name)
+        local patientPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if patientPP and patientPP.Enabled then
+            Log("AutoCheckIn", "Giving badge to patient", { patient = patient:GetFullName(), prompt = patientPP:GetFullName() })
+            local root = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso") or patient:FindFirstChildWhichIsA("BasePart")
+            if root then TeleportPlayer(root.Position + Vector3.new(0, 1.0, 1.5)) end
+            task.wait(0.2)
+            FirePrompt(patientPP)
             task.wait(0.4)
-            break
+            UnequipAllTools()
+            return true
         end
     end
+
+    -- 1. Бланк (Form)
+    local form = checkIn:FindFirstChild("Form")
+    local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if formPP and formPP.Enabled then
+        Log("AutoCheckIn", "Stamping check-in form", { prompt = formPP:GetFullName() })
+        TeleportAndFirePrompt(formPP, Positions.CheckInForm, 0.3)
+        task.wait(0.4)
+        return true
+    end
+
+    -- 2. Фотоаппарат (Camera)
+    local cam = checkIn:FindFirstChild("Camera")
+    local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if camPP and camPP.Enabled then
+        Log("AutoCheckIn", "Taking patient photo", { prompt = camPP:GetFullName() })
+        TeleportAndFirePrompt(camPP, Positions.CheckInCamera, 0.3)
+        task.wait(0.4)
+        return true
+    end
+
+    -- 3. Компьютер (Computer)
+    local pc = checkIn:FindFirstChild("Computer")
+    local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if pcPP and pcPP.Enabled then
+        Log("AutoCheckIn", "Registering on computer", { prompt = pcPP:GetFullName() })
+        TeleportAndFirePrompt(pcPP, Positions.CheckInPC, 0.3)
+        task.wait(0.5)
+        return true
+    end
+
+    -- 4. Принтер (Printer)
+    local printer = checkIn:FindFirstChild("Printer")
+    local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if printerPP and printerPP.Enabled then
+        Log("AutoCheckIn", "Printing badge", { prompt = printerPP:GetFullName() })
+        TeleportAndFirePrompt(printerPP, Positions.CheckInPrinter, 0.3)
+        task.wait(0.5)
+        return true
+    end
+
+    -- 5. Взять напечатанный бейдж (PrintedBadge)
+    local printedBadge = checkIn:FindFirstChild("PrintedBadge")
+    local badgePP = printedBadge and (printedBadge:FindFirstChild("PP") or printedBadge:FindFirstChildWhichIsA("ProximityPrompt", true))
+    if badgePP and badgePP.Enabled then
+        Log("AutoCheckIn", "Taking printed badge", { prompt = badgePP:GetFullName() })
+        TeleportAndFirePrompt(badgePP, Positions.CheckInBadge, 0.3)
+        task.wait(0.5)
+        return true
+    end
+
+    return false
 end
 
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🛒 13. AUTO BUY SHOP
--- ══════════════════════════════════════════════════════════════════════════════════
-local function AutoBuyShopItems()
-    if not _G.AutoBuyShop or _G.AH_IsTreating then return end
 
-    local shop = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("Shop")
-    if not shop then return end
-
-    for _, prompt in ipairs(shop:GetDescendants()) do
-        if prompt:IsA("ProximityPrompt") and prompt.Enabled and (string.lower(prompt.ActionText or ""):find("buy") or string.lower(prompt.ActionText or ""):find("purchase")) then
-            FirePrompt(prompt)
-            task.wait(0.3)
-        end
-    end
-end
-
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🚑 14. AUTO HELP PATIENT
--- ══════════════════════════════════════════════════════════════════════════════════
-local function AutoHelpFaintedPatients()
-    if not _G.AutoHelpPatient or _G.AH_IsTreating then return end
-
-    local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return end
-
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsValidPatient(npc) then
-            for _, prompt in ipairs(npc:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") and prompt.Enabled and (string.lower(prompt.ActionText or ""):find("help") or string.lower(prompt.ActionText or ""):find("carry") or string.lower(prompt.ActionText or ""):find("lift")) then
-                    Log("AutoHelpPatient", "Helping fainted patient", { npc = npc:GetFullName(), prompt = prompt:GetFullName() })
-                    TeleportAndFirePrompt(prompt, nil, 0.4)
-                    task.wait(0.5)
-                    break
-                end
-            end
-        end
-    end
-end
-
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 15. MAIN COORDINATED AUTOMATION LOOP
--- ══════════════════════════════════════════════════════════════════════════════════
-task.spawn(function()
-    Log("Loop", "Averlik Hub Animal Hospital Engine Started", { loopInterval = _G.LoopInterval })
-
-    while true do
-        task.wait(_G.LoopInterval)
-
-        local s, err = pcall(function()
-            -- 1. Оценка угроз и шторки
-            EvaluateCounterThreats()
-
-            -- 2. Приоритетное лечение во всех палатах (1 - 8)
-            ExecuteTreatmentCycle()
-
-            -- 3. Регистрация клиентов
-            ExecuteCheckInCycle()
-
-            -- 4. Кофе для Барни
-            ProcessBarneyCoffee()
-
-            -- 5. Уборка слизи
-            CleanSlimePuddles()
-
-            -- 6. Помощь упавшим пациентам
-            AutoHelpFaintedPatients()
-
-            -- 7. Авто-покупка в магазине
-            AutoBuyShopItems()
-        end)
-
-        if not s then
-            Log("Error", "Loop iteration exception", { error = tostring(err) })
-        end
-    end
-end)
-
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 16. RAYFIELD OBSIDIAN USER INTERFACE
--- ══════════════════════════════════════════════════════════════════════════════════
-local Rayfield = nil
-pcall(function()
-    Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-end)
-
-if Rayfield then
-    local Window = Rayfield:CreateWindow({
-        Name = "🏥 Averlik Hub | Animal Hospital",
-        LoadingTitle = "Averlik Hub",
-        LoadingSubtitle = "by Averlik AI",
-        ConfigurationSaving = {
-            Enabled = true,
-            FolderName = "AverlikHub",
-            FileName = "AnimalHospital"
-        },
-        Discord = {
-            Enabled = false,
-            Invite = "",
-            RememberJoins = true
-        },
-        KeySystem = false
-    })
-
-    local MainTab = Window:CreateTab("🏥 Автоматизация", 4483362458)
-    local ThreatTab = Window:CreateTab("🛡️ Защита", 4483362458)
-    local TeleportTab = Window:CreateTab("📍 Телепорт", 4483362458)
-
-    MainTab:CreateToggle({
-        Name = "Авто-Лечение (Палаты 1-8)",
-        CurrentValue = _G.AutoTreatment,
-        Flag = "AutoTreatment",
-        Callback = function(Value) _G.AutoTreatment = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "Авто-Регистрация (Ресепшен)",
-        CurrentValue = _G.AutoCheckIn,
-        Flag = "AutoCheckIn",
-        Callback = function(Value) _G.AutoCheckIn = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "Кофе для Барни",
-        CurrentValue = _G.AutoGiveBarneyCoffee,
-        Flag = "AutoGiveBarneyCoffee",
-        Callback = function(Value) _G.AutoGiveBarneyCoffee = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "Уборка слизи",
-        CurrentValue = _G.AutoCleanSlime,
-        Flag = "AutoCleanSlime",
-        Callback = function(Value) _G.AutoCleanSlime = Value end,
-    })
-
-    MainTab:CreateToggle({
-        Name = "Помощь пациентам",
-        CurrentValue = _G.AutoHelpPatient,
-        Flag = "AutoHelpPatient",
-        Callback = function(Value) _G.AutoHelpPatient = Value end,
-    })
-
-    ThreatTab:CreateToggle({
-        Name = "Шторка от Аномалий",
-        CurrentValue = _G.AutoAnomalyShutter,
-        Flag = "AutoAnomalyShutter",
-        Callback = function(Value) _G.AutoAnomalyShutter = Value end,
-    })
-
-    ThreatTab:CreateToggle({
-        Name = "Прогонять Аномалии (Ask To Leave)",
-        CurrentValue = _G.AutoAskLeaveAnomaly,
-        Flag = "AutoAskLeaveAnomaly",
-        Callback = function(Value) _G.AutoAskLeaveAnomaly = Value end,
-    })
-
-    for roomName, pos in pairs({
-        ["Регистрация"] = Positions.CheckInPC,
-        ["Барни"] = Positions.Barney,
-        ["Палата 1"] = Positions.Room1_Bed,
-        ["Палата 2"] = Positions.Room2_Bed,
-        ["Палата 3"] = Positions.Room3_Bed,
-        ["Палата 4"] = Positions.Room4_Bed,
-        ["Палата 5"] = Positions.Room5_Bed,
-        ["Палата 6 (Рентген)"] = Positions.Room6_Bed,
-        ["Палата 7 (Реанимация)"] = Positions.Room7_Bed,
-        ["Палата 8 (Хирургия)"] = Positions.Room8_Bed,
-        ["Шкаф Травы (Herbs)"] = Positions.Shelf_Herbs
-    }) do
-        TeleportTab:CreateButton({
-            Name = "Телепорт: " .. roomName,
-            Callback = function() TeleportPlayer(pos) end,
-        })
-    end
-end
