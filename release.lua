@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V14.0 IMAGE ASSET & SPATIAL PROMPT RESOLVER)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V15.0 ANCESTOR MODEL INDEXER)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -55,25 +55,12 @@ _G.AH_SurgeryItemList = {
 _G.AH_SurgeryItemSet = {}
 for _, name in ipairs(_G.AH_SurgeryItemList) do _G.AH_SurgeryItemSet[name] = true end
 
-local _AH_ItemAssetMap = {
-    ['rbxassetid://139637091303873'] = 'Eye Drops',
-    ['rbxassetid://118311058179090'] = 'IV Drops',
-    ['rbxassetid://88750936127655'] = 'Medkit',
-    ['rbxassetid://138334905913311'] = 'Thermometer',
-    ['rbxassetid://75884870805308'] = 'Ointment',
-    ['rbxassetid://125453071439049'] = 'Bandages',
-    ['rbxassetid://135236061613718'] = 'Medicine',
-    ['rbxassetid://113912761080559'] = 'Maple Syrup',
-    ['rbxassetid://120895273610611'] = 'Cough Syrup',
-    ['rbxassetid://94559086254344'] = 'Herbs',
-    ['rbxassetid://132258407294719'] = 'Antibiotics',
-    ['rbxassetid://102550407034117'] = 'Organ',
-    ['rbxassetid://137637637347521'] = 'Transplant',
-    ['rbxassetid://93721219255457'] = 'Scalpel',
-    ['rbxassetid://97305931082100'] = 'Scissors',
-    ['rbxassetid://134707010467431'] = 'Pills',
-    ['rbxassetid://122709292837373'] = 'Plaster',
-    ['rbxassetid://79216016769062'] = 'First Aid Kit'
+_G.AH_BlacklistedItemNames = {
+    ["Chocolate bar"] = true,
+    ["Chocolate"] = true,
+    ["Coffee"] = true,
+    ["Taser"] = true,
+    ["Extinguisher"] = true
 }
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -128,18 +115,7 @@ local Positions = {
 
     Room8_Bed = Vector3.new(-144.89, 3.56, 99.59),
     Room8_Monitor = Vector3.new(-134.63, 4.78, 85.74),
-    Room8_TV = Vector3.new(-144.93, 8.34, 114.49),
-
-    Shelf_Herbs = Vector3.new(-137.12, 3.46, -57.82),
-    Shelf_MapleSyrup = Vector3.new(-137.12, 3.46, -60.82),
-    Shelf_EyeDrops = Vector3.new(-137.12, 3.46, -63.82),
-    Shelf_Pills = Vector3.new(-137.12, 3.46, -66.82),
-    Shelf_Bandages = Vector3.new(-137.12, 3.46, -69.82),
-    Shelf_Thermometer = Vector3.new(-137.12, 3.46, -72.82),
-    Shelf_CoughSyrup = Vector3.new(-137.12, 3.46, -75.82),
-    Shelf_Ointment = Vector3.new(-137.12, 3.46, -78.82),
-    Shelf_Plaster = Vector3.new(-137.12, 3.46, -81.82),
-    Shelf_FirstAidKit = Vector3.new(-137.12, 3.46, -84.82)
+    Room8_TV = Vector3.new(-144.93, 8.34, 114.49)
 }
 
 _G.AH_RoomData = {
@@ -214,26 +190,8 @@ local function GetPromptPosition(prompt)
     return nil
 end
 
-local function GetPromptNearPosition(pos, maxDist)
-    if not pos then return nil end
-    local closest, minD = nil, maxDist or 6.0
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") and desc.Enabled then
-            local pPos = GetPromptPosition(desc)
-            if pPos then
-                local d = (pPos - pos).Magnitude
-                if d < minD then
-                    closest = desc
-                    minD = d
-                end
-            end
-        end
-    end
-    return closest
-end
-
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ⚡ 3. BULLETPROOF MULTI-EXECUTOR PROXIMITY PROMPT ENGINE
+-- ⚡ 3. BULLETPROOF PROXIMITY PROMPT ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function PressPP(prompt, holdTime)
     if not prompt or not prompt.Parent or not prompt.Enabled or StopCheck() then return false end
@@ -253,7 +211,6 @@ local function PressPP(prompt, holdTime)
         prompt = prompt:GetFullName()
     })
 
-    -- 1. Native Executor API Calls
     pcall(function()
         if type(fireproximityprompt) == "function" then
             fireproximityprompt(prompt)
@@ -262,7 +219,6 @@ local function PressPP(prompt, holdTime)
         end
     end)
 
-    -- 2. InputHold API Fallback
     pcall(function()
         if prompt.InputHoldBegin and prompt.InputHoldEnd then
             prompt:InputHoldBegin()
@@ -394,44 +350,34 @@ local function DiscardToolAtTrash(tool)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔍 5. DYNAMIC ITEM PROMPT RESOLVER (IMAGE ASSET + SPATIAL RESOLVER)
+-- 🔍 5. EXACT ANCESTOR MODEL PROMPT INDEXER (FOXNAME ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function IndexSinglePrompt(desc)
-    if not desc:IsA("ProximityPrompt") or not desc.Parent then return end
-
-    -- Проверка по имени родителя
-    local pName = desc.Parent.Name
-    if _G.AH_ItemSet[pName] or _G.AH_SurgeryItemSet[pName] then
-        if not _AH_ItemPrompts[pName] then _AH_ItemPrompts[pName] = {} end
-        _AH_ItemPrompts[pName][desc] = true
-        return
-    end
-
-    -- Проверка по ImageLabel / Decal Asset ID
-    local img = desc.Parent:FindFirstChildWhichIsA("ImageLabel", true) or desc.Parent:FindFirstChildWhichIsA("Decal", true) or desc.Parent.Parent:FindFirstChildWhichIsA("ImageLabel", true)
-    if img then
-        local asset = img:IsA("Decal") and img.Texture or img.Image
-        local mappedName = _AH_ItemAssetMap[asset]
-        if mappedName then
-            if not _AH_ItemPrompts[mappedName] then _AH_ItemPrompts[mappedName] = {} end
-            _AH_ItemPrompts[mappedName][desc] = true
+local function IndexTreatmentPrompt(prompt)
+    if not prompt:IsA("ProximityPrompt") then return end
+    local current = prompt.Parent
+    while current and current ~= Workspace do
+        local cName = current.Name
+        if (_G.AH_ItemSet[cName] or _G.AH_SurgeryItemSet[cName]) and not _G.AH_BlacklistedItemNames[cName] and (current:IsA("Model") or current:IsA("BasePart") or current:IsA("Folder")) then
+            if not _AH_ItemPrompts[cName] then _AH_ItemPrompts[cName] = {} end
+            _AH_ItemPrompts[cName][prompt] = true
             return
         end
+        current = current.Parent
     end
 end
 
-local function IndexItemPrompts()
+local function InitItemIndexer()
     for _, desc in ipairs(Workspace:GetDescendants()) do
         if desc:IsA("ProximityPrompt") then
-            IndexSinglePrompt(desc)
+            IndexTreatmentPrompt(desc)
         end
     end
 end
 
-IndexItemPrompts()
+InitItemIndexer()
 Workspace.DescendantAdded:Connect(function(desc)
     if desc:IsA("ProximityPrompt") then
-        IndexSinglePrompt(desc)
+        IndexTreatmentPrompt(desc)
     end
 end)
 
@@ -440,48 +386,40 @@ local function GetItemPrompt(itemName, isSurgery)
 
     -- 1. Хирургия Room 8
     if isSurgery or _G.AH_SurgeryItemSet[itemName] then
-        local med = Workspace:FindFirstChild("Rooms") and Workspace.Rooms:FindFirstChild("Emergency") and Workspace.Rooms.Emergency:FindFirstChild("Room8") and Workspace.Rooms.Emergency.Room8:FindFirstChild("Minigame") and Workspace.Rooms.Emergency.Room8.Minigame:FindFirstChild("Medicine")
-        if med then
+        local ok, med = pcall(function() return Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
+        if ok and med then
             for _, d in ipairs(med:GetDescendants()) do
-                if d:IsA("ProximityPrompt") and d.Enabled then
-                    local pName = NormalizeName(d.Parent and d.Parent.Name or "")
-                    if pName == target or pName:find(target) then
-                        return d
-                    end
+                if d:IsA("ProximityPrompt") and d.Parent and NormalizeName(d.Parent.Name) == target then
+                    return d
                 end
             end
         end
     end
 
-    -- 2. Индексированные промпты полок по ассет-маппингу и именам
-    if _AH_ItemPrompts[itemName] then
-        for p in pairs(_AH_ItemPrompts[itemName]) do
-            if p.Parent and p.Enabled then
-                return p
+    local blacklisted = nil
+    pcall(function() blacklisted = Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
+
+    -- 2. Индексированные промпты
+    local promptSet = _AH_ItemPrompts[itemName]
+    if promptSet then
+        for prompt in pairs(promptSet) do
+            if prompt.Parent and prompt.Enabled and not (blacklisted and prompt:IsDescendantOf(blacklisted)) then
+                return prompt
             end
         end
     end
 
-    -- 3. Пространственный поиск около точных координат полок
-    local staticShelfPos = Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")]
-    if staticShelfPos then
-        local spatialPrompt = GetPromptNearPosition(staticShelfPos, 6.0)
-        if spatialPrompt then
-            if not _AH_ItemPrompts[itemName] then _AH_ItemPrompts[itemName] = {} end
-            _AH_ItemPrompts[itemName][spatialPrompt] = true
-            return spatialPrompt
-        end
-    end
-
-    -- 4. Общий поиск по всей карте
+    -- 3. Глубокий рекурсивный поиск по предкам
     for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") and desc.Enabled and desc.Parent then
-            local pName = NormalizeName(desc.Parent.Name)
-            local act = NormalizeName(desc.ActionText or "")
-            if pName == target or pName:find(target) or act == target or act:find(target) then
-                if not _AH_ItemPrompts[itemName] then _AH_ItemPrompts[itemName] = {} end
-                _AH_ItemPrompts[itemName][desc] = true
-                return desc
+        if desc:IsA("ProximityPrompt") and desc.Enabled and not (blacklisted and desc:IsDescendantOf(blacklisted)) then
+            local curr = desc.Parent
+            while curr and curr ~= Workspace do
+                if NormalizeName(curr.Name) == target and not _G.AH_BlacklistedItemNames[curr.Name] then
+                    if not _AH_ItemPrompts[itemName] then _AH_ItemPrompts[itemName] = {} end
+                    _AH_ItemPrompts[itemName][desc] = true
+                    return desc
+                end
+                curr = curr.Parent
             end
         end
     end
@@ -492,6 +430,7 @@ end
 local function GrabItemUntilInInventory(itemName, isSurgery)
     if GetItemCount(itemName) > 0 then return true end
 
+    -- Очистка посторонних инструментов
     for _, container in ipairs(InventoryParents()) do
         for _, tool in ipairs(container:GetChildren()) do
             if tool:IsA("Tool") and NormalizeName(tool.Name) ~= NormalizeName(itemName) then
@@ -501,32 +440,24 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
     end
 
     local prompt = GetItemPrompt(itemName, isSurgery)
-    local shelfPos = (prompt and GetPromptPosition(prompt)) or Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")]
-
-    if shelfPos then
-        if not prompt then
-            prompt = GetPromptNearPosition(shelfPos, 6.0)
+    if prompt then
+        Log("AutoTreatment", "Grabbing prescription item", { item = itemName, prompt = prompt:GetFullName() })
+        local pPos = GetPromptPosition(prompt)
+        if pPos then
+            TeleportPlayer(pPos + Vector3.new(0, 1.0, 1.5))
+            task.wait(0.15)
         end
-
-        Log("AutoTreatment", "Grabbing prescription item", { item = itemName, prompt = prompt and prompt:GetFullName() or "Spatial fallback" })
-        TeleportPlayer(shelfPos + Vector3.new(0, 1.0, 1.2))
-        task.wait(0.2)
 
         local countBefore = GetItemCount(itemName)
-        if prompt and prompt.Enabled then
-            PressPP(prompt, 0.35)
-        else
-            local fallbackPP = GetPromptNearPosition(shelfPos, 6.0)
-            if fallbackPP and fallbackPP.Enabled then
-                PressPP(fallbackPP, 0.35)
-            end
-        end
+        PressPP(prompt, 0.35)
 
         local t = os.clock()
         while os.clock() - t < 1.5 and not StopCheck() do
             if GetItemCount(itemName) > countBefore then break end
             task.wait(0.08)
         end
+    else
+        Log("AutoTreatment", "Prescription shelf prompt not found in workspace", { item = itemName })
     end
 
     return GetItemCount(itemName) > 0
@@ -1604,7 +1535,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v14.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v15.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
