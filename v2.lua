@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V10.0 PERFECT ACCURACY)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V11.0 PERFECT TREATMENT & DESK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -35,7 +35,7 @@ _G.Fullbright = _G.Fullbright ~= nil and _G.Fullbright or false
 _G.WalkSpeedValue = _G.WalkSpeedValue or 16
 _G.LoopInterval = 0.15
 
--- 📌 RUNTIME STATE & DATASETS (PERSISTENT BY NAME & INSTANCE)
+-- 📌 RUNTIME STATE & DATASETS
 _G.HasActiveThreat = false
 local _AH_TreatedPatients = {}
 local _AH_HandledCheckInPatients = {}
@@ -516,76 +516,52 @@ local function EvaluateCounterThreats()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📺 7. TV PRESCRIPTION PARSER (FOXNAME UI REPORT PARSER)
+-- 📺 7. TV PRESCRIPTION PARSER (FOXNAME EXACT UI & STATUS CHECK)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function GetRoomFolder(roomName, isEmergency)
+local function GetRoomFolder(roomData)
     local rooms = Workspace:FindFirstChild("Rooms")
     if not rooms then return nil end
-    return isEmergency and rooms:FindFirstChild("Emergency") or rooms:FindFirstChild("Medical")
+    return roomData.Emergency and rooms:FindFirstChild("Emergency") or rooms:FindFirstChild("Medical")
 end
 
-local function GetReportInventory(roomName, isEmergency)
-    local folder = GetRoomFolder(roomName, isEmergency)
-    local room = folder and folder:FindFirstChild(roomName)
+local function GetReportInventory(roomData)
+    local folder = GetRoomFolder(roomData)
+    local room = folder and folder:FindFirstChild(roomData.Name)
     local inv = room and room:FindFirstChild("Minigame") and room.Minigame:FindFirstChild("TV") and room.Minigame.TV:FindFirstChild("Screen") and room.Minigame.TV.Screen:FindFirstChild("UI") and room.Minigame.TV.Screen.UI:FindFirstChild("Report") and room.Minigame.TV.Screen.UI.Report:FindFirstChild("inv")
     return inv
 end
 
-local function GetNeededTreatmentItems(roomName, isEmergency)
+local function GetNeededTreatmentItems(roomData)
     local needed = {}
-    local inv = GetReportInventory(roomName, isEmergency)
+    local inv = GetReportInventory(roomData)
     if inv then
         for _, itemGui in ipairs(inv:GetChildren()) do
             if itemGui:IsA("GuiObject") and itemGui.Visible then
+                local isItem = _G.AH_ItemSet[itemGui.Name] or (roomData.Name == "Room8" and _G.AH_SurgeryItemSet[itemGui.Name])
                 local check = itemGui:FindFirstChild("check")
                 local isChecked = check and check.Visible == true
-                if not isChecked then
+                if isItem and not isChecked then
                     table.insert(needed, itemGui.Name)
                 end
             end
         end
     end
-
-    if #needed == 0 then
-        local folder = GetRoomFolder(roomName, isEmergency)
-        local room = folder and folder:FindFirstChild(roomName)
-        local tv = room and room:FindFirstChild("Minigame") and room.Minigame:FindFirstChild("TV")
-        if tv then
-            for _, desc in ipairs(tv:GetDescendants()) do
-                if desc:IsA("TextLabel") and desc.Visible then
-                    local text = desc.Text
-                    if text and text ~= "" then
-                        for item in string.gmatch(text, "([^,\n\r]+)") do
-                            local cleaned = string.gsub(item, "^%s*(.-)%s*$", "%1")
-                            cleaned = string.gsub(cleaned, "^[%-%*•]%s*", "")
-                            local norm = NormalizeName(cleaned)
-                            if #cleaned > 1 and not norm:find("status") and not norm:find("report") and not norm:find("patient") and not norm:find("recovering") and not norm:find("healthy") and not norm:find("stable") and not norm:find("cured") then
-                                table.insert(needed, cleaned)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
     return needed
 end
 
-local function IsRoomRecovering(roomName, isEmergency)
-    local folder = GetRoomFolder(roomName, isEmergency)
-    local room = folder and folder:FindFirstChild(roomName)
+local function IsRoomRecovering(roomData)
+    local folder = GetRoomFolder(roomData)
+    local room = folder and folder:FindFirstChild(roomData.Name)
     if not room then return false end
 
-    local tv = room:FindFirstChild("Minigame") and room.Minigame:FindFirstChild("TV")
-    if tv then
-        for _, desc in ipairs(tv:GetDescendants()) do
-            if desc:IsA("TextLabel") and desc.Visible then
-                local text = string.lower(desc.Text or "")
-                if text:find("recovering") or text:find("stable") or text:find("healthy") or text:find("discharged") or text:find("cured") then
-                    return true
-                end
-            end
+    local ok, healing, header = pcall(function()
+        local ui = room.Minigame.TV.Screen.UI
+        return ui.Healing, ui.Healing.header
+    end)
+    if ok and healing and header and healing.Visible then
+        local text = string.lower(tostring(header.Text or ""))
+        if text:find("patient") ~= nil and text:find("recover") ~= nil then
+            return true
         end
     end
     return false
@@ -612,17 +588,18 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🏥 8. COMPLETE TREATMENT ENGINE (EXACT FOXNAME REPLICA)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function GetPatientInRoom(roomName, centerPos)
+local function GetPatientInRoom(roomData)
     local npcs = Workspace:FindFirstChild("NPCs")
     if not npcs then return nil end
+
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
+        if npc:IsA("Model") and not npc:GetAttribute("IsVisitor") and (npc:GetAttribute("IsPatient") == true or npc:GetAttribute("Skinwalker") == true) then
             local desRoom = npc:GetAttribute("DesignatedRoom")
-            if desRoom == roomName then
+            if desRoom == roomData.Name then
                 return npc
             end
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root and (root.Position - centerPos).Magnitude <= 28 then
+            if root and (root.Position - roomData.Position).Magnitude <= 28 then
                 return npc
             end
         end
@@ -630,22 +607,19 @@ local function GetPatientInRoom(roomName, centerPos)
     return nil
 end
 
-local function TreatSingleRoom(roomName, isEmergency)
+local function TreatSingleRoom(roomData)
     if not _G.AutoTreatment or StopCheck() then return false end
 
-    if _AH_RoomCooldowns[roomName] and (os.clock() - _AH_RoomCooldowns[roomName] < 4.0) then
-        return false
-    end
+    if IsRoomRecovering(roomData) then return false end
 
-    local folder = GetRoomFolder(roomName, isEmergency)
-    local room = folder and folder:FindFirstChild(roomName)
-    if not room or IsRoomRecovering(roomName, isEmergency) then return false end
+    local folder = GetRoomFolder(roomData)
+    local room = folder and folder:FindFirstChild(roomData.Name)
+    if not room then return false end
 
     local minigame = room:FindFirstChild("Minigame")
     if not minigame then return false end
 
-    local bedCenter = Positions[roomName .. "_Bed"] or Positions[roomName .. "_Device"] or room:GetPivot().Position
-    local patient = GetPatientInRoom(roomName, bedCenter)
+    local patient = GetPatientInRoom(roomData)
     local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
     local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
 
@@ -657,7 +631,7 @@ local function TreatSingleRoom(roomName, isEmergency)
             if p:IsA("ProximityPrompt") and p.Enabled then
                 local act = string.lower(p.ActionText or "")
                 if act:find("sample") or act:find("dna") or act:find("take") or act:find("prepare") then
-                    Log("AutoTreatment", "Taking DNA sample", { room = roomName, prompt = p:GetFullName() })
+                    Log("AutoTreatment", "Taking DNA sample", { room = roomData.Name, prompt = p:GetFullName() })
                     PressPromptNearby(p, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
                     didAction = true
                     task.wait(0.3)
@@ -671,7 +645,7 @@ local function TreatSingleRoom(roomName, isEmergency)
     local analyzer = minigame:FindFirstChild("Analyzer")
     local analyzerPP = analyzer and (analyzer:FindFirstChild("PP") or analyzer:FindFirstChildWhichIsA("ProximityPrompt", true))
     if analyzerPP and analyzerPP.Enabled then
-        Log("AutoTreatment", "Analyzing sample in analyzer", { room = roomName, prompt = analyzerPP:GetFullName() })
+        Log("AutoTreatment", "Analyzing sample in analyzer", { room = roomData.Name, prompt = analyzerPP:GetFullName() })
         PressPromptNearby(analyzerPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
         didAction = true
         task.wait(0.3)
@@ -681,7 +655,7 @@ local function TreatSingleRoom(roomName, isEmergency)
     local xrayMonitor = minigame:FindFirstChild("xrayMonitor")
     local xrayPP = xrayMonitor and (xrayMonitor:FindFirstChild("PP") or xrayMonitor:FindFirstChildWhichIsA("ProximityPrompt", true))
     if xrayPP and xrayPP.Enabled then
-        Log("AutoTreatment", "Starting X-Ray scan", { room = roomName, prompt = xrayPP:GetFullName() })
+        Log("AutoTreatment", "Starting X-Ray scan", { room = roomData.Name, prompt = xrayPP:GetFullName() })
         PressPromptNearby(xrayPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
         didAction = true
         task.wait(0.3)
@@ -691,7 +665,7 @@ local function TreatSingleRoom(roomName, isEmergency)
     local monitor = minigame:FindFirstChild("Monitor")
     local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
     if monitorPP2 and monitorPP2.Enabled then
-        Log("AutoTreatment", "Processing monitor results", { room = roomName, prompt = monitorPP2:GetFullName() })
+        Log("AutoTreatment", "Processing monitor results", { room = roomData.Name, prompt = monitorPP2:GetFullName() })
         PressPromptNearby(monitorPP2, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
         didAction = true
         task.wait(0.3)
@@ -701,43 +675,43 @@ local function TreatSingleRoom(roomName, isEmergency)
     local xresult = minigame:FindFirstChild("xresult") or minigame:FindFirstChild("PrintedXRay")
     local xresultPP = xresult and (xresult:FindFirstChild("PP") or xresult:FindFirstChildWhichIsA("ProximityPrompt", true))
     if xresultPP and xresultPP.Enabled then
-        Log("AutoTreatment", "Taking X-Ray result", { room = roomName, prompt = xresultPP:GetFullName() })
+        Log("AutoTreatment", "Taking X-Ray result", { room = roomData.Name, prompt = xresultPP:GetFullName() })
         PressPromptNearby(xresultPP, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
         didAction = true
         task.wait(0.3)
     end
 
     -- 6. Доставка медикаментов по рецепту
-    local needed = GetNeededTreatmentItems(roomName, isEmergency)
+    local needed = GetNeededTreatmentItems(roomData)
     if #needed > 0 then
         Log("AutoTreatment", "Starting patient prescription delivery", {
-            emergency = isEmergency and "true" or "false",
+            emergency = roomData.Emergency and "true" or "false",
             neededItems = table.concat(needed, ", "),
-            npc = patient and patient:GetFullName() or (roomName .. ".Patient"),
-            room = roomName
+            npc = patient and patient:GetFullName() or (roomData.Name .. ".Patient"),
+            room = roomData.Name
         })
 
         local attempt = 0
         local appliedAny = false
 
         while _G.AutoTreatment and not StopCheck() and attempt < 12 do
-            if IsRoomRecovering(roomName, isEmergency) then
-                Log("AutoTreatment", "Patient is recovering, completed", { room = roomName })
+            if IsRoomRecovering(roomData) then
+                Log("AutoTreatment", "Patient is recovering, completed", { room = roomData.Name })
                 break
             end
 
-            needed = GetNeededTreatmentItems(roomName, isEmergency)
+            needed = GetNeededTreatmentItems(roomData)
             if #needed == 0 then
                 task.wait(0.3)
-                needed = GetNeededTreatmentItems(roomName, isEmergency)
-                if #needed == 0 or IsRoomRecovering(roomName, isEmergency) then break end
+                needed = GetNeededTreatmentItems(roomData)
+                if #needed == 0 or IsRoomRecovering(roomData) then break end
             end
 
             attempt = attempt + 1
             local currentItem = needed[1]
 
             if _G.AutoKillAnomaly and patient and patient:GetAttribute("Skinwalker") == true then
-                local allItems = isEmergency and _G.AH_SurgeryItemList or _G.AH_ItemList
+                local allItems = roomData.Emergency and _G.AH_SurgeryItemList or _G.AH_ItemList
                 for _, wrong in ipairs(allItems) do
                     local isWanted = false
                     for _, req in ipairs(needed) do if req == wrong then isWanted = true break end end
@@ -746,13 +720,13 @@ local function TreatSingleRoom(roomName, isEmergency)
             end
 
             if GetItemCount(currentItem) == 0 then
-                GrabItemUntilInInventory(currentItem, isEmergency)
+                GrabItemUntilInInventory(currentItem, roomData.Emergency)
             end
 
             if GetItemCount(currentItem) > 0 then
                 UseInventoryTool(currentItem)
                 local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or bedPP
-                local treatPos = (treatPP and GetPromptPartPosition(treatPP)) or bedCenter
+                local treatPos = (treatPP and GetPromptPartPosition(treatPP)) or roomData.Position
 
                 TeleportPlayer(treatPos + Vector3.new(0, 1.0, 1.0))
                 task.wait(0.15)
@@ -765,14 +739,14 @@ local function TreatSingleRoom(roomName, isEmergency)
 
                     local waitTimeout = os.clock() + 3.0
                     while os.clock() < waitTimeout and not StopCheck() do
-                        if IsRoomRecovering(roomName, isEmergency) then break end
-                        local curNeeded = GetNeededTreatmentItems(roomName, isEmergency)
+                        if IsRoomRecovering(roomData) then break end
+                        local curNeeded = GetNeededTreatmentItems(roomData)
                         local stillInReport = false
                         for _, it in ipairs(curNeeded) do
                             if it == currentItem then stillInReport = true break end
                         end
                         if not stillInReport then
-                            Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = roomName })
+                            Log("AutoTreatment", "Item successfully applied and checked off TV", { item = currentItem, room = roomData.Name })
                             break
                         end
                         task.wait(0.2)
@@ -789,18 +763,12 @@ local function TreatSingleRoom(roomName, isEmergency)
             end
         end
 
-        if appliedAny or IsRoomRecovering(roomName, isEmergency) then
+        if appliedAny or IsRoomRecovering(roomData) then
             if patient then MarkPatientTreated(patient) end
-            Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or (roomName .. ".Patient"), room = roomName })
-        else
-            _AH_RoomCooldowns[roomName] = os.clock()
+            Log("AutoTreatment", "Finished patient treatment", { npc = patient and patient:GetFullName() or (roomData.Name .. ".Patient"), room = roomData.Name })
         end
 
         return true
-    end
-
-    if not didAction then
-        _AH_RoomCooldowns[roomName] = os.clock()
     end
 
     return didAction
@@ -810,14 +778,15 @@ local function ExecuteTreatmentCycle()
     if not _G.AutoTreatment or _G.HasActiveThreat or StopCheck() then return false end
 
     -- Приоритет реанимаций (Палаты 8, 7, 6)
-    for _, r in ipairs({"Room8", "Room7", "Room6"}) do
-        if TreatSingleRoom(r, true) then return true end
+    for _, idx in ipairs({8, 7, 6}) do
+        local roomData = _G.AH_RoomData[idx]
+        if TreatSingleRoom(roomData) then return true end
     end
 
     -- Терапевтические палаты (Палаты 1 - 5)
-    for i = 1, 5 do
-        local r = "Room" .. tostring(i)
-        if TreatSingleRoom(r, false) then return true end
+    for idx = 1, 5 do
+        local roomData = _G.AH_RoomData[idx]
+        if TreatSingleRoom(roomData) then return true end
     end
 
     return false
@@ -1057,7 +1026,6 @@ local function ExecuteCheckInCycle()
         return true
     end
 
-    -- Если ни одного промпта не было доступно на стойке, НЕ телепортируемся к пациенту
     return didAnyWork
 end
 
@@ -1305,8 +1273,9 @@ local function FindEmptyBedPrompt()
     local medical = rooms:FindFirstChild("Medical")
     if medical then
         for i = 1, 5 do
+            local rData = _G.AH_RoomData[i]
             local r = medical:FindFirstChild("Room" .. tostring(i))
-            if r and not IsRoomRecovering("Room" .. tostring(i), false) then
+            if r and not IsRoomRecovering(rData) then
                 local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
                 local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
                 if bedPP and bedPP.Enabled then
@@ -1318,13 +1287,14 @@ local function FindEmptyBedPrompt()
 
     local emergency = rooms:FindFirstChild("Emergency")
     if emergency then
-        for _, rName in ipairs({"Room6", "Room7", "Room8"}) do
-            local r = emergency:FindFirstChild(rName)
-            if r and not IsRoomRecovering(rName, true) then
+        for _, idx in ipairs({6, 7, 8}) do
+            local rData = _G.AH_RoomData[idx]
+            local r = emergency:FindFirstChild(rData.Name)
+            if r and not IsRoomRecovering(rData) then
                 local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
                 local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
                 if bedPP and bedPP.Enabled then
-                    return bedPP, GetPromptPartPosition(bedPP) or Positions[rName .. "_Bed"]
+                    return bedPP, GetPromptPartPosition(bedPP) or Positions[rData.Name .. "_Bed"]
                 end
             end
         end
@@ -1529,7 +1499,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v10.0 [P: Мышь | G: Скрыть]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v11.0 [P: Мышь | G: Скрыть]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
