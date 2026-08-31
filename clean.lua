@@ -2,6 +2,20 @@
 -- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE MASTER SUITE (V3.0 HYPER-REACTIVE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
+-- 🛑 SINGLE-INSTANCE EXECUTION GUARD (PREVENTS MULTI-SCRIPT INJECTION CONFLICTS)
+if _G.AH_CleanupPrevious then
+    pcall(_G.AH_CleanupPrevious)
+    task.wait(0.3)
+end
+
+local CurrentSessionId = tick()
+_G.AH_CurrentSession = CurrentSessionId
+_G.AH_CleanupPrevious = function()
+    _G.AH_CurrentSession = nil
+    _G.AH_MasterRunning = false
+end
+_G.AH_MasterRunning = true
+
 -- ⚙️ GLOBAL TOGGLES & SETTINGS
 _G.AutoCheckIn = _G.AutoCheckIn ~= nil and _G.AutoCheckIn or true
 _G.AutoAnomalyShutter = _G.AutoAnomalyShutter ~= nil and _G.AutoAnomalyShutter or true
@@ -223,6 +237,7 @@ local function PressPromptNearbyUntil(prompt, interval, timeout, condition)
 end
 
 local function StopCheck()
+    if _G.AH_CurrentSession ~= CurrentSessionId then return true end
     return not _G.AutoTreatment and not _G.AutoCheckIn
 end
 
@@ -903,7 +918,7 @@ local function TreatRoom6Emergency()
     return false
 end
 
--- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & CACHE PROTECTION)
+-- 🏥 ПАЛАТЫ 1 - 5 (DIRECT MEDICAL DIAGNOSIS & MULTI-ITEM SAFE DELIVERY)
 local function TreatMedicalRooms()
     local rooms = Workspace:FindFirstChild("Rooms")
     local medical = rooms and rooms:FindFirstChild("Medical")
@@ -956,7 +971,7 @@ local function TreatMedicalRooms()
                         end
                     end
 
-                    -- Взятие ДНК
+                    -- 1. Взятие ДНК
                     if dnaPP and dnaPP.Enabled then
                         _G.AH_IsTreating = true
                         Log("AutoTreatment", "Taking DNA sample", { prompt = dnaPP:GetFullName(), room = roomName })
@@ -966,7 +981,7 @@ local function TreatMedicalRooms()
                         task.wait(0.6)
                     end
 
-                    -- Анализатор (Analyzer)
+                    -- 2. Анализатор (Analyzer)
                     local analyzerPP = analyzer and (analyzer:FindFirstChild("PP") or analyzer:FindFirstChildWhichIsA("ProximityPrompt", true))
                     if analyzerPP and analyzerPP.Enabled then
                         Log("AutoTreatment", "Analyzing sample in analyzer", { prompt = analyzerPP:GetFullName(), room = roomName })
@@ -974,7 +989,7 @@ local function TreatMedicalRooms()
                         task.wait(1.5)
                     end
 
-                    -- Монитор (Monitor PP2)
+                    -- 3. Монитор (Monitor PP2)
                     local monitorPP2 = monitor and (monitor:FindFirstChild("PP2") or monitor:FindFirstChildWhichIsA("ProximityPrompt", true))
                     if monitorPP2 then
                         monitorPP2.Enabled = true
@@ -989,7 +1004,7 @@ local function TreatMedicalRooms()
                     needed = ResolveNeededTreatmentItems(roomName)
                 end
 
-                -- Доставка лекарств по рецепту ТВ (например, Herbs)
+                -- Доставка лекарств по рецепту ТВ (с полной поддержкой всех предметов в рецепте)
                 if #needed > 0 and patient and not IsPatientAlreadyTreated(patient) then
                     _G.AH_IsTreating = true
                     Log("AutoTreatment", "Starting patient treatment", {
@@ -1000,14 +1015,23 @@ local function TreatMedicalRooms()
                     })
 
                     local attempt = 0
-                    while _G.AutoTreatment and not StopCheck() do
+                    local appliedAny = false
+
+                    while _G.AutoTreatment and not StopCheck() and attempt < 15 do
                         if IsRoomRecovering(room) then
                             Log("AutoTreatment", "Patient is recovering, stopping treatment", { room = roomName })
                             break
                         end
 
                         needed = ResolveNeededTreatmentItems(roomName)
-                        if #needed == 0 then break end
+                        if #needed == 0 then
+                            -- Проверяем дважды с небольшой задержкой, чтобы исключить мерцание UI
+                            task.wait(0.5)
+                            needed = ResolveNeededTreatmentItems(roomName)
+                            if #needed == 0 or IsRoomRecovering(room) then
+                                break
+                            end
+                        end
 
                         attempt = attempt + 1
                         local currentItem = needed[1]
@@ -1028,7 +1052,6 @@ local function TreatMedicalRooms()
                         })
 
                         if GetItemCount(currentItem) == 0 then
-                            Log("Inventory", "Tool not found in inventory", { item = currentItem })
                             GrabItemUntilInInventory(currentItem, roomName)
                         end
 
@@ -1048,6 +1071,7 @@ local function TreatMedicalRooms()
                                 FirePrompt(treatPP)
                                 task.wait(0.4)
                                 UnequipAllTools()
+                                appliedAny = true
 
                                 local waitTimeout = os.clock() + 4.0
                                 while os.clock() < waitTimeout and not StopCheck() do
@@ -1075,9 +1099,11 @@ local function TreatMedicalRooms()
                         end
                     end
 
-                    if patient then MarkPatientTreated(patient) end
+                    if appliedAny or IsRoomRecovering(room) then
+                        if patient then MarkPatientTreated(patient) end
+                        Log("AutoTreatment", "Finished patient treatment", { npc = patient:GetFullName(), room = roomName })
+                    end
                     _G.AH_IsTreating = false
-                    Log("AutoTreatment", "Finished patient treatment", { npc = patient:GetFullName(), room = roomName })
                     return true
                 end
             end
