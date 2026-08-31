@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V20.0 ATOMIC TASK LOCK ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V21.0 DESIGNATED BED ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -676,25 +676,59 @@ local function MarkPatientTreated(npc)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 8. COMPLETE TREATMENT ENGINE (ATOMIC FULL ROOM COMPLETION)
+-- 🛏️ 8. DESIGNATED BED RESOLVER & PATIENT PLACEMENT
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function GetPatientInRoom(roomData)
-    local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return nil end
+local function GetBedPromptForPatient(patient)
+    if not patient then return nil, nil end
 
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and not npc:GetAttribute("IsVisitor") and (npc:GetAttribute("IsPatient") == true or npc:GetAttribute("Skinwalker") == true) then
-            local desRoom = npc:GetAttribute("DesignatedRoom")
-            if desRoom == roomData.Name then
-                return npc
+    local desRoom = patient:GetAttribute("DesignatedRoom")
+    local rooms = Workspace:FindFirstChild("Rooms")
+    if not rooms then return nil, nil end
+
+    -- 1. Точная доставка в назначенную палату (DesignatedRoom)
+    if desRoom and typeof(desRoom) == "string" and desRoom ~= "" then
+        local rFolder = rooms:FindFirstChild("Medical") and rooms.Medical:FindFirstChild(desRoom)
+        if not rFolder and rooms:FindFirstChild("Emergency") then
+            rFolder = rooms.Emergency:FindFirstChild(desRoom)
+        end
+        if rFolder then
+            local mg = rFolder:FindFirstChild("Minigame")
+            local bed = mg and mg:FindFirstChild("Bed")
+            local inBed = bed and bed:FindFirstChild("InBed")
+            if inBed then
+                local pp2 = inBed:FindFirstChild("PP2") or inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if pp2 and pp2.Enabled then
+                    return pp2, GetPromptPosition(pp2) or (bed:FindFirstChildWhichIsA("BasePart") and bed:FindFirstChildWhichIsA("BasePart").Position)
+                end
             end
-            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root and (root.Position - roomData.Position).Magnitude <= 28 then
-                return npc
+            if bed then
+                local pp = bed:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if pp and pp.Enabled then
+                    return pp, GetPromptPosition(pp)
+                end
             end
         end
     end
-    return nil
+
+    -- 2. Поиск свободной койки (приоритет PP2)
+    for _, cat in ipairs({"Medical", "Emergency"}) do
+        local catFolder = rooms:FindFirstChild(cat)
+        if catFolder then
+            for _, r in ipairs(catFolder:GetChildren()) do
+                local mg = r:FindFirstChild("Minigame")
+                local bed = mg and mg:FindFirstChild("Bed")
+                local inBed = bed and bed:FindFirstChild("InBed")
+                if inBed then
+                    local pp2 = inBed:FindFirstChild("PP2") or inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if pp2 and pp2.Enabled then
+                        return pp2, GetPromptPosition(pp2)
+                    end
+                end
+            end
+        end
+    end
+
+    return nil, nil
 end
 
 local function GetRoomBedPrompt(roomData, minigame, patient)
@@ -720,6 +754,28 @@ local function GetRoomBedPrompt(roomData, minigame, patient)
     return nil
 end
 
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 🏥 9. COMPLETE TREATMENT ENGINE (ATOMIC FULL ROOM COMPLETION)
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function GetPatientInRoom(roomData)
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return nil end
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") and not npc:GetAttribute("IsVisitor") and (npc:GetAttribute("IsPatient") == true or npc:GetAttribute("Skinwalker") == true) then
+            local desRoom = npc:GetAttribute("DesignatedRoom")
+            if desRoom == roomData.Name then
+                return npc
+            end
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+            if root and (root.Position - roomData.Position).Magnitude <= 28 then
+                return npc
+            end
+        end
+    end
+    return nil
+end
+
 local function TreatSingleRoom(roomData)
     if not _G.AutoTreatment or StopCheck() then return false end
 
@@ -734,6 +790,19 @@ local function TreatSingleRoom(roomData)
 
     local patient = GetPatientInRoom(roomData)
     local didAction = false
+
+    -- 0. Если пациент возле палаты, но не на койке -> нажимаем PP2 (Place Patient in Bed)
+    if patient and roomData.Name ~= "Room6" and patient:GetAttribute("InBed") ~= true then
+        local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+        local placePP = inBed and inBed:FindFirstChild("PP2")
+        if placePP and placePP.Enabled then
+            Log("AutoTreatment", "Placing patient in room bed PP2", { room = roomData.Name, prompt = placePP:GetFullName() })
+            PressTreatmentPromptNearbyUntil(placePP, 0.2, 2.5, function()
+                return not placePP.Parent or not placePP.Enabled or (patient and patient:GetAttribute("InBed") == true)
+            end)
+            task.wait(0.2)
+        end
+    end
 
     -- 1. DNA Sample Prompt (на пациенте)
     if patient then
@@ -890,7 +959,7 @@ local function TreatSingleRoom(roomData)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 9. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
+-- 🏢 10. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -1106,7 +1175,7 @@ local function ExecuteCheckInCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚪 10. AUTO ASK LEAVE ANOMALY
+-- 🚪 11. AUTO ASK LEAVE ANOMALY
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoAskLeaveAnomaly()
     if not _G.AutoAskLeaveAnomaly or StopCheck() then return false end
@@ -1133,7 +1202,7 @@ local function AutoAskLeaveAnomaly()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧯 11. AUTO PUT OUT FIRE (PATIENTS & ROOMS)
+-- 🧯 12. AUTO PUT OUT FIRE (PATIENTS & ROOMS)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function EquipExtinguisher()
     if GetItemCount("Extinguisher") > 0 then
@@ -1196,7 +1265,7 @@ local function AutoPutOutFire()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📹 12. AUTO FIX SECURITY CAMERAS
+-- 📹 13. AUTO FIX SECURITY CAMERAS
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoFixCam()
     if not _G.AutoFixCam or StopCheck() then return false end
@@ -1218,7 +1287,7 @@ local function AutoFixCam()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ⚡ 13. AUTO TASER ANOMALIES
+-- ⚡ 14. AUTO TASER ANOMALIES
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function EquipTaser()
     if GetItemCount("Taser") > 0 then
@@ -1261,7 +1330,7 @@ local function AutoTaserAnomalies()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ☕ 14. AUTO BARNEY COFFEE
+-- ☕ 15. AUTO BARNEY COFFEE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function ProcessBarneyCoffee()
     if not _G.AutoGiveBarneyCoffee or StopCheck() then return end
@@ -1308,7 +1377,7 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧼 15. AUTO CLEAN SLIME
+-- 🧼 16. AUTO CLEAN SLIME
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function CleanSlimePuddles()
     if not _G.AutoCleanSlime or StopCheck() then return end
@@ -1329,7 +1398,7 @@ local function CleanSlimePuddles()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛒 16. AUTO BUY SHOP
+-- 🛒 17. AUTO BUY SHOP
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoBuyShopItems()
     if not _G.AutoBuyShop or StopCheck() then return end
@@ -1346,75 +1415,52 @@ local function AutoBuyShopItems()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚑 17. AUTO HELP FAINTED PATIENTS (PICKUP & BED DELIVERY)
+-- 🚑 18. AUTO HELP FAINTED PATIENTS (PICKUP & DESIGNATED BED PLACEMENT)
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function FindEmptyBedPrompt()
-    local rooms = Workspace:FindFirstChild("Rooms")
-    if not rooms then return nil, nil end
-
-    local medical = rooms:FindFirstChild("Medical")
-    if medical then
-        for i = 1, 5 do
-            local rData = _G.AH_RoomData[i]
-            local r = medical:FindFirstChild("Room" .. tostring(i))
-            if r and not IsRoomRecovering(rData) then
-                local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
-                local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
-                if bedPP and bedPP.Enabled then
-                    return bedPP, GetPromptPosition(bedPP) or Positions["Room" .. tostring(i) .. "_Bed"]
-                end
-            end
-        end
-    end
-
-    local emergency = rooms:FindFirstChild("Emergency")
-    if emergency then
-        for _, idx in ipairs({6, 7, 8}) do
-            local rData = _G.AH_RoomData[idx]
-            local r = emergency:FindFirstChild(rData.Name)
-            if r and not IsRoomRecovering(rData) then
-                local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
-                local bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
-                if bedPP and bedPP.Enabled then
-                    return bedPP, GetPromptPosition(bedPP) or Positions[rData.Name .. "_Bed"]
-                end
-            end
-        end
-    end
-
-    return nil, nil
-end
-
 local function AutoHelpFaintedPatients()
-    if not _G.AutoHelpPatient or StopCheck() then return end
+    if not _G.AutoHelpPatient or StopCheck() then return false end
 
     local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return end
+    if not npcs then return false end
 
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and IsValidPatient(npc) then
+            local helpPP = nil
             for _, p in ipairs(npc:GetDescendants()) do
                 if p:IsA("ProximityPrompt") and p.Enabled then
-                    local act = string.lower(p.ActionText or "")
-                    if act:find("help") or act:find("carry") or act:find("revive") or act:find("faint") then
-                        Log("AutoHelpPatient", "Helping fainted patient", { npc = npc:GetFullName() })
-                        PressPromptNearby(p, 0.2, Vector3.new(0, 1.0, 1.5), 0.15)
-
-                        local bedPP, bedPos = FindEmptyBedPrompt()
-                        if bedPP and bedPos then
-                            Log("AutoHelpPatient", "Delivering patient to empty bed", { bed = bedPP:GetFullName() })
-                            PressPromptNearby(bedPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-                        end
-                        return
+                    local act = string.lower(tostring(p.ActionText or ""))
+                    if act:find("carry") or act:find("help") or act:find("revive") or act:find("faint") or p.Name == "FaintedPP" then
+                        helpPP = p
+                        break
                     end
                 end
             end
+
+            if helpPP and helpPP.Enabled then
+                Log("AutoHelpPatient", "Helping/carrying fainted patient", { npc = npc:GetFullName(), prompt = helpPP:GetFullName() })
+                PressPromptNearby(helpPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
+                task.wait(0.2)
+
+                local bedPP, bedPos = GetBedPromptForPatient(npc)
+                if bedPP and bedPos then
+                    Log("AutoHelpPatient", "Placing patient in designated bed", {
+                        npc = npc:GetFullName(),
+                        designatedRoom = tostring(npc:GetAttribute("DesignatedRoom")),
+                        bed = bedPP:GetFullName()
+                    })
+                    PressTreatmentPromptNearbyUntil(bedPP, 0.2, 2.5, function()
+                        return npc:GetAttribute("InBed") == true or not bedPP.Parent or not bedPP.Enabled
+                    end)
+                end
+                return true
+            end
         end
     end
+    return false
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🌐 18. THIRD PERSON & SERVER UTILITIES
+-- 🌐 19. THIRD PERSON & SERVER UTILITIES
 -- ══════════════════════════════════════════════════════════════════════════════════
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -1528,7 +1574,7 @@ local function ToggleFullbright(enabled)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 19. NATIVE OBSIDIAN LUXURY GUI ENGINE & KEYBINDS (P: MOUSE, G: TOGGLE GUI)
+-- 🎨 20. NATIVE OBSIDIAN LUXURY GUI ENGINE & KEYBINDS (P: MOUSE, G: TOGGLE GUI)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local GuiParent = nil
 pcall(function() GuiParent = gethui and gethui() end)
@@ -1581,7 +1627,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v20.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v21.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -1930,7 +1976,7 @@ TabButtons["Автоматизация"].TextColor3 = Color3.fromRGB(255, 255, 2
 TabFrames["Автоматизация"].Visible = true
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (ATOMIC TASK MUTEX LOCK)
+-- 🔄 21. AUTONOMOUS PRIORITY SCHEDULER (ATOMIC TASK MUTEX LOCK)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function RunTaskExclusively(taskName, taskFunc)
     if _AH_IsPerformingTask or StopCheck() then return false end
@@ -2009,7 +2055,7 @@ task.spawn(function()
             RunTaskExclusively("AutoCheckIn", ExecuteCheckInCycle)
         end
 
-        -- 8. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ
+        -- 8. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ (Точная доставка на койку назначенной палаты)
         if _G.AutoHelpPatient and not _AH_IsPerformingTask then
             RunTaskExclusively("AutoHelpPatient", AutoHelpFaintedPatients)
         end
