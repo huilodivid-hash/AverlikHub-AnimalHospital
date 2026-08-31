@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V9.0 REFINED ACCURACY)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V10.0 PERFECT ACCURACY)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -35,10 +35,10 @@ _G.Fullbright = _G.Fullbright ~= nil and _G.Fullbright or false
 _G.WalkSpeedValue = _G.WalkSpeedValue or 16
 _G.LoopInterval = 0.15
 
--- 📌 RUNTIME STATE & DATASETS
+-- 📌 RUNTIME STATE & DATASETS (PERSISTENT BY NAME & INSTANCE)
 _G.HasActiveThreat = false
-_G.AH_TreatedPatients = setmetatable({}, { __mode = "k" })
-local _AH_HandledCheckInPatients = setmetatable({}, { __mode = "k" })
+local _AH_TreatedPatients = {}
+local _AH_HandledCheckInPatients = {}
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
 local _AH_RoomCooldowns = {}
 
@@ -139,6 +139,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
@@ -193,7 +194,7 @@ local function GetPromptPartPosition(prompt)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ⚡ 3. FOXNAME CALIBRATED PROXIMITY PROMPT ENGINE
+-- ⚡ 3. PROXIMITY PROMPT ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function FirePrompt(prompt, minHold)
     if not prompt or not prompt.Parent or not prompt.Enabled or StopCheck() then return false end
@@ -599,13 +600,13 @@ end
 
 local function IsPatientAlreadyTreated(npc)
     if not npc then return true end
-    local last = _G.AH_TreatedPatients[npc]
+    local last = _AH_TreatedPatients[npc.Name]
     if last and (os.clock() - last < 25.0) then return true end
     return false
 end
 
 local function MarkPatientTreated(npc)
-    if npc then _G.AH_TreatedPatients[npc] = os.clock() end
+    if npc then _AH_TreatedPatients[npc.Name] = os.clock() end
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -839,16 +840,14 @@ end
 
 local function IsRecentlyHandledCheckInPatient(npc)
     if not npc then return true end
-    if npc:GetAttribute("FoxnameCheckInPromptHandled") == true then return true end
-    local last = _AH_HandledCheckInPatients[npc]
-    if last and (os.clock() - last < 12.0) then return true end
+    local last = _AH_HandledCheckInPatients[npc.Name]
+    if last and (os.clock() - last < 20.0) then return true end
     return false
 end
 
 local function MarkCheckInPatientHandled(npc)
     if npc then
-        npc:SetAttribute("FoxnameCheckInPromptHandled", true)
-        _AH_HandledCheckInPatients[npc] = os.clock()
+        _AH_HandledCheckInPatients[npc.Name] = os.clock()
     end
 end
 
@@ -924,6 +923,8 @@ end
 
 local function DeliverBadgeToPatient(patient)
     if not patient then return false end
+    if not HasBadgeInInventory() then return false end
+
     EquipBadgeIfInInventory()
 
     local pPos = (patient:FindFirstChild("HumanoidRootPart") and patient.HumanoidRootPart.Position) or patient:GetPivot().Position
@@ -974,8 +975,10 @@ local function ExecuteCheckInCycle()
         if bPP and bPP.Enabled then
             Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
             PressPromptNearby(bPP, 0.2, Vector3.new(0, 1.0, 1.5), 0.15)
-            DeliverBadgeToPatient(patient)
-            return true
+            if HasBadgeInInventory() then
+                DeliverBadgeToPatient(patient)
+                return true
+            end
         end
     end
 
@@ -1473,7 +1476,7 @@ local function ToggleFullbright(enabled)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 19. NATIVE OBSIDIAN LUXURY GUI ENGINE (100% RELIABLE & NO EXTERNAL HTTP)
+-- 🎨 19. NATIVE OBSIDIAN LUXURY GUI ENGINE & KEYBINDS (P: MOUSE, G: TOGGLE GUI)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local GuiParent = nil
 pcall(function() GuiParent = gethui and gethui() end)
@@ -1526,10 +1529,10 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v9.0"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v10.0 [P: Мышь | G: Скрыть]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 14
+Title.TextSize = 13
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Header
 
@@ -1557,6 +1560,38 @@ UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- ⌨️ KEYBINDS ENGINE (P: UNLOCK MOUSE, G: TOGGLE GUI)
+local _MouseUnlocked = false
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    -- Клавиша P: Разблокировка курсора мыши
+    if input.KeyCode == Enum.KeyCode.P then
+        _MouseUnlocked = not _MouseUnlocked
+        if _MouseUnlocked then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            UserInputService.MouseIconEnabled = true
+            Log("Keybind", "Mouse cursor unlocked (Default mode)")
+        else
+            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+            Log("Keybind", "Mouse cursor locked (LockCenter mode)")
+        end
+    end
+
+    -- Клавиша G: Открыть / Закрыть меню
+    if input.KeyCode == Enum.KeyCode.G then
+        MainFrame.Visible = not MainFrame.Visible
+        Log("Keybind", "Toggled GUI visibility: " .. tostring(MainFrame.Visible))
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if _MouseUnlocked and UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     end
 end)
 
