@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V25.0 UNIVERSAL PHARMACY & MONITOR THROTTLE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V26.0 PERFECT SHUTTER ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -695,7 +695,7 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛡️ 7. PURE FOXNAME THREAT DETECTION & SHUTTER ENGINE
+-- 🛡️ 7. PURE ACCURATE SHUTTER ENGINE (ZERO FALSE CLOSURES)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetShutterPP()
     local misc = Workspace:FindFirstChild("Misc")
@@ -734,6 +734,7 @@ end
 
 local function IsNpcThreat(npc)
     if not npc or not npc:IsA("Model") then return false end
+    -- Истинные угрозы: строго Skinwalker == true или монстр Barney при включенных чекбоксах
     if _G.AutoBarneyShutter and IsBarneyNpc(npc) then return true end
     if _G.AutoAnomalyShutter and npc:GetAttribute("Skinwalker") == true then return true end
     return false
@@ -757,35 +758,30 @@ local function IsThreatLeaving(npc)
     return false
 end
 
-local function HasNormalPatientAtCheckIn()
+local function GetClosestCounterNpc()
     local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return false end
+    if not npcs then return nil, false end
 
     local center = Positions.CheckInCounter
+    local closestNpc = nil
+    local closestDist = 28.0
+    local isThreat = false
+
     for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsValidPatient(npc) and not IsNpcThreat(npc) then
+        if npc:IsA("Model") and IsValidPatient(npc) then
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root and (root.Position - center).Magnitude <= 28 then
-                return true
+            if root then
+                local dist = (root.Position - center).Magnitude
+                if dist < closestDist then
+                    closestNpc = npc
+                    closestDist = dist
+                    isThreat = IsNpcThreat(npc)
+                end
             end
         end
     end
-    return false
-end
 
-local function HasThreatNearCheckIn()
-    local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return false end
-
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsNpcThreat(npc) and not IsThreatLeaving(npc) then
-            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-            if root and (root.Position - Positions.CheckInCounter).Magnitude <= 32 then
-                return true
-            end
-        end
-    end
-    return false
+    return closestNpc, isThreat
 end
 
 local function EvaluateShutterLogic()
@@ -796,20 +792,41 @@ local function EvaluateShutterLogic()
         return
     end
 
-    local threatNear = HasThreatNearCheckIn()
+    local closestNpc, isThreat = GetClosestCounterNpc()
 
-    if threatNear then
-        _G.HasActiveThreat = true
-        if IsShutterClosed() == false then
-            Log("AutoShutter", "Closed shutter for active threat at check-in")
-            SetShutterClosed(true)
-        end
-    else
+    -- 1. Если у стойки обычный нормальный пациент -> ШТОРКА ВСЕГДА ДОЛЖНА БЫТЬ ОТКРЫТА!
+    if closestNpc and not isThreat then
         _G.HasActiveThreat = false
         if IsShutterClosed() == true then
-            Log("AutoShutter", "Opening shutter: no active threats at counter")
+            Log("AutoShutter", "Opening shutter for normal patient at counter", { npc = closestNpc.Name })
             SetShutterClosed(false)
         end
+        return
+    end
+
+    -- 2. Если у стойки реальная угроза (Skinwalker == true)
+    if closestNpc and isThreat then
+        if IsThreatLeaving(closestNpc) then
+            _G.HasActiveThreat = false
+            if IsShutterClosed() == true then
+                Log("AutoShutter", "Opening shutter for departing threat", { npc = closestNpc.Name })
+                SetShutterClosed(false)
+            end
+        else
+            _G.HasActiveThreat = true
+            if IsShutterClosed() == false then
+                Log("AutoShutter", "Closed shutter for active threat at counter", { npc = closestNpc.Name })
+                SetShutterClosed(true)
+            end
+        end
+        return
+    end
+
+    -- 3. Если у стойки никого нет -> открываем шторку!
+    _G.HasActiveThreat = false
+    if IsShutterClosed() == true then
+        Log("AutoShutter", "Opening shutter: counter area is clear")
+        SetShutterClosed(false)
     end
 end
 
@@ -1817,7 +1834,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v25.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v26.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
