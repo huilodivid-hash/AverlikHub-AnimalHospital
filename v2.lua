@@ -1437,7 +1437,117 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 16. RAYFIELD OBSIDIAN USER INTERFACE (SAFE-LOADED)
+-- 🌐 15. SERVER UTILITIES (SERVER HOP, REJOIN, ANTI-AFK, FULLBRIGHT, SPEED)
+-- ══════════════════════════════════════════════════════════════════════════════════
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
+
+local function RejoinServer()
+    Log("Teleport", "Rejoining current server...")
+    if #Players:GetPlayers() <= 1 then
+        LocalPlayer:Kick("\n[Averlik Hub] Перезаходим на сервер...")
+        task.wait(0.2)
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    else
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end
+end
+
+local function ServerHop()
+    Log("Teleport", "Searching for a new public server...")
+    local placeId = game.PlaceId
+    local servers = {}
+    local req = request or http_request or (syn and syn.request) or (http and http.request)
+    if req then
+        local url = string.format("https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100", tostring(placeId))
+        local s, response = pcall(function() return req({ Url = url, Method = "GET" }) end)
+        if s and response and response.Body then
+            local body = HttpService:JSONDecode(response.Body)
+            if body and body.data then
+                for _, server in ipairs(body.data) do
+                    if type(server) == "table" and server.maxPlayers > server.playing and server.id ~= game.JobId then
+                        table.insert(servers, server.id)
+                    end
+                end
+            end
+        end
+    end
+
+    if #servers > 0 then
+        local target = servers[math.random(1, #servers)]
+        Log("Teleport", "Teleporting to server", { target = target })
+        TeleportService:TeleportToPlaceInstance(placeId, target, LocalPlayer)
+    else
+        Log("Teleport", "Fallback normal teleport...")
+        TeleportService:Teleport(placeId, LocalPlayer)
+    end
+end
+
+local function ServerHopLowPlayer()
+    Log("Teleport", "Searching for a low player server...")
+    local placeId = game.PlaceId
+    local servers = {}
+    local req = request or http_request or (syn and syn.request) or (http and http.request)
+    if req then
+        local url = string.format("https://games.roblox.com/v1/games/%s/servers/Public?sortOrder=Asc&limit=100", tostring(placeId))
+        local s, response = pcall(function() return req({ Url = url, Method = "GET" }) end)
+        if s and response and response.Body then
+            local body = HttpService:JSONDecode(response.Body)
+            if body and body.data then
+                for _, server in ipairs(body.data) do
+                    if type(server) == "table" and server.maxPlayers > server.playing and server.id ~= game.JobId and server.playing >= 1 then
+                        table.insert(servers, server)
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(servers, function(a, b) return a.playing < b.playing end)
+
+    if #servers > 0 then
+        Log("Teleport", "Teleporting to lowest player server", { players = servers[1].playing, target = servers[1].id })
+        TeleportService:TeleportToPlaceInstance(placeId, servers[1].id, LocalPlayer)
+    else
+        TeleportService:Teleport(placeId, LocalPlayer)
+    end
+end
+
+-- Anti-AFK
+LocalPlayer.Idled:Connect(function()
+    if _G.AntiAFK ~= false then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end
+end)
+
+-- Fullbright
+local OriginalBrightness = Lighting.Brightness
+local OriginalClockTime = Lighting.ClockTime
+local OriginalFogEnd = Lighting.FogEnd
+local OriginalGlobalShadows = Lighting.GlobalShadows
+local OriginalAmbient = Lighting.Ambient
+
+local function ToggleFullbright(value)
+    if value then
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    else
+        Lighting.Brightness = OriginalBrightness
+        Lighting.ClockTime = OriginalClockTime
+        Lighting.FogEnd = OriginalFogEnd
+        Lighting.GlobalShadows = OriginalGlobalShadows
+        Lighting.Ambient = OriginalAmbient
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 🎨 17. RAYFIELD OBSIDIAN USER INTERFACE (SAFE-LOADED)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local Rayfield = nil
 pcall(function()
@@ -1465,6 +1575,7 @@ if Rayfield then
     local MainTab = Window:CreateTab("🏥 Автоматизация", 4483362458)
     local ThreatTab = Window:CreateTab("🛡️ Защита", 4483362458)
     local TeleportTab = Window:CreateTab("📍 Телепорт", 4483362458)
+    local MiscTab = Window:CreateTab("⚙️ Разное / Утилиты", 4483362458)
 
     MainTab:CreateToggle({
         Name = "Авто-Лечение (Палаты 1-8)",
@@ -1515,6 +1626,7 @@ if Rayfield then
         Callback = function(Value) _G.AutoAskLeaveAnomaly = Value end,
     })
 
+    -- Телепорты
     for roomName, pos in pairs({
         ["Регистрация"] = Positions.CheckInPC,
         ["Барни"] = Positions.Barney,
@@ -1533,4 +1645,60 @@ if Rayfield then
             Callback = function() TeleportPlayer(pos) end,
         })
     end
+
+    -- Утилиты и Сервер
+    MiscTab:CreateButton({
+        Name = "🔄 Rejoin (Перезайти на этот же сервер)",
+        Callback = RejoinServer,
+    })
+
+    MiscTab:CreateButton({
+        Name = "🌐 Server Hop (Случайный сервер)",
+        Callback = ServerHop,
+    })
+
+    MiscTab:CreateButton({
+        Name = "👥 Server Hop (Сервер с малым онлайном)",
+        Callback = ServerHopLowPlayer,
+    })
+
+    MiscTab:CreateToggle({
+        Name = "🛡️ Anti-AFK (Защита от кика 20 мин)",
+        CurrentValue = true,
+        Flag = "AntiAFK",
+        Callback = function(Value) _G.AntiAFK = Value end,
+    })
+
+    MiscTab:CreateToggle({
+        Name = "💡 Fullbright (Яркий свет)",
+        CurrentValue = false,
+        Flag = "Fullbright",
+        Callback = ToggleFullbright,
+    })
+
+    MiscTab:CreateSlider({
+        Name = "Скорость бега (WalkSpeed)",
+        Range = {16, 120},
+        Increment = 1,
+        Suffix = " studs/s",
+        CurrentValue = 16,
+        Flag = "WalkSpeed",
+        Callback = function(Value)
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.WalkSpeed = Value end
+        end,
+    })
+
+    MiscTab:CreateSlider({
+        Name = "Сила прыжка (JumpPower)",
+        Range = {50, 250},
+        Increment = 5,
+        Suffix = " power",
+        CurrentValue = 50,
+        Flag = "JumpPower",
+        Callback = function(Value)
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.JumpPower = Value end
+        end,
+    })
 end
