@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V15.0 ANCESTOR MODEL INDEXER)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V16.0 PURE FOXNAME ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -40,7 +40,6 @@ _G.HasActiveThreat = false
 local _AH_TreatedPatients = {}
 local _AH_HandledCheckInPatients = {}
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
-local _AH_ItemPrompts = {}
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -264,6 +263,29 @@ local function PressPromptNearbyUntil(prompt, interval, timeout, condition, offs
     return not (prompt and prompt.Parent and prompt.Enabled)
 end
 
+local treatmentOffset = Vector3.new(0, 1.5, 0)
+
+local function PressTreatmentPromptNearbyUntil(prompt, interval, timeout, condition)
+    if not prompt or not prompt.Enabled or StopCheck() then return false end
+    local pos = GetPromptPosition(prompt)
+    if pos then
+        TeleportPlayer(pos + treatmentOffset)
+        task.wait(0.1)
+        if StopCheck() then return false end
+    end
+
+    local deadline = os.clock() + (timeout or 2.0)
+    while prompt and prompt.Parent and os.clock() < deadline and not StopCheck() do
+        if condition and condition() then return true end
+        if not prompt.Enabled then return true end
+
+        PressPP(prompt, interval or 0.25)
+        task.wait(interval or 0.2)
+    end
+    if condition then return condition() == true end
+    return not (prompt and prompt.Parent and prompt.Enabled)
+end
+
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🎒 4. INVENTORY & TOOL CONTROL ENGINE
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -352,55 +374,61 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🔍 5. EXACT ANCESTOR MODEL PROMPT INDEXER (FOXNAME ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local _AH_ItemIndexTable = {}
+local _AH_IndexedOnce = false
+
+local function GetBlacklistedContainer()
+    local ok, res = pcall(function() return Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
+    if ok then return res end
+    return nil
+end
+
 local function IndexTreatmentPrompt(prompt)
     if not prompt:IsA("ProximityPrompt") then return end
     local current = prompt.Parent
     while current and current ~= Workspace do
         local cName = current.Name
-        if (_G.AH_ItemSet[cName] or _G.AH_SurgeryItemSet[cName]) and not _G.AH_BlacklistedItemNames[cName] and (current:IsA("Model") or current:IsA("BasePart") or current:IsA("Folder")) then
-            if not _AH_ItemPrompts[cName] then _AH_ItemPrompts[cName] = {} end
-            _AH_ItemPrompts[cName][prompt] = true
+        if _G.AH_ItemSet[cName] and not _G.AH_BlacklistedItemNames[cName] and (current:IsA("Model") or current:IsA("BasePart") or current:IsA("Folder")) then
+            local tbl = _AH_ItemIndexTable[cName]
+            if not tbl then tbl = {} _AH_ItemIndexTable[cName] = tbl end
+            tbl[prompt] = true
             return
         end
         current = current.Parent
     end
 end
 
-local function InitItemIndexer()
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") then
-            IndexTreatmentPrompt(desc)
+local function InitTreatmentIndex()
+    if _AH_IndexedOnce then return end
+    _AH_IndexedOnce = true
+    local all = Workspace:GetDescendants()
+    for i = 1, #all do
+        local obj = all[i]
+        if obj:IsA("ProximityPrompt") then
+            IndexTreatmentPrompt(obj)
         end
+        if i % 400 == 0 then task.wait() end
     end
+    Workspace.DescendantAdded:Connect(IndexTreatmentPrompt)
 end
 
-InitItemIndexer()
-Workspace.DescendantAdded:Connect(function(desc)
-    if desc:IsA("ProximityPrompt") then
-        IndexTreatmentPrompt(desc)
-    end
-end)
-
-local function GetItemPrompt(itemName, isSurgery)
-    local target = NormalizeName(itemName)
-
-    -- 1. Хирургия Room 8
-    if isSurgery or _G.AH_SurgeryItemSet[itemName] then
-        local ok, med = pcall(function() return Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
-        if ok and med then
-            for _, d in ipairs(med:GetDescendants()) do
-                if d:IsA("ProximityPrompt") and d.Parent and NormalizeName(d.Parent.Name) == target then
-                    return d
-                end
+local function GetSurgeryItemPP(itemName)
+    local ok, med = pcall(function() return Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
+    if ok and med then
+        for _, d in ipairs(med:GetDescendants()) do
+            if d:IsA("ProximityPrompt") and d.Parent and d.Parent.Name == itemName then
+                return d
             end
         end
     end
+    return nil
+end
 
-    local blacklisted = nil
-    pcall(function() blacklisted = Workspace.Rooms.Emergency.Room8.Minigame.Medicine end)
-
-    -- 2. Индексированные промпты
-    local promptSet = _AH_ItemPrompts[itemName]
+local function GetItemPP(itemName)
+    if not _G.AH_ItemSet[itemName] or _G.AH_BlacklistedItemNames[itemName] then return nil end
+    InitTreatmentIndex()
+    local blacklisted = GetBlacklistedContainer()
+    local promptSet = _AH_ItemIndexTable[itemName]
     if promptSet then
         for prompt in pairs(promptSet) do
             if prompt.Parent and prompt.Enabled and not (blacklisted and prompt:IsDescendantOf(blacklisted)) then
@@ -408,22 +436,6 @@ local function GetItemPrompt(itemName, isSurgery)
             end
         end
     end
-
-    -- 3. Глубокий рекурсивный поиск по предкам
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") and desc.Enabled and not (blacklisted and desc:IsDescendantOf(blacklisted)) then
-            local curr = desc.Parent
-            while curr and curr ~= Workspace do
-                if NormalizeName(curr.Name) == target and not _G.AH_BlacklistedItemNames[curr.Name] then
-                    if not _AH_ItemPrompts[itemName] then _AH_ItemPrompts[itemName] = {} end
-                    _AH_ItemPrompts[itemName][desc] = true
-                    return desc
-                end
-                curr = curr.Parent
-            end
-        end
-    end
-
     return nil
 end
 
@@ -439,25 +451,25 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
         end
     end
 
-    local prompt = GetItemPrompt(itemName, isSurgery)
+    local prompt = nil
+    if isSurgery then
+        prompt = GetSurgeryItemPP(itemName)
+    else
+        prompt = GetItemPP(itemName)
+    end
+
     if prompt then
-        Log("AutoTreatment", "Grabbing prescription item", { item = itemName, prompt = prompt:GetFullName() })
-        local pPos = GetPromptPosition(prompt)
-        if pPos then
-            TeleportPlayer(pPos + Vector3.new(0, 1.0, 1.5))
-            task.wait(0.15)
-        end
-
+        Log("AutoTreatment", "Grabbing treatment item", { targetItem = itemName, prompt = prompt:GetFullName(), countBefore = GetItemCount(itemName) })
         local countBefore = GetItemCount(itemName)
-        PressPP(prompt, 0.35)
-
+        PressTreatmentPromptNearbyUntil(prompt, 0.12, 1.5, function() return GetItemCount(itemName) > countBefore end)
         local t = os.clock()
         while os.clock() - t < 1.5 and not StopCheck() do
             if GetItemCount(itemName) > countBefore then break end
-            task.wait(0.08)
+            task.wait(0.03)
         end
+        task.wait(0.1)
     else
-        Log("AutoTreatment", "Prescription shelf prompt not found in workspace", { item = itemName })
+        Log("AutoTreatment", "Prescription shelf prompt not found", { item = itemName })
     end
 
     return GetItemCount(itemName) > 0
@@ -762,14 +774,13 @@ local function TreatSingleRoom(roomData)
             if GetItemCount(currentItem) > 0 then
                 UseInventoryTool(currentItem)
                 local treatPP = (patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))) or bedPP
-                local treatPos = (treatPP and GetPromptPosition(treatPP)) or roomData.Position
-
-                TeleportPlayer(treatPos + Vector3.new(0, 1.0, 1.0))
-                task.wait(0.15)
 
                 if treatPP and treatPP.Enabled then
-                    PressPP(treatPP, 0.35)
-                    task.wait(0.3)
+                    Log("AutoTreatment", "Delivering treatment item to bed", { room = roomData.Name, targetItem = currentItem, prompt = treatPP:GetFullName() })
+                    PressTreatmentPromptNearbyUntil(treatPP, 0.15, 2.0, function()
+                        return GetItemCount(currentItem) == 0 or not treatPP.Parent or not treatPP.Enabled
+                    end)
+
                     UnequipAllTools()
                     appliedAny = true
 
@@ -1535,7 +1546,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v15.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v16.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
