@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V8.0 NATIVE OBSIDIAN GUI)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V9.0 REFINED ACCURACY)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -38,6 +38,7 @@ _G.LoopInterval = 0.15
 -- 📌 RUNTIME STATE & DATASETS
 _G.HasActiveThreat = false
 _G.AH_TreatedPatients = setmetatable({}, { __mode = "k" })
+local _AH_HandledCheckInPatients = setmetatable({}, { __mode = "k" })
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
 local _AH_RoomCooldowns = {}
 
@@ -55,7 +56,7 @@ _G.AH_SurgeryItemSet = {}
 for _, name in ipairs(_G.AH_SurgeryItemList) do _G.AH_SurgeryItemSet[name] = true end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📍 1. STATIC PRECISE COORDINATES (EXTRACTED FROM GAME DUMP)
+-- 📍 1. STATIC PRECISE COORDINATES & ROOM DATA
 -- ══════════════════════════════════════════════════════════════════════════════════
 local Positions = {
     CheckInPC = Vector3.new(-97.68, 3.50, -2.50),
@@ -118,6 +119,17 @@ local Positions = {
     Shelf_Ointment = Vector3.new(-137.12, 3.46, -78.82),
     Shelf_Plaster = Vector3.new(-137.12, 3.46, -81.82),
     Shelf_FirstAidKit = Vector3.new(-137.12, 3.46, -84.82)
+}
+
+_G.AH_RoomData = {
+    [1] = { Name = "Room1", Emergency = false, Position = Positions.Room1_Bed },
+    [2] = { Name = "Room2", Emergency = false, Position = Positions.Room2_Bed },
+    [3] = { Name = "Room3", Emergency = false, Position = Positions.Room3_Bed },
+    [4] = { Name = "Room4", Emergency = false, Position = Positions.Room4_Bed },
+    [5] = { Name = "Room5", Emergency = false, Position = Positions.Room5_Bed },
+    [6] = { Name = "Room6", Emergency = true, Position = Positions.Room6_Bed },
+    [7] = { Name = "Room7", Emergency = true, Position = Positions.Room7_Bed },
+    [8] = { Name = "Room8", Emergency = true, Position = Positions.Room8_Bed }
 }
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -604,6 +616,10 @@ local function GetPatientInRoom(roomName, centerPos)
     if not npcs then return nil end
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
+            local desRoom = npc:GetAttribute("DesignatedRoom")
+            if desRoom == roomName then
+                return npc
+            end
             local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
             if root and (root.Position - centerPos).Magnitude <= 28 then
                 return npc
@@ -792,10 +808,12 @@ end
 local function ExecuteTreatmentCycle()
     if not _G.AutoTreatment or _G.HasActiveThreat or StopCheck() then return false end
 
+    -- Приоритет реанимаций (Палаты 8, 7, 6)
     for _, r in ipairs({"Room8", "Room7", "Room6"}) do
         if TreatSingleRoom(r, true) then return true end
     end
 
+    -- Терапевтические палаты (Палаты 1 - 5)
     for i = 1, 5 do
         local r = "Room" .. tostring(i)
         if TreatSingleRoom(r, false) then return true end
@@ -805,7 +823,7 @@ local function ExecuteTreatmentCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 9. COMPLETE RECEPTION ENGINE (EXACT FOXNAME REPLICA)
+-- 🏢 9. COMPLETE RECEPTION ENGINE (ZERO-SPAM & NON-TELEPORT SCAN)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -819,6 +837,21 @@ local function GetCheckInStations()
     return stations
 end
 
+local function IsRecentlyHandledCheckInPatient(npc)
+    if not npc then return true end
+    if npc:GetAttribute("FoxnameCheckInPromptHandled") == true then return true end
+    local last = _AH_HandledCheckInPatients[npc]
+    if last and (os.clock() - last < 12.0) then return true end
+    return false
+end
+
+local function MarkCheckInPatientHandled(npc)
+    if npc then
+        npc:SetAttribute("FoxnameCheckInPromptHandled", true)
+        _AH_HandledCheckInPatients[npc] = os.clock()
+    end
+end
+
 local function GetPatientAtCounter()
     if IsShutterClosed() or _G.HasActiveThreat then return nil, nil end
 
@@ -830,7 +863,7 @@ local function GetPatientAtCounter()
         local center = (pc and GetPromptPartPosition(pc)) or Positions.CheckInCounter
 
         for _, npc in ipairs(npcs:GetChildren()) do
-            if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
+            if npc:IsA("Model") and IsValidPatient(npc) and not IsRecentlyHandledCheckInPatient(npc) then
                 if not IsNpcThreat(npc) then
                     local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
                     if root and (root.Position - center).Magnitude <= 28 then
@@ -904,7 +937,7 @@ local function DeliverBadgeToPatient(patient)
     end
 
     UnequipAllTools()
-    MarkPatientTreated(patient)
+    MarkCheckInPatientHandled(patient)
     Log("AutoCheckIn", "Successfully finished check-in for patient", { patient = patient:GetFullName() })
     return true
 end
@@ -928,11 +961,13 @@ local function ExecuteCheckInCycle()
         end
     end
 
+    -- 1. Если бейджик на руках -> вручаем
     if HasBadgeInInventory() then
         DeliverBadgeToPatient(patient)
         return true
     end
 
+    -- 2. Готовый напечатанный бейджик на стойке
     for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
         local b = checkIn:FindFirstChild(bName)
         local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
@@ -944,25 +979,33 @@ local function ExecuteCheckInCycle()
         end
     end
 
+    local didAnyWork = false
+
+    -- 3. Бланк (Form)
     local form = checkIn:FindFirstChild("Form")
     local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
     if formPP and formPP.Enabled then
         Log("AutoCheckIn", "Stamping Form", { prompt = formPP:GetFullName() })
         PressPromptNearby(formPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        didAnyWork = true
     end
 
+    -- 4. Фотоаппарат (Camera)
     local cam = checkIn:FindFirstChild("Camera")
     local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
     if camPP and camPP.Enabled then
         Log("AutoCheckIn", "Taking Photo", { prompt = camPP:GetFullName() })
         PressPromptNearby(camPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        didAnyWork = true
     end
 
+    -- 5. Компьютер (Computer — прожимаем 1 раз)
     local pc = checkIn:FindFirstChild("Computer")
     local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
     if pcPP and pcPP.Enabled then
         Log("AutoCheckIn", "Processing computer registration", { prompt = pcPP:GetFullName() })
         PressPromptNearby(pcPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        didAnyWork = true
 
         local waitDeadline = os.clock() + 3.0
         while os.clock() < waitDeadline and not StopCheck() do
@@ -981,11 +1024,13 @@ local function ExecuteCheckInCycle()
         end
     end
 
+    -- 6. Принтер (Printer)
     local printer = checkIn:FindFirstChild("Printer")
     local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
     if printerPP and printerPP.Enabled then
         Log("AutoCheckIn", "Printing Badge", { prompt = printerPP:GetFullName() })
         PressPromptNearby(printerPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
+        didAnyWork = true
 
         local waitBadge = os.clock() + 2.5
         while os.clock() < waitBadge and not StopCheck() do
@@ -1003,8 +1048,14 @@ local function ExecuteCheckInCycle()
         end
     end
 
-    DeliverBadgeToPatient(patient)
-    return true
+    -- 7. Если бейджик на руках после принтера -> вручаем
+    if HasBadgeInInventory() then
+        DeliverBadgeToPatient(patient)
+        return true
+    end
+
+    -- Если ни одного промпта не было доступно на стойке, НЕ телепортируемся к пациенту
+    return didAnyWork
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -1433,7 +1484,6 @@ if not GuiParent then
     GuiParent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Удалить старый UI если есть
 local oldGui = GuiParent:FindFirstChild("AverlikHub_AnimalHospital")
 if oldGui then oldGui:Destroy() end
 
@@ -1443,7 +1493,6 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = GuiParent
 
--- Главное окно
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 560, 0, 390)
@@ -1462,7 +1511,6 @@ MainStroke.Color = Color3.fromRGB(45, 55, 75)
 MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
--- Верхний бар (Draggable Header)
 local Header = Instance.new("Frame")
 Header.Name = "Header"
 Header.Size = UDim2.new(1, 0, 0, 42)
@@ -1478,14 +1526,13 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v8.0"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v9.0"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Header
 
--- Dragging logic
 local dragging, dragInput, dragStart, startPos
 Header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1513,7 +1560,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Левый контейнер вкладок (Sidebar)
 local Sidebar = Instance.new("Frame")
 Sidebar.Name = "Sidebar"
 Sidebar.Size = UDim2.new(0, 150, 1, -42)
@@ -1533,7 +1579,6 @@ SidebarPad.PaddingLeft = UDim.new(0, 10)
 SidebarPad.PaddingRight = UDim.new(0, 10)
 SidebarPad.Parent = Sidebar
 
--- Правый контейнер контента
 local ContentArea = Instance.new("Frame")
 ContentArea.Name = "ContentArea"
 ContentArea.Size = UDim2.new(1, -150, 1, -42)
@@ -1604,7 +1649,6 @@ local function CreateTab(name, icon)
     return tabContent
 end
 
--- Элементы UI
 local function AddToggle(parentTab, title, defaultVal, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 0, 38)
@@ -1769,7 +1813,7 @@ AddToggle(TabAuto, "🏥 Авто-Лечение (Палаты 1 - 8)", _G.AutoT
 AddToggle(TabAuto, "🏢 Авто-Регистрация (Ресепшен)", _G.AutoCheckIn, function(v) _G.AutoCheckIn = v end)
 AddToggle(TabAuto, "🚑 Спасение упавших пациентов", _G.AutoHelpPatient, function(v) _G.AutoHelpPatient = v end)
 AddToggle(TabAuto, "🧯 Авто-Тушение пожаров", _G.AutoPutOutFire, function(v) _G.AutoPutOutFire = v end)
-AddToggle(TabAuto, "🧼 Авто-Уборка луж слизи", _G.AutoCleanSlime, function(v) _G.AutoCleanSlime = v end)
+AddToggle(TabAuto, "🧼 Авто-Уборка слизи", _G.AutoCleanSlime, function(v) _G.AutoCleanSlime = v end)
 AddToggle(TabAuto, "📹 Авто-Починка камер", _G.AutoFixCam, function(v) _G.AutoFixCam = v end)
 AddToggle(TabAuto, "🛒 Авто-Покупка в магазине", _G.AutoBuyShop, function(v) _G.AutoBuyShop = v end)
 
@@ -1794,13 +1838,12 @@ AddSlider(TabMisc, "Скорость бега", 16, 120, 16, function(v)
     if hum then hum.WalkSpeed = v end
 end)
 
--- Активировать первую вкладку
 TabButtons["Автоматизация"].BackgroundColor3 = Color3.fromRGB(40, 75, 140)
 TabButtons["Автоматизация"].TextColor3 = Color3.fromRGB(255, 255, 255)
 TabFrames["Автоматизация"].Visible = true
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (NON-BLOCKING PARALLEL PIPELINE)
+-- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (TREATMENT PRIORITY & NO-SPAM CHECKIN)
 -- ══════════════════════════════════════════════════════════════════════════════════
 task.spawn(function()
     Log("Loop", "Averlik Hub Animal Hospital Engine Started", { sessionId = MySession, loopInterval = _G.LoopInterval })
@@ -1832,37 +1875,38 @@ task.spawn(function()
         end
 
         if not safetyWorked and not _G.HasActiveThreat and not IsShutterClosed() then
-            -- 3. Лечение палат (Палаты 8, 7, 6, 1..5)
-            local worked = false
-            pcall(function() worked = ExecuteTreatmentCycle() end)
+            -- 3. ПЕРВООЧЕРЕДНОЕ ЛЕЧЕНИЕ ПАЦИЕНТОВ В ПАЛАТАХ (Палаты 8, 7, 6, 1..5)
+            local treated = false
+            pcall(function() treated = ExecuteTreatmentCycle() end)
 
-            -- 4. Ресепшен (Регистрация посетителей на CheckIn и CheckIn2)
-            if not worked then
-                pcall(function() worked = ExecuteCheckInCycle() end)
+            -- 4. Ресепшен (Регистрация посетителей на CheckIn и CheckIn2 только если лечение не активно)
+            local checkedIn = false
+            if not treated then
+                pcall(function() checkedIn = ExecuteCheckInCycle() end)
             end
 
             -- 5. Спасение упавших пациентов
-            if not worked then
+            if not treated and not checkedIn then
                 pcall(AutoHelpFaintedPatients)
             end
 
             -- 6. Починка камер безопасности
-            if not worked then
+            if not treated and not checkedIn then
                 pcall(AutoFixCam)
             end
 
             -- 7. Кофе для Барни
-            if not worked then
+            if not treated and not checkedIn then
                 pcall(ProcessBarneyCoffee)
             end
 
             -- 8. Уборка луж слизи
-            if not worked then
+            if not treated and not checkedIn then
                 pcall(CleanSlimePuddles)
             end
 
             -- 9. Покупка в магазине
-            if not worked then
+            if not treated and not checkedIn then
                 pcall(AutoBuyShopItems)
             end
         end
