@@ -1446,8 +1446,70 @@ local function AutoBuyShopItems()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚑 14. AUTO HELP PATIENT
+-- 🚑 14. AUTO HELP FAINTED PATIENTS (PICK UP & DELIVER TO EMPTY BED)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function FindEmptyBedPrompt(designatedRoom)
+    local rooms = Workspace:FindFirstChild("Rooms")
+    if not rooms then return nil, nil end
+
+    -- 1. Если у пациента есть назначенная палата -> проверяем её койку первой
+    if designatedRoom then
+        local rNum = tonumber(designatedRoom:match("%d+"))
+        local folder = (rNum and rNum >= 6) and rooms:FindFirstChild("Emergency") or rooms:FindFirstChild("Medical")
+        local r = folder and folder:FindFirstChild(designatedRoom)
+        local minigame = r and r:FindFirstChild("Minigame")
+        local inBed = minigame and minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
+        if inBed then
+            for _, pp in ipairs(inBed:GetDescendants()) do
+                if pp:IsA("ProximityPrompt") and pp.Enabled then
+                    local pPos = (inBed:IsA("BasePart") and inBed.Position) or Positions[designatedRoom .. "_Bed"]
+                    return pp, pPos
+                end
+            end
+        end
+    end
+
+    -- 2. Поиск свободной койки в обычных палатах (Medical Rooms 1 - 5)
+    local medical = rooms:FindFirstChild("Medical")
+    if medical then
+        for i = 1, 5 do
+            local rName = "Room" .. tostring(i)
+            local r = medical:FindFirstChild(rName)
+            if r and not IsRoomRecovering(r) then
+                local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
+                if inBed then
+                    local bedPP = inBed:FindFirstChild("PP") or inBed:FindFirstChild("PP2") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if bedPP and bedPP.Enabled then
+                        local pPos = (inBed:IsA("BasePart") and inBed.Position) or Positions[rName .. "_Bed"]
+                        return bedPP, pPos
+                    end
+                end
+            end
+        end
+    end
+
+    -- 3. Поиск свободной койки в палатах реанимации (Emergency Rooms 6 - 8)
+    local emergency = rooms:FindFirstChild("Emergency")
+    if emergency then
+        for i = 7, 8 do
+            local rName = "Room" .. tostring(i)
+            local r = emergency:FindFirstChild(rName)
+            if r and not IsRoomRecovering(r) then
+                local inBed = r:FindFirstChild("Minigame") and r.Minigame:FindFirstChild("Bed") and r.Minigame.Bed:FindFirstChild("InBed")
+                if inBed then
+                    local bedPP = inBed:FindFirstChild("PP2") or inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if bedPP and bedPP.Enabled then
+                        local pPos = (inBed:IsA("BasePart") and inBed.Position) or Positions[rName .. "_Bed"]
+                        return bedPP, pPos
+                    end
+                end
+            end
+        end
+    end
+
+    return nil, nil
+end
+
 local function AutoHelpFaintedPatients()
     if not _G.AutoHelpPatient or _G.AH_IsTreating then return end
 
@@ -1457,54 +1519,40 @@ local function AutoHelpFaintedPatients()
     for _, npc in ipairs(npcs:GetChildren()) do
         if npc:IsA("Model") and IsValidPatient(npc) then
             for _, prompt in ipairs(npc:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") and prompt.Enabled and (string.lower(prompt.ActionText or ""):find("help") or string.lower(prompt.ActionText or ""):find("carry") or string.lower(prompt.ActionText or ""):find("lift")) then
-                    Log("AutoHelpPatient", "Helping fainted patient", { npc = npc:GetFullName(), prompt = prompt:GetFullName() })
-                    TeleportAndFirePrompt(prompt, nil, 0.4)
-                    task.wait(0.5)
-                    break
+                if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                    local act = string.lower(tostring(prompt.ActionText or ""))
+                    if act:find("help") or act:find("carry") or act:find("lift") or act:find("pick") or prompt.Name == "FaintedPP" then
+                        Log("AutoHelpPatient", "Picking up fainted patient", { npc = npc:GetFullName(), prompt = prompt:GetFullName() })
+
+                        -- 1. Подбираем пациента
+                        TeleportAndFirePrompt(prompt, nil, 0.3)
+                        task.wait(0.4)
+
+                        -- 2. Ищем свободную койку для размещения
+                        local desRoom = npc:GetAttribute("DesignatedRoom")
+                        local bedPP, bedPos = FindEmptyBedPrompt(desRoom)
+
+                        if bedPP and bedPos then
+                            Log("AutoHelpPatient", "Delivering carried patient to bed", { bed = bedPP:GetFullName() })
+                            TeleportPlayer(bedPos + Vector3.new(0, 1.0, 1.0))
+                            task.wait(0.2)
+                            FirePrompt(bedPP)
+                            task.wait(0.5)
+                        else
+                            -- Если нет свободной койки, относим в палату 1 или реанимацию
+                            local fallbackPos = Positions.Room1_Bed or Positions.Room7_Bed
+                            if fallbackPos then
+                                TeleportPlayer(fallbackPos + Vector3.new(0, 1.0, 1.0))
+                                task.wait(0.3)
+                            end
+                        end
+                        return
+                    end
                 end
             end
         end
     end
 end
-
--- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 15. MAIN COORDINATED AUTOMATION LOOP
--- ══════════════════════════════════════════════════════════════════════════════════
-task.spawn(function()
-    Log("Loop", "Averlik Hub Animal Hospital Engine Started", { loopInterval = _G.LoopInterval })
-
-    while true do
-        task.wait(_G.LoopInterval)
-
-        local s, err = pcall(function()
-            -- 1. Оценка угроз и шторки
-            EvaluateCounterThreats()
-
-            -- 2. Приоритетное лечение во всех палатах (1 - 8)
-            ExecuteTreatmentCycle()
-
-            -- 3. Регистрация клиентов
-            ExecuteCheckInCycle()
-
-            -- 4. Кофе для Барни
-            ProcessBarneyCoffee()
-
-            -- 5. Уборка слизи
-            CleanSlimePuddles()
-
-            -- 6. Помощь упавшим пациентам
-            AutoHelpFaintedPatients()
-
-            -- 7. Авто-покупка в магазине
-            AutoBuyShopItems()
-        end)
-
-        if not s then
-            Log("Error", "Loop iteration exception", { error = tostring(err) })
-        end
-    end
-end)
 
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🌐 15. SERVER UTILITIES (SERVER HOP, REJOIN, ANTI-AFK, FULLBRIGHT, SPEED)
