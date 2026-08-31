@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V13.0 BULLETPROOF PROMPTS)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V14.0 IMAGE ASSET & SPATIAL PROMPT RESOLVER)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -54,6 +54,27 @@ _G.AH_SurgeryItemList = {
 }
 _G.AH_SurgeryItemSet = {}
 for _, name in ipairs(_G.AH_SurgeryItemList) do _G.AH_SurgeryItemSet[name] = true end
+
+local _AH_ItemAssetMap = {
+    ['rbxassetid://139637091303873'] = 'Eye Drops',
+    ['rbxassetid://118311058179090'] = 'IV Drops',
+    ['rbxassetid://88750936127655'] = 'Medkit',
+    ['rbxassetid://138334905913311'] = 'Thermometer',
+    ['rbxassetid://75884870805308'] = 'Ointment',
+    ['rbxassetid://125453071439049'] = 'Bandages',
+    ['rbxassetid://135236061613718'] = 'Medicine',
+    ['rbxassetid://113912761080559'] = 'Maple Syrup',
+    ['rbxassetid://120895273610611'] = 'Cough Syrup',
+    ['rbxassetid://94559086254344'] = 'Herbs',
+    ['rbxassetid://132258407294719'] = 'Antibiotics',
+    ['rbxassetid://102550407034117'] = 'Organ',
+    ['rbxassetid://137637637347521'] = 'Transplant',
+    ['rbxassetid://93721219255457'] = 'Scalpel',
+    ['rbxassetid://97305931082100'] = 'Scissors',
+    ['rbxassetid://134707010467431'] = 'Pills',
+    ['rbxassetid://122709292837373'] = 'Plaster',
+    ['rbxassetid://79216016769062'] = 'First Aid Kit'
+}
 
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 📍 1. STATIC PRECISE COORDINATES & ROOM DATA
@@ -191,6 +212,24 @@ local function GetPromptPosition(prompt)
     local bp = p:FindFirstChildWhichIsA("BasePart", true)
     if bp then return bp.Position end
     return nil
+end
+
+local function GetPromptNearPosition(pos, maxDist)
+    if not pos then return nil end
+    local closest, minD = nil, maxDist or 6.0
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") and desc.Enabled then
+            local pPos = GetPromptPosition(desc)
+            if pPos then
+                local d = (pPos - pos).Magnitude
+                if d < minD then
+                    closest = desc
+                    minD = d
+                end
+            end
+        end
+    end
+    return closest
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
@@ -355,28 +394,44 @@ local function DiscardToolAtTrash(tool)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔍 5. DYNAMIC ITEM PROMPT RESOLVER & PROMPT INDEXER
+-- 🔍 5. DYNAMIC ITEM PROMPT RESOLVER (IMAGE ASSET + SPATIAL RESOLVER)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function IndexSinglePrompt(desc)
+    if not desc:IsA("ProximityPrompt") or not desc.Parent then return end
+
+    -- Проверка по имени родителя
+    local pName = desc.Parent.Name
+    if _G.AH_ItemSet[pName] or _G.AH_SurgeryItemSet[pName] then
+        if not _AH_ItemPrompts[pName] then _AH_ItemPrompts[pName] = {} end
+        _AH_ItemPrompts[pName][desc] = true
+        return
+    end
+
+    -- Проверка по ImageLabel / Decal Asset ID
+    local img = desc.Parent:FindFirstChildWhichIsA("ImageLabel", true) or desc.Parent:FindFirstChildWhichIsA("Decal", true) or desc.Parent.Parent:FindFirstChildWhichIsA("ImageLabel", true)
+    if img then
+        local asset = img:IsA("Decal") and img.Texture or img.Image
+        local mappedName = _AH_ItemAssetMap[asset]
+        if mappedName then
+            if not _AH_ItemPrompts[mappedName] then _AH_ItemPrompts[mappedName] = {} end
+            _AH_ItemPrompts[mappedName][desc] = true
+            return
+        end
+    end
+end
+
 local function IndexItemPrompts()
     for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") and desc.Parent then
-            local pName = desc.Parent.Name
-            if _G.AH_ItemSet[pName] or _G.AH_SurgeryItemSet[pName] then
-                if not _AH_ItemPrompts[pName] then _AH_ItemPrompts[pName] = {} end
-                _AH_ItemPrompts[pName][desc] = true
-            end
+        if desc:IsA("ProximityPrompt") then
+            IndexSinglePrompt(desc)
         end
     end
 end
 
 IndexItemPrompts()
 Workspace.DescendantAdded:Connect(function(desc)
-    if desc:IsA("ProximityPrompt") and desc.Parent then
-        local pName = desc.Parent.Name
-        if _G.AH_ItemSet[pName] or _G.AH_SurgeryItemSet[pName] then
-            if not _AH_ItemPrompts[pName] then _AH_ItemPrompts[pName] = {} end
-            _AH_ItemPrompts[pName][desc] = true
-        end
+    if desc:IsA("ProximityPrompt") then
+        IndexSinglePrompt(desc)
     end
 end)
 
@@ -398,7 +453,7 @@ local function GetItemPrompt(itemName, isSurgery)
         end
     end
 
-    -- 2. Индексированные промпты полок
+    -- 2. Индексированные промпты полок по ассет-маппингу и именам
     if _AH_ItemPrompts[itemName] then
         for p in pairs(_AH_ItemPrompts[itemName]) do
             if p.Parent and p.Enabled then
@@ -407,7 +462,18 @@ local function GetItemPrompt(itemName, isSurgery)
         end
     end
 
-    -- 3. Общий поиск по всей карте
+    -- 3. Пространственный поиск около точных координат полок
+    local staticShelfPos = Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")]
+    if staticShelfPos then
+        local spatialPrompt = GetPromptNearPosition(staticShelfPos, 6.0)
+        if spatialPrompt then
+            if not _AH_ItemPrompts[itemName] then _AH_ItemPrompts[itemName] = {} end
+            _AH_ItemPrompts[itemName][spatialPrompt] = true
+            return spatialPrompt
+        end
+    end
+
+    -- 4. Общий поиск по всей карте
     for _, desc in ipairs(Workspace:GetDescendants()) do
         if desc:IsA("ProximityPrompt") and desc.Enabled and desc.Parent then
             local pName = NormalizeName(desc.Parent.Name)
@@ -438,13 +504,22 @@ local function GrabItemUntilInInventory(itemName, isSurgery)
     local shelfPos = (prompt and GetPromptPosition(prompt)) or Positions["Shelf_" .. itemName:gsub("%s+", "")] or Positions[itemName:gsub("%s+", "")]
 
     if shelfPos then
-        Log("AutoTreatment", "Grabbing prescription item", { item = itemName, prompt = prompt and prompt:GetFullName() or "Static" })
+        if not prompt then
+            prompt = GetPromptNearPosition(shelfPos, 6.0)
+        end
+
+        Log("AutoTreatment", "Grabbing prescription item", { item = itemName, prompt = prompt and prompt:GetFullName() or "Spatial fallback" })
         TeleportPlayer(shelfPos + Vector3.new(0, 1.0, 1.2))
         task.wait(0.2)
 
         local countBefore = GetItemCount(itemName)
         if prompt and prompt.Enabled then
             PressPP(prompt, 0.35)
+        else
+            local fallbackPP = GetPromptNearPosition(shelfPos, 6.0)
+            if fallbackPP and fallbackPP.Enabled then
+                PressPP(fallbackPP, 0.35)
+            end
         end
 
         local t = os.clock()
@@ -1529,7 +1604,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v13.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v14.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
