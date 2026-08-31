@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE MASTER SUITE (V6.0 PURE FOXNAME ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL COMPLETE 1-TO-1 MASTER SUITE (V7.0 ULTIMATE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -15,15 +15,22 @@ local function StopCheck()
     return not IsSessionActive()
 end
 
--- ⚙️ GLOBAL SETTINGS & TOGGLES
-_G.AutoCheckIn = _G.AutoCheckIn ~= nil and _G.AutoCheckIn or true
+-- ⚙️ COMPLETE GLOBAL TOGGLES & SETTINGS
 _G.AutoTreatment = _G.AutoTreatment ~= nil and _G.AutoTreatment or true
+_G.AutoCheckIn = _G.AutoCheckIn ~= nil and _G.AutoCheckIn or true
 _G.AutoAnomalyShutter = _G.AutoAnomalyShutter ~= nil and _G.AutoAnomalyShutter or true
 _G.AutoBarneyShutter = _G.AutoBarneyShutter ~= nil and _G.AutoBarneyShutter or true
-_G.AutoGiveBarneyCoffee = _G.AutoGiveBarneyCoffee ~= nil and _G.AutoGiveBarneyCoffee or true
-_G.AutoCleanSlime = _G.AutoCleanSlime ~= nil and _G.AutoCleanSlime or true
+_G.AutoAskLeaveAnomaly = _G.AutoAskLeaveAnomaly ~= nil and _G.AutoAskLeaveAnomaly or true
+_G.AutoKillAnomaly = _G.AutoKillAnomaly ~= nil and _G.AutoKillAnomaly or false
 _G.AutoHelpPatient = _G.AutoHelpPatient ~= nil and _G.AutoHelpPatient or true
+_G.AutoPutOutFire = _G.AutoPutOutFire ~= nil and _G.AutoPutOutFire or true
+_G.AutoCleanSlime = _G.AutoCleanSlime ~= nil and _G.AutoCleanSlime or true
+_G.AutoGiveBarneyCoffee = _G.AutoGiveBarneyCoffee ~= nil and _G.AutoGiveBarneyCoffee or true
+_G.AutoFixCam = _G.AutoFixCam ~= nil and _G.AutoFixCam or true
+_G.AutoTaser = _G.AutoTaser ~= nil and _G.AutoTaser or false
 _G.AutoBuyShop = _G.AutoBuyShop ~= nil and _G.AutoBuyShop or false
+_G.UnlockThirdPerson = _G.UnlockThirdPerson ~= nil and _G.UnlockThirdPerson or true
+_G.DisableLocalAnomalies = _G.DisableLocalAnomalies ~= nil and _G.DisableLocalAnomalies or false
 _G.LoopInterval = 0.15
 
 -- 📌 RUNTIME STATE & DATASETS
@@ -31,6 +38,7 @@ _G.HasActiveThreat = false
 _G.AH_TreatedPatients = setmetatable({}, { __mode = "k" })
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
 local _AH_RoomCooldowns = {}
+local _AH_FirePrompts = {}
 
 _G.AH_ItemList = {
     "Herbs", "Maple Syrup", "Eye Drops", "Pills", "Bandages",
@@ -46,7 +54,7 @@ _G.AH_SurgeryItemSet = {}
 for _, name in ipairs(_G.AH_SurgeryItemList) do _G.AH_SurgeryItemSet[name] = true end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 📍 1. STATIC PRECISE COORDINATES (FALLBACKS FROM GAME DUMP)
+-- 📍 1. STATIC PRECISE COORDINATES (EXTRACTED FROM GAME DUMP)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local Positions = {
     CheckInPC = Vector3.new(-97.68, 3.50, -2.50),
@@ -61,6 +69,8 @@ local Positions = {
     CoffeeMachine = Vector3.new(-123.83, 4.01, 10.33),
     Coffee = Vector3.new(-123.77, 3.80, 10.31),
     Trash = Vector3.new(-144.50, 3.46, -18.50),
+    ExtinguisherStation = Vector3.new(-103.91, 4.00, 10.50),
+    TaserStation = Vector3.new(-103.91, 4.00, 15.50),
 
     Room1_Bed = Vector3.new(-168.22, 3.19, -41.90),
     Room1_Device = Vector3.new(-180.76, 4.74, -45.91),
@@ -369,7 +379,7 @@ end
 local function GrabItemUntilInInventory(itemName, isSurgery)
     if GetItemCount(itemName) > 0 then return true end
 
-    -- Очистить лишний мусор
+    -- Очистить лишний инвентарь
     for _, container in ipairs(InventoryParents()) do
         for _, tool in ipairs(container:GetChildren()) do
             if tool:IsA("Tool") and NormalizeName(tool.Name) ~= NormalizeName(itemName) then
@@ -707,6 +717,16 @@ local function TreatSingleRoom(roomName, isEmergency)
             attempt = attempt + 1
             local currentItem = needed[1]
 
+            -- Проверка на устранение скинвокера (AutoKillAnomaly)
+            if _G.AutoKillAnomaly and patient and patient:GetAttribute("Skinwalker") == true then
+                local allItems = isEmergency and _G.AH_SurgeryItemList or _G.AH_ItemList
+                for _, wrong in ipairs(allItems) do
+                    local isWanted = false
+                    for _, req in ipairs(needed) do if req == wrong then isWanted = true break end end
+                    if not isWanted then currentItem = wrong break end
+                end
+            end
+
             if GetItemCount(currentItem) == 0 then
                 GrabItemUntilInInventory(currentItem, isEmergency)
             end
@@ -788,24 +808,41 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🏢 9. COMPLETE RECEPTION ENGINE (EXACT FOXNAME REPLICA)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function GetCheckInStations()
+    local stations = {}
+    local misc = Workspace:FindFirstChild("Misc")
+    if misc then
+        for _, name in ipairs({"CheckIn", "CheckIn2"}) do
+            local s = misc:FindFirstChild(name)
+            if s then table.insert(stations, s) end
+        end
+    end
+    return stations
+end
+
 local function GetPatientAtCounter()
-    if IsShutterClosed() or _G.HasActiveThreat then return nil end
+    if IsShutterClosed() or _G.HasActiveThreat then return nil, nil end
 
     local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return nil end
+    if not npcs then return nil, nil end
 
-    local counterSpot = Positions.CheckInCounter
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
-            if not IsNpcThreat(npc) then
-                local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
-                if root and (root.Position - counterSpot).Magnitude <= 28 then
-                    return npc
+    for _, station in ipairs(GetCheckInStations()) do
+        local pc = station:FindFirstChild("Computer")
+        local center = (pc and GetPromptPartPosition(pc)) or Positions.CheckInCounter
+
+        for _, npc in ipairs(npcs:GetChildren()) do
+            if npc:IsA("Model") and IsValidPatient(npc) and not IsPatientAlreadyTreated(npc) then
+                if not IsNpcThreat(npc) then
+                    local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChildWhichIsA("BasePart")
+                    if root and (root.Position - center).Magnitude <= 28 then
+                        return npc, station
+                    end
                 end
             end
         end
     end
-    return nil
+
+    return nil, nil
 end
 
 local function GetNpcTalkPrompt(npc)
@@ -878,12 +915,19 @@ local function ExecuteCheckInCycle()
         return false
     end
 
-    local misc = Workspace:FindFirstChild("Misc")
-    local checkIn = misc and misc:FindFirstChild("CheckIn")
-    if not checkIn then return false end
+    local patient, checkIn = GetPatientAtCounter()
+    if not patient or not checkIn then return false end
 
-    local patient = GetPatientAtCounter()
-    if not patient then return false end
+    -- Проверка на StalkerMonster и StrangePaper
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if npcs and npcs:FindFirstChild("StalkerMonster") then
+        local strangePaper = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("StrangePaper")
+        local spPP = strangePaper and strangePaper:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if spPP and spPP.Enabled then
+            Log("AutoCheckIn", "Interacting with StrangePaper for StalkerMonster")
+            PressPromptNearby(spPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        end
+    end
 
     -- 1. Бейджик уже в инвентаре -> отдать
     if HasBadgeInInventory() then
@@ -974,7 +1018,158 @@ local function ExecuteCheckInCycle()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- ☕ 10. AUTO BARNEY COFFEE
+-- 🚪 10. AUTO ASK LEAVE ANOMALY
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function AutoAskLeaveAnomaly()
+    if not _G.AutoAskLeaveAnomaly or StopCheck() then return false end
+
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return false end
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") then
+            for _, p in ipairs(npc:GetDescendants()) do
+                if p:IsA("ProximityPrompt") and p.Enabled then
+                    local act = string.lower(p.ActionText or "")
+                    if act:find("ask to leave") or act:find("leave") or act:find("dismiss") then
+                        Log("AutoAskLeaveAnomaly", "Asking anomaly to leave", { npc = npc:GetFullName() })
+                        PressPromptNearby(p, 0.4, Vector3.new(0, 1.0, 1.5), 0.2)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 🧯 11. AUTO PUT OUT FIRE (PATIENTS & ROOMS)
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function EquipExtinguisher()
+    if GetItemCount("Extinguisher") > 0 then
+        return UseInventoryTool("Extinguisher")
+    end
+
+    local misc = Workspace:FindFirstChild("Misc")
+    local extStation = misc and misc:FindFirstChild("ExtinguisherStation")
+    local extPP = extStation and extStation:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if extPP and extPP.Enabled then
+        Log("AutoPutOutFire", "Grabbing Extinguisher from station")
+        PressPromptNearby(extPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        return UseInventoryTool("Extinguisher")
+    end
+    return false
+end
+
+local function AutoPutOutFire()
+    if not _G.AutoPutOutFire or StopCheck() then return false end
+
+    -- 1. Поиск горящих пациентов (FirePP)
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if npcs then
+        for _, npc in ipairs(npcs:GetChildren()) do
+            local firePP = npc:FindFirstChild("FirePP") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if firePP and firePP.Enabled then
+                local act = string.lower(firePP.ActionText or "")
+                if act:find("fire") or act:find("extinguish") or act:find("burn") then
+                    EquipExtinguisher()
+                    Log("AutoPutOutFire", "Extinguishing burning patient", { npc = npc:GetFullName() })
+                    PressPromptNearby(firePP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+                    UnequipAllTools()
+                    return true
+                end
+            end
+        end
+    end
+
+    -- 2. Поиск огня в комнатах
+    local rooms = Workspace:FindFirstChild("Rooms")
+    if rooms then
+        for _, p in ipairs(rooms:GetDescendants()) do
+            if p:IsA("ProximityPrompt") and p.Enabled then
+                local act = string.lower(p.ActionText or "")
+                if act:find("put out fire") or act:find("extinguish") then
+                    EquipExtinguisher()
+                    Log("AutoPutOutFire", "Extinguishing fire in room", { prompt = p:GetFullName() })
+                    PressPromptNearby(p, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+                    UnequipAllTools()
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 📹 12. AUTO FIX SECURITY CAMERAS
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function AutoFixCam()
+    if not _G.AutoFixCam or StopCheck() then return false end
+
+    local cams = Workspace:FindFirstChild("Cameras") or (Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("Cameras"))
+    if not cams then return false end
+
+    for _, p in ipairs(cams:GetDescendants()) do
+        if p:IsA("ProximityPrompt") and p.Enabled then
+            local act = string.lower(p.ActionText or "")
+            if act:find("fix") or act:find("repair") or act:find("cam") then
+                Log("AutoFixCam", "Fixing security camera", { prompt = p:GetFullName() })
+                PressPromptNearby(p, 0.35, Vector3.new(0, 1.0, 1.5), 0.2)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- ⚡ 13. AUTO TASER ANOMALIES
+-- ══════════════════════════════════════════════════════════════════════════════════
+local function EquipTaser()
+    if GetItemCount("Taser") > 0 then
+        return UseInventoryTool("Taser")
+    end
+
+    local misc = Workspace:FindFirstChild("Misc")
+    local tStation = misc and misc:FindFirstChild("TaserStation")
+    local tPP = tStation and tStation:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if tPP and tPP.Enabled then
+        Log("AutoTaser", "Grabbing Taser from station")
+        PressPromptNearby(tPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+        return UseInventoryTool("Taser")
+    end
+    return false
+end
+
+local function AutoTaserAnomalies()
+    if not _G.AutoTaser or StopCheck() then return false end
+
+    local npcs = Workspace:FindFirstChild("NPCs")
+    if not npcs then return false end
+
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc:IsA("Model") and IsNpcThreat(npc) then
+            local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
+            if root then
+                EquipTaser()
+                Log("AutoTaser", "Zapping anomaly with taser", { npc = npc:GetFullName() })
+                TeleportPlayer(root.Position + Vector3.new(0, 1.0, 3.0))
+                task.wait(0.2)
+                UseInventoryTool("Taser")
+                task.wait(0.3)
+                UnequipAllTools()
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- ☕ 14. AUTO BARNEY COFFEE
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function ProcessBarneyCoffee()
     if not _G.AutoGiveBarneyCoffee or StopCheck() then return end
@@ -1023,7 +1218,7 @@ local function ProcessBarneyCoffee()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧼 11. AUTO CLEAN SLIME
+-- 🧼 15. AUTO CLEAN SLIME
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function CleanSlimePuddles()
     if not _G.AutoCleanSlime or StopCheck() then return end
@@ -1044,7 +1239,7 @@ local function CleanSlimePuddles()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛒 12. AUTO BUY SHOP
+-- 🛒 16. AUTO BUY SHOP
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function AutoBuyShopItems()
     if not _G.AutoBuyShop or StopCheck() then return end
@@ -1061,7 +1256,7 @@ local function AutoBuyShopItems()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🚑 13. AUTO HELP FAINTED PATIENTS (PICKUP & BED DELIVERY)
+-- 🚑 17. AUTO HELP FAINTED PATIENTS (PICKUP & BED DELIVERY)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function FindEmptyBedPrompt()
     local rooms = Workspace:FindFirstChild("Rooms")
@@ -1128,7 +1323,18 @@ local function AutoHelpFaintedPatients()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🌐 14. SERVER UTILITIES (SERVER HOP, REJOIN, ANTI-AFK, FULLBRIGHT, SPEED)
+-- 🌐 18. THIRD PERSON & ANOMALY SUPPRESSION
+-- ══════════════════════════════════════════════════════════════════════════════════
+if _G.UnlockThirdPerson then
+    pcall(function()
+        LocalPlayer.CameraMinZoomDistance = 0.5
+        LocalPlayer.CameraMaxZoomDistance = 128
+        LocalPlayer.CameraMode = Enum.CameraMode.Classic
+    end)
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════════
+-- 🌐 19. SERVER UTILITIES (SERVER HOP, REJOIN, ANTI-AFK, FULLBRIGHT, SPEED)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -1224,7 +1430,7 @@ local function ToggleFullbright(enabled)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🎨 15. OBSIDIAN LUXURY UI (RAYFIELD DESIGN SYSTEM)
+-- 🎨 20. OBSIDIAN LUXURY UI (RAYFIELD DESIGN SYSTEM)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local Rayfield = nil
 pcall(function()
@@ -1234,8 +1440,8 @@ end)
 if Rayfield then
     local Window = Rayfield:CreateWindow({
         Name = "🏥 Averlik Hub | Animal Hospital",
-        LoadingTitle = "Averlik Hub v6.0",
-        LoadingSubtitle = "by Averlik Dev Team",
+        LoadingTitle = "Averlik Hub v7.0",
+        LoadingSubtitle = "1-to-1 Foxname Pure Replica",
         ConfigurationSaving = {
             Enabled = true,
             FolderName = "AverlikHub",
@@ -1245,7 +1451,7 @@ if Rayfield then
     })
 
     local MainTab = Window:CreateTab("⚡ Автоматизация", 4483362458)
-    local SafeTab = Window:CreateTab("🛡️ Защита и Барни", 4483362458)
+    local SafeTab = Window:CreateTab("🛡️ Защита и Безопасность", 4483362458)
     local MiscTab = Window:CreateTab("🌐 Утилиты и Сервер", 4483362458)
 
     MainTab:CreateSection("🏥 Медицина и Пациенты")
@@ -1272,10 +1478,24 @@ if Rayfield then
     })
 
     MainTab:CreateToggle({
+        Name = "🧯 Авто-Тушение пожаров и пациентов",
+        CurrentValue = _G.AutoPutOutFire,
+        Flag = "AutoPutOutFire",
+        Callback = function(Value) _G.AutoPutOutFire = Value end,
+    })
+
+    MainTab:CreateToggle({
         Name = "🧼 Авто-Уборка слизи (Лужи)",
         CurrentValue = _G.AutoCleanSlime,
         Flag = "AutoCleanSlime",
         Callback = function(Value) _G.AutoCleanSlime = Value end,
+    })
+
+    MainTab:CreateToggle({
+        Name = "📹 Авто-Починка камер безопасности",
+        CurrentValue = _G.AutoFixCam,
+        Flag = "AutoFixCam",
+        Callback = function(Value) _G.AutoFixCam = Value end,
     })
 
     MainTab:CreateToggle({
@@ -1285,7 +1505,7 @@ if Rayfield then
         Callback = function(Value) _G.AutoBuyShop = Value end,
     })
 
-    SafeTab:CreateSection("🛡️ Защита и Шторка")
+    SafeTab:CreateSection("🛡️ Защита и Аномалии")
 
     SafeTab:CreateToggle({
         Name = "🛑 Авто-Шторка от Аномалий (Скинвокеры)",
@@ -1299,6 +1519,27 @@ if Rayfield then
         CurrentValue = _G.AutoBarneyShutter,
         Flag = "AutoBarneyShutter",
         Callback = function(Value) _G.AutoBarneyShutter = Value end,
+    })
+
+    SafeTab:CreateToggle({
+        Name = "🗣️ Выгонять аномалии (Ask To Leave)",
+        CurrentValue = _G.AutoAskLeaveAnomaly,
+        Flag = "AutoAskLeaveAnomaly",
+        Callback = function(Value) _G.AutoAskLeaveAnomaly = Value end,
+    })
+
+    SafeTab:CreateToggle({
+        Name = "☠️ Устранять скинвокеров (Ошибочные лекарства)",
+        CurrentValue = _G.AutoKillAnomaly,
+        Flag = "AutoKillAnomaly",
+        Callback = function(Value) _G.AutoKillAnomaly = Value end,
+    })
+
+    SafeTab:CreateToggle({
+        Name = "⚡ Авто-Тазер аномалий",
+        CurrentValue = _G.AutoTaser,
+        Flag = "AutoTaser",
+        Callback = function(Value) _G.AutoTaser = Value end,
     })
 
     SafeTab:CreateToggle({
@@ -1339,6 +1580,22 @@ if Rayfield then
         Callback = ToggleFullbright,
     })
 
+    MiscTab:CreateToggle({
+        Name = "🎥 Разблокировка 3-го лица",
+        CurrentValue = _G.UnlockThirdPerson,
+        Flag = "UnlockThirdPerson",
+        Callback = function(Value)
+            _G.UnlockThirdPerson = Value
+            if Value then
+                pcall(function()
+                    LocalPlayer.CameraMinZoomDistance = 0.5
+                    LocalPlayer.CameraMaxZoomDistance = 128
+                    LocalPlayer.CameraMode = Enum.CameraMode.Classic
+                end)
+            end
+        end,
+    })
+
     MiscTab:CreateSlider({
         Name = "Скорость бега (WalkSpeed)",
         Range = {16, 120},
@@ -1354,7 +1611,7 @@ if Rayfield then
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 16. AUTONOMOUS SCHEDULER (NON-BLOCKING PRIORITY ENGINE)
+-- 🔄 21. AUTONOMOUS PRIORITY SCHEDULER (NON-BLOCKING PARALLEL PIPELINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 task.spawn(function()
     Log("Loop", "Averlik Hub Animal Hospital Engine Started", { sessionId = MySession, loopInterval = _G.LoopInterval })
@@ -1364,35 +1621,54 @@ task.spawn(function()
 
         if not IsSessionActive() then break end
 
-        -- 1. Оценка угроз
+        -- 1. Защита от угроз и закрытие шторок
         pcall(EvaluateCounterThreats)
 
-        if not _G.HasActiveThreat and not IsShutterClosed() then
-            -- 2. Лечение палат (Палаты 8, 7, 6, 1..5)
+        -- 2. Тушение пожаров и горящих пациентов (Высший приоритет безопасности)
+        local safetyWorked = false
+        pcall(function() safetyWorked = AutoPutOutFire() end)
+
+        if not safetyWorked then
+            -- 3. Выдворение аномалий
+            pcall(function() safetyWorked = AutoAskLeaveAnomaly() end)
+        end
+
+        if not safetyWorked then
+            -- 4. Тазер аномалий
+            pcall(function() safetyWorked = AutoTaserAnomalies() end)
+        end
+
+        if not safetyWorked and not _G.HasActiveThreat and not IsShutterClosed() then
+            -- 5. Лечение палат (Палаты 8, 7, 6, 1..5)
             local worked = false
             pcall(function() worked = ExecuteTreatmentCycle() end)
 
-            -- 3. Ресепшен (Регистрация посетителей)
+            -- 6. Ресепшен (Регистрация посетителей на CheckIn и CheckIn2)
             if not worked then
                 pcall(function() worked = ExecuteCheckInCycle() end)
             end
 
-            -- 4. Спасение упавших пациентов
+            -- 7. Спасение упавших пациентов
             if not worked then
                 pcall(AutoHelpFaintedPatients)
             end
 
-            -- 5. Кофе для Барни
+            -- 8. Починка камер безопасности
+            if not worked then
+                pcall(AutoFixCam)
+            end
+
+            -- 9. Кофе для Барни
             if not worked then
                 pcall(ProcessBarneyCoffee)
             end
 
-            -- 6. Уборка луж слизи
+            -- 10. Уборка луж слизи
             if not worked then
                 pcall(CleanSlimePuddles)
             end
 
-            -- 7. Покупка в магазине
+            -- 11. Покупка в магазине
             if not worked then
                 pcall(AutoBuyShopItems)
             end
