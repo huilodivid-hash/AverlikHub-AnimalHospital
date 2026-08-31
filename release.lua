@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V19.0 COMPLETE CHECK-IN ENGINE)
+-- 🏥 AVERLIK HUB: ANIMAL HOSPITAL ULTIMATE 1-TO-1 SUITE (V20.0 ATOMIC TASK LOCK ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- 🛑 SINGLETON SESSION LIFECYCLE GUARD
@@ -37,6 +37,7 @@ _G.LoopInterval = 0.15
 
 -- 📌 RUNTIME STATE & DATASETS
 _G.HasActiveThreat = false
+local _AH_IsPerformingTask = false
 local _AH_TreatedPatients = {}
 local _AH_HandledCheckInPatients = {}
 local _AH_PromptCooldowns = setmetatable({}, { __mode = "k" })
@@ -411,7 +412,7 @@ local function IndexTreatmentPrompt(prompt)
     local current = prompt.Parent
     while current and current ~= Workspace do
         local cName = current.Name
-        if _G.AH_ItemSet[cName] and not _G.AH_BlacklistedItemNames[cName] and (current:IsA("Model") or current:IsA("BasePart") or current:IsA("Folder")) then
+        if _G.AH_ItemSet[cName] and not _G.AH_BlacklistedItemNames[cName] and (current:IsA("Model") or current:IsA("BasePart")) then
             local tbl = _AH_ItemIndexTable[cName]
             if not tbl then tbl = {} _AH_ItemIndexTable[cName] = tbl end
             tbl[prompt] = true
@@ -458,22 +459,6 @@ local function GetItemPP(itemName)
             end
         end
     end
-
-    -- Deep scan fallback for pharmacy shelves
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") and desc.Enabled and not IsDescendantOfBlacklist(desc) then
-            local curr = desc.Parent
-            while curr and curr ~= Workspace do
-                if curr.Name == itemName and not _G.AH_BlacklistedItemNames[curr.Name] then
-                    if not _AH_ItemIndexTable[itemName] then _AH_ItemIndexTable[itemName] = {} end
-                    _AH_ItemIndexTable[itemName][desc] = true
-                    return desc
-                end
-                curr = curr.Parent
-            end
-        end
-    end
-
     return nil
 end
 
@@ -611,7 +596,6 @@ local function EvaluateShutterLogic()
     end
 
     local threatNear = HasThreatNearCheckIn()
-    local normalNear = HasNormalPatientAtCheckIn()
 
     if threatNear then
         _G.HasActiveThreat = true
@@ -692,7 +676,7 @@ local function MarkPatientTreated(npc)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 8. COMPLETE TREATMENT ENGINE (EXACT FOXNAME REPLICA)
+-- 🏥 8. COMPLETE TREATMENT ENGINE (ATOMIC FULL ROOM COMPLETION)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetPatientInRoom(roomData)
     local npcs = Workspace:FindFirstChild("NPCs")
@@ -713,6 +697,29 @@ local function GetPatientInRoom(roomData)
     return nil
 end
 
+local function GetRoomBedPrompt(roomData, minigame, patient)
+    if roomData.Name == "Room6" then
+        return patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))
+    end
+
+    local bed = minigame:FindFirstChild("Bed")
+    if bed then
+        local inBed = bed:FindFirstChild("InBed")
+        local p = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if p and p.Enabled then return p end
+
+        local p2 = bed:FindFirstChild("PP") or bed:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if p2 and p2.Enabled then return p2 end
+    end
+
+    if patient then
+        local npPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if npPP and npPP.Enabled then return npPP end
+    end
+
+    return nil
+end
+
 local function TreatSingleRoom(roomData)
     if not _G.AutoTreatment or StopCheck() then return false end
 
@@ -726,16 +733,6 @@ local function TreatSingleRoom(roomData)
     if not minigame then return false end
 
     local patient = GetPatientInRoom(roomData)
-
-    -- Резолвер целевого промпта (в Room6 - пациент, во всех остальных - кровать InBed.PP)
-    local bedPP = nil
-    if roomData.Name == "Room6" then
-        bedPP = patient and (patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true))
-    else
-        local inBed = minigame:FindFirstChild("Bed") and minigame.Bed:FindFirstChild("InBed")
-        bedPP = inBed and (inBed:FindFirstChild("PP") or inBed:FindFirstChildWhichIsA("ProximityPrompt", true))
-    end
-
     local didAction = false
 
     -- 1. DNA Sample Prompt (на пациенте)
@@ -794,7 +791,7 @@ local function TreatSingleRoom(roomData)
         task.wait(0.3)
     end
 
-    -- 6. Доставка медикаментов по рецепту
+    -- 6. Доставка медикаментов по рецепту (ATOMIC EXECUTION)
     local needed = GetNeededTreatmentItems(roomData)
     if #needed > 0 then
         Log("AutoTreatment", "Starting patient prescription delivery", {
@@ -807,7 +804,7 @@ local function TreatSingleRoom(roomData)
         local attempt = 0
         local appliedAny = false
 
-        while _G.AutoTreatment and not StopCheck() and attempt < 15 do
+        while _G.AutoTreatment and not StopCheck() and attempt < 20 do
             if IsRoomRecovering(roomData) then
                 Log("AutoTreatment", "Patient is recovering, completed", { room = roomData.Name })
                 break
@@ -840,15 +837,15 @@ local function TreatSingleRoom(roomData)
                 UseInventoryTool(currentItem)
                 task.wait(0.05)
 
-                local targetPrompt = bedPP
-                if patient and patient:GetAttribute("Skinwalker") == true then
-                    local npPP = patient:FindFirstChild("PP") or patient:FindFirstChildWhichIsA("ProximityPrompt", true)
-                    if npPP and npPP.Enabled then targetPrompt = npPP end
+                local targetPrompt = GetRoomBedPrompt(roomData, minigame, patient)
+                if not targetPrompt then
+                    task.wait(0.3)
+                    targetPrompt = GetRoomBedPrompt(roomData, minigame, patient)
                 end
 
                 if targetPrompt and targetPrompt.Enabled then
                     Log("AutoTreatment", "Delivering treatment item to bed", { room = roomData.Name, targetItem = currentItem, prompt = targetPrompt:GetFullName() })
-                    PressTreatmentPromptNearbyUntil(targetPrompt, 0.15, 2.0, function()
+                    PressTreatmentPromptNearbyUntil(targetPrompt, 0.15, 2.5, function()
                         return GetItemCount(currentItem) == 0 or not targetPrompt.Parent or not targetPrompt.Enabled
                     end)
 
@@ -871,9 +868,10 @@ local function TreatSingleRoom(roomData)
                     end
                 else
                     Log("AutoTreatment", "Target bed/patient prompt not available", { room = roomData.Name })
+                    task.wait(0.2)
                 end
             else
-                task.wait(0.4)
+                task.wait(0.3)
             end
         end
 
@@ -891,26 +889,8 @@ local function TreatSingleRoom(roomData)
     return didAction
 end
 
-local function ExecuteTreatmentCycle()
-    if not _G.AutoTreatment or StopCheck() then return false end
-
-    -- Приоритет реанимаций (Палаты 8, 7, 6)
-    for _, idx in ipairs({8, 7, 6}) do
-        local roomData = _G.AH_RoomData[idx]
-        if TreatSingleRoom(roomData) then return true end
-    end
-
-    -- Терапевтические палаты (Палаты 1 - 5)
-    for idx = 1, 5 do
-        local roomData = _G.AH_RoomData[idx]
-        if TreatSingleRoom(roomData) then return true end
-    end
-
-    return false
-end
-
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏢 9. COMPLETE RECEPTION ENGINE (EXACT FOXNAME REPLICA)
+-- 🏢 9. COMPLETE RECEPTION ENGINE (ATOMIC ZERO-INTERRUPT FLOW)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function GetCheckInStations()
     local stations = {}
@@ -1033,78 +1013,95 @@ local function ExecuteCheckInCycle()
         end
     end
 
-    -- 1. Если NPC уже готов завершить регистрацию -> говорим сразу!
-    if FinishPatientCheckIn(patient) then return true end
+    Log("AutoCheckIn", "Starting check-in cycle for patient", { patient = patient:GetFullName() })
 
-    -- 2. Готовый напечатанный бейджик на стойке
-    for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
-        local b = checkIn:FindFirstChild(bName)
-        local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
-        if bPP and bPP.Enabled then
-            Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
-            PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
+    local maxSteps = 10
+    local step = 0
+    while not StopCheck() and step < maxSteps do
+        step = step + 1
+
+        -- 1. Если NPC уже готов завершить регистрацию -> говорим сразу!
+        if FinishPatientCheckIn(patient) then return true end
+
+        -- 2. Готовый напечатанный бейджик на стойке
+        for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
+            local b = checkIn:FindFirstChild(bName)
+            local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
+            if bPP and bPP.Enabled then
+                Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
+                PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
+                task.wait(0.2)
+                if FinishPatientCheckIn(patient) then return true end
+            end
+        end
+
+        local didAnyAction = false
+
+        -- 3. Бланк (Form)
+        local form = checkIn:FindFirstChild("Form")
+        local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if formPP and formPP.Enabled then
+            Log("AutoCheckIn", "Stamping Form", { prompt = formPP:GetFullName() })
+            PressPromptNearby(formPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+            didAnyAction = true
+            task.wait(0.15)
+            if FinishPatientCheckIn(patient) then return true end
+        end
+
+        -- 4. Фотоаппарат (Camera)
+        local cam = checkIn:FindFirstChild("Camera")
+        local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if camPP and camPP.Enabled then
+            Log("AutoCheckIn", "Taking Photo", { prompt = camPP:GetFullName() })
+            PressPromptNearby(camPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+            didAnyAction = true
+            task.wait(0.15)
+            if FinishPatientCheckIn(patient) then return true end
+        end
+
+        -- 5. Компьютер (Computer)
+        local pc = checkIn:FindFirstChild("Computer")
+        local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if pcPP and pcPP.Enabled then
+            Log("AutoCheckIn", "Processing computer registration", { prompt = pcPP:GetFullName() })
+            PressPromptNearby(pcPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
+            didAnyAction = true
             task.wait(0.2)
             if FinishPatientCheckIn(patient) then return true end
         end
-    end
 
-    -- 3. Бланк (Form)
-    local form = checkIn:FindFirstChild("Form")
-    local formPP = form and (form:FindFirstChild("PP") or form:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if formPP and formPP.Enabled then
-        Log("AutoCheckIn", "Stamping Form", { prompt = formPP:GetFullName() })
-        PressPromptNearby(formPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        task.wait(0.15)
-        if FinishPatientCheckIn(patient) then return true end
-    end
+        -- 6. Принтер (Printer)
+        local printer = checkIn:FindFirstChild("Printer")
+        local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if printerPP and printerPP.Enabled then
+            Log("AutoCheckIn", "Printing Badge", { prompt = printerPP:GetFullName() })
+            PressPromptNearby(printerPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
+            didAnyAction = true
 
-    -- 4. Фотоаппарат (Camera)
-    local cam = checkIn:FindFirstChild("Camera")
-    local camPP = cam and (cam:FindFirstChild("PP") or cam:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if camPP and camPP.Enabled then
-        Log("AutoCheckIn", "Taking Photo", { prompt = camPP:GetFullName() })
-        PressPromptNearby(camPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        task.wait(0.15)
-        if FinishPatientCheckIn(patient) then return true end
-    end
-
-    -- 5. Компьютер (Computer)
-    local pc = checkIn:FindFirstChild("Computer")
-    local pcPP = pc and (pc:FindFirstChild("PP") or pc:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if pcPP and pcPP.Enabled then
-        Log("AutoCheckIn", "Processing computer registration", { prompt = pcPP:GetFullName() })
-        PressPromptNearby(pcPP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-        task.wait(0.2)
-        if FinishPatientCheckIn(patient) then return true end
-    end
-
-    -- 6. Принтер (Printer)
-    local printer = checkIn:FindFirstChild("Printer")
-    local printerPP = printer and (printer:FindFirstChild("PP") or printer:FindFirstChildWhichIsA("ProximityPrompt", true))
-    if printerPP and printerPP.Enabled then
-        Log("AutoCheckIn", "Printing Badge", { prompt = printerPP:GetFullName() })
-        PressPromptNearby(printerPP, 0.35, Vector3.new(0, 1.0, 1.5), 0.15)
-
-        local waitDeadline = os.clock() + 3.0
-        while os.clock() < waitDeadline and not StopCheck() do
-            for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
-                local b = checkIn:FindFirstChild(bName)
-                local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
-                if bPP and bPP.Enabled then
-                    Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
-                    PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
-                    task.wait(0.2)
-                    if FinishPatientCheckIn(patient) then return true end
-                    break
+            local waitDeadline = os.clock() + 3.0
+            while os.clock() < waitDeadline and not StopCheck() do
+                for _, bName in ipairs({"PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}) do
+                    local b = checkIn:FindFirstChild(bName)
+                    local bPP = b and (b:FindFirstChild("PP") or b:FindFirstChildWhichIsA("ProximityPrompt", true))
+                    if bPP and bPP.Enabled then
+                        Log("AutoCheckIn", "Taking printed badge from desk", { prompt = bPP:GetFullName() })
+                        PressPromptNearby(bPP, 0.25, Vector3.new(0, 1.0, 1.5), 0.15)
+                        task.wait(0.2)
+                        if FinishPatientCheckIn(patient) then return true end
+                        break
+                    end
                 end
+                if FinishPatientCheckIn(patient) then return true end
+                task.wait(0.15)
             end
-            if FinishPatientCheckIn(patient) then return true end
-            task.wait(0.15)
         end
+
+        if FinishPatientCheckIn(patient) then return true end
+        if not didAnyAction then break end
+        task.wait(0.15)
     end
 
     if FinishPatientCheckIn(patient) then return true end
-
     return false
 end
 
@@ -1157,6 +1154,8 @@ end
 local function AutoPutOutFire()
     if not _G.AutoPutOutFire or StopCheck() then return false end
 
+    local firesExtinguished = 0
+
     local npcs = Workspace:FindFirstChild("NPCs")
     if npcs then
         for _, npc in ipairs(npcs:GetChildren()) do
@@ -1167,8 +1166,7 @@ local function AutoPutOutFire()
                     EquipExtinguisher()
                     Log("AutoPutOutFire", "Extinguishing burning patient", { npc = npc:GetFullName() })
                     PressPromptNearby(firePP, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-                    UnequipAllTools()
-                    return true
+                    firesExtinguished = firesExtinguished + 1
                 end
             end
         end
@@ -1183,11 +1181,15 @@ local function AutoPutOutFire()
                     EquipExtinguisher()
                     Log("AutoPutOutFire", "Extinguishing fire in room", { prompt = p:GetFullName() })
                     PressPromptNearby(p, 0.3, Vector3.new(0, 1.0, 1.5), 0.15)
-                    UnequipAllTools()
-                    return true
+                    firesExtinguished = firesExtinguished + 1
                 end
             end
         end
+    end
+
+    if firesExtinguished > 0 then
+        UnequipAllTools()
+        return true
     end
 
     return false
@@ -1579,7 +1581,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏥 Averlik Hub | Animal Hospital v19.0 [P: Мышь | G: Меню]"
+Title.Text = "🏥 Averlik Hub | Animal Hospital v20.0 [P: Мышь | G: Меню]"
 Title.TextColor3 = Color3.fromRGB(240, 245, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -1928,8 +1930,19 @@ TabButtons["Автоматизация"].TextColor3 = Color3.fromRGB(255, 255, 2
 TabFrames["Автоматизация"].Visible = true
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (FOXNAME EXACT ORDER)
+-- 🔄 20. AUTONOMOUS PRIORITY SCHEDULER (ATOMIC TASK MUTEX LOCK)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local function RunTaskExclusively(taskName, taskFunc)
+    if _AH_IsPerformingTask or StopCheck() then return false end
+    _AH_IsPerformingTask = true
+    local ok, res = pcall(taskFunc)
+    _AH_IsPerformingTask = false
+    if not ok then
+        Log("TaskError", taskName .. " failed: " .. tostring(res))
+    end
+    return res == true
+end
+
 task.spawn(function()
     Log("Loop", "Averlik Hub Animal Hospital Engine Started", { sessionId = MySession, loopInterval = _G.LoopInterval })
 
@@ -1949,75 +1962,76 @@ task.spawn(function()
 
         local now = os.clock()
 
-        -- 1. СРОЧНОЕ ЛЕЧЕНИЕ (Палаты 8, 7, 6 каждые 0.25с)
-        if _G.AutoTreatment and now >= nextUrgentCheck then
-            nextUrgentCheck = now + 0.25
+        -- 1. СРОЧНОЕ ЛЕЧЕНИЕ РЕАНИМАЦИЙ (Палаты 8, 7, 6)
+        if _G.AutoTreatment and now >= nextUrgentCheck and not _AH_IsPerformingTask then
+            nextUrgentCheck = now + 0.35
             for _, idx in ipairs({8, 7, 6}) do
                 local roomData = _G.AH_RoomData[idx]
-                local ok, did = pcall(function() return TreatSingleRoom(roomData) end)
-                if ok and did then break end
+                if RunTaskExclusively("UrgentTreatment_" .. roomData.Name, function() return TreatSingleRoom(roomData) end) then
+                    break
+                end
             end
         end
 
-        -- 2. ВЫГОН АНОМАЛИЙ
-        local anomalyHandled = false
-        if _G.AutoAskLeaveAnomaly then
-            pcall(function() anomalyHandled = AutoAskLeaveAnomaly() end)
+        -- 2. ВЫГОН АНОМАЛИЙ (Ask to leave)
+        if _G.AutoAskLeaveAnomaly and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoAskLeaveAnomaly", AutoAskLeaveAnomaly)
         end
 
-        -- 3. ТУШЕНИЕ ПОЖАРОВ
-        local fireHandled = false
-        if not anomalyHandled and _G.AutoPutOutFire then
-            pcall(function() fireHandled = AutoPutOutFire() end)
+        -- 3. ТУШЕНИЕ ПОЖАРОВ (Без прерывания)
+        if _G.AutoPutOutFire and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoPutOutFire", AutoPutOutFire)
         end
 
         -- 4. ТАЗЕР АНОМАЛИЙ
-        local taserHandled = false
-        if not anomalyHandled and not fireHandled and _G.AutoTaser then
-            pcall(function() taserHandled = AutoTaserAnomalies() end)
+        if _G.AutoTaser and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoTaserAnomalies", AutoTaserAnomalies)
         end
 
-        -- 5. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8 каждые 0.6с)
-        if _G.AutoTreatment and now >= nextGeneralTreatment then
+        -- 5. ОБЩЕЕ ЛЕЧЕНИЕ (Палаты 1 - 8)
+        if _G.AutoTreatment and now >= nextGeneralTreatment and not _AH_IsPerformingTask then
             nextGeneralTreatment = now + 0.6
             for idx = 1, 8 do
                 local roomData = _G.AH_RoomData[idx]
-                local ok, did = pcall(function() return TreatSingleRoom(roomData) end)
-                if ok and did then break end
+                if RunTaskExclusively("GeneralTreatment_" .. roomData.Name, function() return TreatSingleRoom(roomData) end) then
+                    break
+                end
             end
         end
 
         -- 6. УМНАЯ ШТОРКА (Только при реальных скинвокерах и Барни, открытие при уходе)
-        pcall(EvaluateShutterLogic)
+        if not _AH_IsPerformingTask then
+            pcall(EvaluateShutterLogic)
+        end
 
-        -- 7. РЕСЕПШЕН (Регистрация посетителей)
-        if _G.AutoCheckIn and not _G.HasActiveThreat and IsShutterClosed() ~= true then
-            pcall(ExecuteCheckInCycle)
+        -- 7. РЕСЕПШЕН (Регистрация посетителей от начала до конца)
+        if _G.AutoCheckIn and not _G.HasActiveThreat and IsShutterClosed() ~= true and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoCheckIn", ExecuteCheckInCycle)
         end
 
         -- 8. СПАСЕНИЕ УПАВШИХ ПАЦИЕНТОВ
-        if _G.AutoHelpPatient then
-            pcall(AutoHelpFaintedPatients)
+        if _G.AutoHelpPatient and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoHelpPatient", AutoHelpFaintedPatients)
         end
 
         -- 9. ПОЧИНКА КАМЕР
-        if _G.AutoFixCam then
-            pcall(AutoFixCam)
+        if _G.AutoFixCam and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoFixCam", AutoFixCam)
         end
 
         -- 10. КОФЕ ДЛЯ БАРНИ
-        if _G.AutoGiveBarneyCoffee then
-            pcall(ProcessBarneyCoffee)
+        if _G.AutoGiveBarneyCoffee and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoGiveBarneyCoffee", ProcessBarneyCoffee)
         end
 
         -- 11. УБОРКА СЛИЗИ
-        if _G.AutoCleanSlime then
-            pcall(CleanSlimePuddles)
+        if _G.AutoCleanSlime and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoCleanSlime", CleanSlimePuddles)
         end
 
         -- 12. МАГАЗИН
-        if _G.AutoBuyShop then
-            pcall(AutoBuyShopItems)
+        if _G.AutoBuyShop and not _AH_IsPerformingTask then
+            RunTaskExclusively("AutoBuyShop", AutoBuyShopItems)
         end
     end
 
