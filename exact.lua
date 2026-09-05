@@ -534,6 +534,11 @@ local function HasNormalPatientAtCheckIn()
     return false
 end
 
+local function HasAnyNpcAtCheckInCounter()
+    local patient, prompt, station = FindCheckInNpcPrompt()
+    return patient ~= nil
+end
+
 local function IsCheckInPrinterPrompt(prompt)
     if not prompt then return false end
     local current, depth = prompt.Parent, 0
@@ -659,12 +664,13 @@ local function ResolveCheckInPrompt(stepNames, station)
 end
 
 local function RunCheckInCycle()
-    Log("AutoCheckIn", "Starting check-in cycle")
+    if not _G.AutoCheckIn or StopCheck() then return false end
+
+    local patient, patientPrompt, station = FindCheckInNpcPrompt()
+    if not patient then return false end
+
+    Log("AutoCheckIn", "Starting check-in cycle", { patient = patient.Name, station = station and station.Name })
     LockCamera()
-    if not _G.AutoCheckIn or StopCheck() then
-        UnlockCamera()
-        return false
-    end
 
     local npcs = Workspace:FindFirstChild("NPCs")
     local stalker = npcs and npcs:FindFirstChild("StalkerMonster")
@@ -681,7 +687,6 @@ local function RunCheckInCycle()
     end
 
     local steps = {"Form", "Camera", "Computer", "Printer", "PrintedBadge", "PatientBadgeBase", "VisitorBadgeBase"}
-    local patient, patientPrompt, station = FindCheckInNpcPrompt()
     local targetStation = station
     local didAnyAction = false
 
@@ -3128,8 +3133,8 @@ task.spawn(function()
             end
         end
 
-        -- 7. CHECK-IN FALLBACK (When counter area is clear of threats)
-        if _G.AutoCheckIn and not hasDeskPatient then
+        -- 7. CHECK-IN FALLBACK (When counter area is clear of threats and an NPC is at the counter)
+        if _G.AutoCheckIn and not hasDeskPatient and HasAnyNpcAtCheckInCounter() then
             local threatNear = false
             if _G.AutoAnomalyShutter or _G.AutoBarneyShutter then
                 local ok, npcs = GetNpcSnapshot()
