@@ -974,11 +974,20 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🩹 TREATMENT DIAGNOSTIC & PRESCRIPTION PARSER (FOXNAME 1-TO-1)
 -- ══════════════════════════════════════════════════════════════════════════════════
+local _AH_RoomCooldowns = {}
+
 local function IsRecentlyTreated(npc)
     if not npc then return true end
-    local last = _G.AH_TreatedPatients[npc]
+    local last = _G.AH_TreatedPatients[npc] or _G.AH_TreatedPatients[npc.Name]
     if last and (os.clock() - last < 25.0) then return true end
     return false
+end
+
+local function MarkPatientTreated(npc)
+    if npc then
+        _G.AH_TreatedPatients[npc] = os.clock()
+        _G.AH_TreatedPatients[npc.Name] = os.clock()
+    end
 end
 
 local function IsTakeDnaSamplePrompt(prompt)
@@ -1172,23 +1181,18 @@ end
 -- 🏥 FULL PATIENT TREATMENT CYCLE (EXACT FOXNAME ae FUNCTION)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local function ExecutePatientTreatment(patient, patientPrompt, roomData)
-    if not patient then
-        local npcs = Workspace:FindFirstChild("NPCs")
-        if npcs then
-            for _, npc in ipairs(npcs:GetChildren()) do
-                if not npc:GetAttribute("IsVisitor") and (npc:GetAttribute("IsPatient") == true or npc:GetAttribute("Skinwalker") == true) then
-                    local root = npc:FindFirstChild("HumanoidRootPart")
-                    if root then
-                        local isDes = npc:GetAttribute("DesignatedRoom") == roomData.Name
-                        local dist = (root.Position - roomData.Position).Magnitude
-                        if isDes or dist < 25 then
-                            patient = npc
-                            break
-                        end
-                    end
-                end
-            end
-        end
+    if not patient or not patient.Parent then return false end
+
+    local pRoot = patient:FindFirstChild("HumanoidRootPart") or patient:FindFirstChild("Torso")
+    if not pRoot then return false end
+
+    -- Verify patient is physically in this room or already in bed
+    local pDist = (pRoot.Position - roomData.Position).Magnitude
+    local pInBed = patient:GetAttribute("InBed") == true
+    if not pInBed and pDist > 24 then
+        Log("AutoTreatment", "Patient is still walking to room; skipping for now", { room = roomData.Name, dist = math.floor(pDist) })
+        _AH_RoomCooldowns[roomData.Name] = os.clock() + 3.0
+        return false
     end
 
     Log("AutoTreatment", "Starting patient treatment", {
@@ -1232,11 +1236,21 @@ local function ExecutePatientTreatment(patient, patientPrompt, roomData)
     local rNum = tonumber((roomData.Name or ""):match("%d+"))
 
     -- DNA Sample prompt on patient
-    if not roomData.Emergency and IsTakeDnaSamplePrompt(patientPrompt) and patientPrompt.Enabled then
-        Log("AutoTreatment", "Taking DNA sample", { room = roomData.Name, npc = patient and patient.Name, prompt = patientPrompt:GetFullName() })
-        PressTreatmentPromptNearby(patientPrompt, 0.5)
-        task.wait(0.5)
+    local dnaPP = GetTakeDnaSamplePrompt(patient) or (IsTakeDnaSamplePrompt(patientPrompt) and patientPrompt)
+    if not roomData.Emergency and dnaPP and dnaPP.Enabled then
+        Log("AutoTreatment", "Taking DNA sample", { room = roomData.Name, npc = patient and patient.Name, prompt = dnaPP:GetFullName() })
+        PressTreatmentPromptNearby(dnaPP, 0.5)
+        task.wait(0.3)
         if StopCheck() then return end
+
+        -- Insert DNA sample into Analyzer (Rooms 1 - 5)
+        local analyzer = minigame:FindFirstChild("Analyzer") or minigame:FindFirstChild("Analyser")
+        local analyzerPP = analyzer and (analyzer:FindFirstChild("PP") or analyzer:FindFirstChildWhichIsA("ProximityPrompt", true))
+        if analyzerPP and analyzerPP.Enabled then
+            Log("AutoTreatment", "Inserting sample into DNA Analyzer", { room = roomData.Name, prompt = analyzerPP:GetFullName() })
+            PressTreatmentPromptNearby(analyzerPP, 0.4, 0.2)
+            task.wait(0.4)
+        end
     end
 
     -- Rooms 1 - 5: enable monitor prompt in executor
@@ -1292,7 +1306,9 @@ local function ExecutePatientTreatment(patient, patientPrompt, roomData)
                 end
                 if StopCheck() then return end
 
-                if monPP then
+                -- ONLY press computer/monitor if patient is actually in bed or room 6!
+                local patientInBed = patient:GetAttribute("InBed") == true or roomData.Name == "Room6"
+                if monPP and patientInBed then
                     Log("AutoTreatment", "Pressing monitor process prompt", { room = roomData.Name, prompt = monPP:GetFullName(), retryLeft = retriesLeft })
                     if retriesLeft == 0 then
                         local mPos = GetPromptPosition(monPP)
@@ -1380,7 +1396,8 @@ local function ExecutePatientTreatment(patient, patientPrompt, roomData)
                     task.wait(1)
                 else
                     LogError("AutoTreatment", "Monitor did not show illnesses after 8.5s; skipping patient", { room = roomData.Name })
-                    return
+                    _AH_RoomCooldowns[roomData.Name] = os.clock() + 5.0
+                    return false
                 end
             else
                 local tvWait = os.clock() + 10.0
@@ -1399,7 +1416,8 @@ local function ExecutePatientTreatment(patient, patientPrompt, roomData)
                     task.wait(1)
                 else
                     LogError("AutoTreatment", "TV report does not have enough frames after 10s; skipping patient", { room = roomData.Name })
-                    return
+                    _AH_RoomCooldowns[roomData.Name] = os.clock() + 5.0
+                    return false
                 end
             end
         end
@@ -1609,32 +1627,198 @@ local function ExecutePatientTreatment(patient, patientPrompt, roomData)
         end
     end
 
-    if patient then _G.AH_TreatedPatients[patient] = os.clock() end
+    if patient then
+        MarkPatientTreated(patient)
+    end
+    _AH_RoomCooldowns[roomData.Name] = os.clock() + 4.0
     Log("AutoTreatment", "Finished patient treatment", { room = roomData.Name, npc = patient and patient.Name or "unknown" })
     return true
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🏥 SCAN ROOMS & PRIORITY TREATMENT SCHEDULER
+-- 🏥 EXACT FOXNAME MULTI-TIER PATIENT FINDERS & ROOM SCHEDULER
 -- ══════════════════════════════════════════════════════════════════════════════════
-local function FindPatientForRoom(roomData)
-    local npcs = Workspace:FindFirstChild("NPCs")
-    if not npcs then return nil, nil end
+local function GetRoomPrimaryPrompt(roomName)
+    local numStr = tostring(roomName or ''):match('%d+')
+    local rNum = tonumber(numStr)
+    if not rNum then return nil end
+    local folder = rNum <= 5 and Workspace.Rooms.Medical or Workspace.Rooms.Emergency
+    local room = folder:FindFirstChild(roomName)
+    if not room then return nil end
+    local mg = room:FindFirstChild('Minigame')
+    if not mg then return nil end
+    if roomName == 'Room6' then
+        local xmon = mg:FindFirstChild('xrayMonitor')
+        return xmon and xmon:FindFirstChild('PP')
+    end
+    local bed = mg:FindFirstChild('Bed')
+    if not bed then return nil end
+    local inBed = bed:FindFirstChild('InBed')
+    if not inBed then return nil end
+    return inBed:FindFirstChild('PP2') or inBed:FindFirstChild('PP') or inBed:FindFirstChildWhichIsA('ProximityPrompt', true)
+end
 
-    for _, npc in ipairs(npcs:GetChildren()) do
-        if not npc:GetAttribute("IsVisitor") and (npc:GetAttribute("IsPatient") == true or npc:GetAttribute("Skinwalker") == true) then
-            local desRoom = npc:GetAttribute("DesignatedRoom")
-            local root = npc:FindFirstChild("HumanoidRootPart")
-            if root then
-                local dist = (root.Position - roomData.Position).Magnitude
-                if desRoom == roomData.Name or dist < 24 then
-                    local p = GetTakeDnaSamplePrompt(npc) or GetFirstEnabledNpcPrompt(npc)
-                    return npc, p
+-- 🎯 FOXNAME ag: Find patient for room name who has an enabled prompt
+local function FindPatientByRoomName(roomName)
+    local ok, npcs = GetNpcSnapshot()
+    if not ok then return nil, nil end
+    local primaryPP = GetRoomPrimaryPrompt(roomName)
+    if not primaryPP then return nil, nil end
+    local roomPos = GetPromptPosition(primaryPP)
+    if not roomPos then return nil, nil end
+
+    for _, npc in ipairs(npcs) do
+        if not npc:GetAttribute('IsVisitor') then
+            if (npc:GetAttribute('IsPatient') == true or npc:GetAttribute('Skinwalker') == true) and not IsRecentlyTreated(npc) then
+                local root = npc:FindFirstChild('HumanoidRootPart') or npc:FindFirstChild('Torso')
+                if root then
+                    local isDes = npc:GetAttribute('DesignatedRoom') == roomName
+                    local inBed = npc:GetAttribute('InBed') == true
+                    local delta = root.Position - roomPos
+                    local distSq = delta:Dot(delta)
+                    -- 0x310 is 784 (28 studs), 0xe1 is 225 (15 studs)
+                    if not IsNearAnyCheckIn(root.Position, 25) and ((isDes and (inBed or distSq < 784)) or distSq < 225) then
+                        local pp = npc:FindFirstChild('PP') or GetFirstEnabledNpcPrompt(npc)
+                        if pp and pp.Enabled then
+                            return npc, pp
+                        end
+                    end
                 end
             end
         end
     end
     return nil, nil
+end
+
+-- 🎯 FOXNAME ah: Find patient who needs a DNA sample taken
+local function FindDnaPatientForRoom(roomData)
+    local ok, npcs = GetNpcSnapshot()
+    if not ok then return nil, nil end
+    local primaryPP = GetRoomPrimaryPrompt(roomData.Name)
+    local roomPos = primaryPP and GetPromptPosition(primaryPP) or roomData.Position
+    local bestNpc, bestPP, bestScore = nil, nil, -1
+
+    for _, npc in ipairs(npcs) do
+        if not npc:GetAttribute('IsVisitor') then
+            if npc:GetAttribute('IsPatient') == true or npc:GetAttribute('Skinwalker') == true then
+                local dnaPP = GetTakeDnaSamplePrompt(npc)
+                if dnaPP and dnaPP.Enabled then
+                    local isDes = npc:GetAttribute('DesignatedRoom') == roomData.Name
+                    local inBed = npc:GetAttribute('InBed') == true
+                    local root = npc:FindFirstChild('HumanoidRootPart') or npc:FindFirstChild('Torso')
+                    local delta = root and roomPos and (root.Position - roomPos)
+                    local isNear = delta and delta:Dot(delta) <= 1225 -- 35 studs
+                    if (isDes or isNear) and root and not IsNearAnyCheckIn(root.Position, 25) then
+                        local score = 0
+                        if isDes then score = score + 4 end
+                        if inBed then score = score + 2 end
+                        if isNear then score = score + 1 end
+                        if score > bestScore then
+                            bestNpc, bestPP, bestScore = npc, dnaPP, score
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return bestNpc, bestPP
+end
+
+-- 🎯 FOXNAME ai: Find patient who needs treatment items applied
+local function FindTreatmentPatientForRoom(roomData)
+    local ok, npcs = GetNpcSnapshot()
+    if not ok then return nil, nil end
+    local hasWork = (GetMonitorIllnessCount(roomData) > 0) or (CountNeededTreatmentItems(roomData, true) > 0)
+    local rName = roomData.Name
+    local primaryPP = GetRoomPrimaryPrompt(rName)
+    local roomPos = primaryPP and GetPromptPosition(primaryPP) or roomData.Position
+    local bestNpc, bestPP, bestScore = nil, nil, -1
+
+    for _, npc in ipairs(npcs) do
+        if not npc:GetAttribute('IsVisitor') then
+            if (npc:GetAttribute('IsPatient') == true or npc:GetAttribute('Skinwalker') == true) and not IsRecentlyTreated(npc) then
+                local isDes = npc:GetAttribute('DesignatedRoom') == rName
+                local hasHl = HasReadyPatientHighlight(npc)
+                local inBed = npc:GetAttribute('InBed') == true
+                local root = npc:FindFirstChild('HumanoidRootPart') or npc:FindFirstChild('Torso')
+                local delta = root and roomPos and (root.Position - roomPos)
+                local isNear = delta and delta:Dot(delta) <= 1225 -- 35 studs
+                if root and not IsNearAnyCheckIn(root.Position, 25) and ((isDes and (inBed or isNear)) or (isNear and hasHl) or (isNear and hasWork and inBed)) then
+                    local pp = npc:FindFirstChild('PP') or GetFirstEnabledNpcPrompt(npc)
+                    local score = 0
+                    if isDes then score = score + 4 end
+                    if hasHl then score = score + 3 end
+                    if hasWork then score = score + 2 end
+                    if inBed then score = score + 1 end
+                    if pp and pp.Enabled and score > bestScore then
+                        bestNpc, bestPP, bestScore = npc, pp, score
+                    end
+                end
+            end
+        end
+    end
+    return bestNpc, bestPP
+end
+
+-- 🎯 FOXNAME aj / ak: Room 8 surgery prompts
+local function GetRoom8SurgeryStartPrompt(rName)
+    rName = rName or 'Room8'
+    local ok, pp = pcall(function() return Workspace.Rooms.Emergency[rName].Minigame.Bed.InBed.PP2 end)
+    if ok and pp and pp:IsA('ProximityPrompt') and pp.Enabled then return pp end
+    return nil
+end
+
+local function GetRoom8SurgeryMidPrompt(rName)
+    rName = rName or 'Room8'
+    local ok, pp = pcall(function() return Workspace.Rooms.Emergency[rName].Minigame.Bed.InBed.PP end)
+    if ok and pp and pp:IsA('ProximityPrompt') and pp.Enabled then return pp end
+    return nil
+end
+
+-- 🎯 FOXNAME al: Find patient specifically for surgery prompt
+local function FindSurgeryPatient(roomData, prompt)
+    local p, pp = FindTreatmentPatientForRoom(roomData)
+    if p then return p, pp or prompt end
+    p, pp = FindPatientByRoomName(roomData.Name)
+    if p then return p, pp or prompt end
+
+    local ok, npcs = GetNpcSnapshot()
+    if not ok then return nil, nil end
+    local roomPos = GetPromptPosition(prompt) or roomData.Position
+    local bestNpc, bestScore = nil, -1
+
+    for _, npc in ipairs(npcs) do
+        if not npc:GetAttribute('IsVisitor') then
+            if (npc:GetAttribute('IsPatient') == true or npc:GetAttribute('Skinwalker') == true) and not IsRecentlyTreated(npc) then
+                local root = npc:FindFirstChild('HumanoidRootPart') or npc:FindFirstChild('Torso')
+                local isDes = npc:GetAttribute('DesignatedRoom') == roomData.Name
+                local inBed = npc:GetAttribute('InBed') == true
+                local delta = root and roomPos and (root.Position - roomPos)
+                local isNear = delta and delta:Dot(delta) <= 1600 -- 40 studs (0x640)
+                if root and not IsNearAnyCheckIn(root.Position, 25) and ((isDes and (inBed or isNear)) or (inBed and isNear) or isNear) then
+                    local score = 0
+                    if isDes then score = score + 4 end
+                    if inBed then score = score + 3 end
+                    if isNear then score = score + 1 end
+                    if score > bestScore then
+                        bestNpc, bestScore = npc, score
+                    end
+                end
+            end
+        end
+    end
+    if bestNpc then
+        return bestNpc, bestNpc:FindFirstChild('PP') or GetFirstEnabledNpcPrompt(bestNpc) or prompt
+    end
+    return nil, nil
+end
+
+-- Legacy wrapper for any external callers
+local function FindPatientForRoom(roomData)
+    local p, pp = FindDnaPatientForRoom(roomData)
+    if not p then p, pp = FindTreatmentPatientForRoom(roomData) end
+    if not p then p, pp = FindPatientByRoomName(roomData.Name) end
+    return p, pp
 end
 
 local function AutoTreatmentCoordinator(urgentOnly)
@@ -1645,21 +1829,21 @@ local function AutoTreatmentCoordinator(urgentOnly)
     if ok then
         for _, npc in ipairs(npcs) do
             if StopCheck() then return false end
-            local firePP = npc:FindFirstChild("FirePP")
-            local root = npc:FindFirstChild("HumanoidRootPart")
-            local counterUI = root and root:FindFirstChild("Counter") and root.Counter:FindFirstChild("UI")
-            local img = counterUI and counterUI:FindFirstChild("Image")
+            local firePP = npc:FindFirstChild('FirePP')
+            local root = npc:FindFirstChild('HumanoidRootPart')
+            local counterUI = root and root:FindFirstChild('Counter') and root.Counter:FindFirstChild('UI')
+            local img = counterUI and counterUI:FindFirstChild('Image')
 
             if firePP and firePP.Enabled then
-                if firePP.ActionText ~= "Treat Burns" then
-                    Log("AutoTreatment", "Pressing FirePP (Extinguish)", { npc = npc.Name, actionText = firePP.ActionText })
+                if firePP.ActionText ~= 'Treat Burns' then
+                    Log('AutoTreatment', 'Pressing FirePP (Extinguish)', { npc = npc.Name, actionText = firePP.ActionText })
                     PressTreatmentPromptNearbyUntil(firePP, 0.25, 3.0, function()
-                        return not firePP.Parent or not firePP.Enabled or firePP.ActionText == "Treat Burns"
+                        return not firePP.Parent or not firePP.Enabled or firePP.ActionText == 'Treat Burns'
                     end)
                     task.wait(0.5)
                     return true
                 else
-                    local assetId = img and img.Image ~= "" and string.match(img.Image, "%d+")
+                    local assetId = img and img.Image ~= '' and string.match(img.Image, '%d+')
                     local remedyItem = nil
                     if assetId then
                         for mapId, name in pairs(AilmentAssetMap) do
@@ -1671,7 +1855,7 @@ local function AutoTreatmentCoordinator(urgentOnly)
                     end
 
                     if remedyItem then
-                        Log("AutoTreatment", "Patient needs treat burns item", { npc = npc.Name, item = remedyItem })
+                        Log('AutoTreatment', 'Patient needs treat burns item', { npc = npc.Name, item = remedyItem })
                         if GetItemCount(remedyItem) == 0 then
                             local itemPP = GetItemPP(remedyItem)
                             if itemPP then
@@ -1689,9 +1873,9 @@ local function AutoTreatmentCoordinator(urgentOnly)
                         if GetItemCount(remedyItem) > 0 then
                             UseInventoryTool(remedyItem)
                             task.wait(0.2)
-                            Log("AutoTreatment", "Treating burning patient with item", { npc = npc.Name, item = remedyItem })
+                            Log('AutoTreatment', 'Treating burning patient with item', { npc = npc.Name, item = remedyItem })
                             PressTreatmentPromptNearbyUntil(firePP, 0.25, 3.0, function()
-                                return not firePP.Parent or not firePP.Enabled or GetItemCount(remedyItem) == 0 or firePP.ActionText ~= "Treat Burns"
+                                return not firePP.Parent or not firePP.Enabled or GetItemCount(remedyItem) == 0 or firePP.ActionText ~= 'Treat Burns'
                             end)
                             task.wait(0.5)
                             return true
@@ -1702,7 +1886,7 @@ local function AutoTreatmentCoordinator(urgentOnly)
         end
     end
 
-    -- 2. Iterate rooms according to Foxname order: {6, 7, 8} if urgent, {6, 7, 8, 1, 2, 3, 4, 5} if normal
+    -- 2. Iterate rooms according to exact Foxname order: {6, 7, 8} if urgent, {6, 7, 8, 1, 2, 3, 4, 5} if normal
     local roomOrder = urgentOnly and {6, 7, 8} or {6, 7, 8, 1, 2, 3, 4, 5}
 
     for _, rIdx in ipairs(roomOrder) do
@@ -1712,40 +1896,78 @@ local function AutoTreatmentCoordinator(urgentOnly)
         local roomData = _G.AH_RoomData[rIdx]
         local patient, patientPrompt = nil, nil
 
-        if roomData.Name == "Room8" then
-            local mg = Workspace.Rooms.Emergency.Room8:FindFirstChild("Minigame")
-            local startPP = mg and mg:FindFirstChild("Bed") and mg.Bed:FindFirstChild("InBed") and mg.Bed.InBed:FindFirstChild("PP2")
-            if startPP and startPP.Enabled then
-                patient, patientPrompt = FindPatientForRoom(roomData)
+        if roomData.Name == 'Room8' then
+            local startPP = GetRoom8SurgeryStartPrompt(roomData.Name)
+            local midPP = GetRoom8SurgeryMidPrompt(roomData.Name)
+            if startPP then
+                Log('AutoTreatment', 'Found surgery start prompt', { room = roomData.Name, prompt = startPP:GetFullName() })
+                patient, patientPrompt = FindSurgeryPatient(roomData, startPP)
                 if not patient then
-                    Log("AutoTreatment", "No surgery patient found; pressing start prompt", { room = roomData.Name })
+                    Log('AutoTreatment', 'No surgery patient found; pressing start prompt', { room = roomData.Name, prompt = startPP:GetFullName() })
                     PressTreatmentPromptNearbyUntil(startPP, 0.25, 3.0, function()
                         return not startPP.Parent or not startPP.Enabled or CountNeededTreatmentItems(roomData, true) > 0
                     end)
                     return true
                 end
+            elseif midPP then
+                Log('AutoTreatment', 'Found mid-surgery Apply Treatment prompt', { room = roomData.Name, prompt = midPP:GetFullName() })
+                patient, patientPrompt = FindSurgeryPatient(roomData, midPP)
+                if not patient then patient, patientPrompt = FindPatientByRoomName(roomData.Name) end
+                if not patientPrompt then patientPrompt = midPP end
             else
-                patient, patientPrompt = FindPatientForRoom(roomData)
+                patient, patientPrompt = FindDnaPatientForRoom(roomData)
             end
-        elseif roomData.Name == "Room6" or roomData.Name == "Room7" then
-            local mg = Workspace.Rooms.Emergency[roomData.Name]:FindFirstChild("Minigame")
-            local xresultPP = GetPrintedXRayPrompt(mg)
-            patient, patientPrompt = FindPatientForRoom(roomData)
+        elseif roomData.Name == 'Room6' or roomData.Name == 'Room7' then
+            local startPP = nil
+            if roomData.Name == 'Room7' then
+                startPP = GetRoom8SurgeryStartPrompt(roomData.Name)
+            else
+                local ok, xmonPP = pcall(function() return Workspace.Rooms.Emergency.Room6.Minigame.xrayMonitor.PP end)
+                if ok and xmonPP and xmonPP:IsA('ProximityPrompt') and xmonPP.Enabled then startPP = xmonPP end
+            end
 
-            if xresultPP and xresultPP.Enabled then
+            local folder = roomData.Emergency and Workspace.Rooms.Emergency or Workspace.Rooms.Medical
+            local rModel = folder:FindFirstChild(roomData.Name)
+            local mg = rModel and rModel:FindFirstChild('Minigame')
+            local xresultPP = GetPrintedXRayPrompt(mg)
+            local pRoom, pRoomPP = FindPatientByRoomName(roomData.Name)
+
+            if roomData.Name == 'Room6' and not startPP and pRoom then
+                local dna = GetTakeDnaSamplePrompt(pRoom)
+                if dna and dna.Enabled then startPP = dna end
+            end
+
+            if startPP then
+                patientPrompt = startPP
+                patient = pRoom
+            elseif xresultPP and xresultPP.Enabled then
                 patientPrompt = xresultPP
-                Log("AutoTreatment", "xresult is enabled for room, treating room", { room = roomData.Name })
+                patient = pRoom
+                Log('AutoTreatment', 'xresult is enabled for room, treating room', { room = roomData.Name, npc = patient and patient.Name, prompt = patientPrompt:GetFullName() })
+            elseif pRoom then
+                patient = pRoom
+                patientPrompt = pRoomPP
             end
         else
-            patient, patientPrompt = FindPatientForRoom(roomData)
+            -- ROOMS 1 - 5 (MEDICAL ROOMS)
+            patient, patientPrompt = FindDnaPatientForRoom(roomData)
+            if not patient then
+                patient, patientPrompt = FindTreatmentPatientForRoom(roomData)
+            end
+            if not patient then
+                patient, patientPrompt = FindPatientByRoomName(roomData.Name)
+            end
         end
 
-        if patient or (patientPrompt and (roomData.Name == "Room6" or roomData.Name == "Room7")) then
+        -- Inactive recovery room skip (exact Foxname J(bf))
+        if not patient and not patientPrompt and IsRoomRecovering(roomData) then
+            Log('AutoTreatment', 'Skipping inactive recovery room', { room = roomData.Name })
+        elseif patient or (patientPrompt and (roomData.Name == 'Room6' or roomData.Name == 'Room7')) then
             if not IsRoomRecovering(roomData) then
-                Log("AutoTreatment", "Found patient for room (or start prompt)", { room = roomData.Name, npc = patient and patient.Name })
+                Log('AutoTreatment', 'Found patient for room (or start prompt)', { room = roomData.Name, npc = patient and patient.Name, prompt = patientPrompt and patientPrompt:GetFullName() })
                 local ok, res = pcall(ExecutePatientTreatment, patient, patientPrompt, roomData)
                 if not ok then
-                    LogError("AutoTreatment", "Patient treatment cycle crashed", { error = res, room = roomData.Name }, true)
+                    LogError('AutoTreatment', 'Patient treatment cycle crashed', { error = res, room = roomData.Name }, true)
                     if patient then _G.AH_TreatedPatients[patient] = os.clock() end
                     return false
                 end
