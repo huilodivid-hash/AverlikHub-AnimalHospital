@@ -1724,6 +1724,34 @@ local function FindDnaPatientForRoom(roomData)
     return bestNpc, bestPP
 end
 
+local function IsVisibleHighlight(h)
+    if not h or not h:IsA("Highlight") or h.Enabled == false then return false end
+    local ft = h.FillTransparency == nil or h.FillTransparency < 1
+    local ot = h.OutlineTransparency == nil or h.OutlineTransparency < 1
+    return ft or ot
+end
+
+local function IsLightBlueTreatmentColor(c)
+    if not c then return false end
+    return math.abs(c.R * 255 - 85) <= 15 and math.abs(c.G * 255 - 250) <= 15 and math.abs(c.B * 255 - 255) <= 15
+end
+
+local function HasReadyPatientHighlight(npc)
+    if not npc then return false end
+    local ok, res = pcall(function()
+        for _, obj in ipairs(npc:GetDescendants()) do
+            if IsVisibleHighlight(obj) then
+                if IsLightBlueTreatmentColor(obj.FillColor) or IsLightBlueTreatmentColor(obj.OutlineColor) then
+                    return true
+                end
+                return true
+            end
+        end
+        return false
+    end)
+    return ok and res == true
+end
+
 -- 🎯 FOXNAME ai: Find patient who needs treatment items applied
 local function FindTreatmentPatientForRoom(roomData)
     local ok, npcs = GetNpcSnapshot()
