@@ -16,7 +16,8 @@ local function StopCheck()
         _G.AutoBarneyShutter or _G.AutoAnomalyShutter or _G.AutoCheckIn or
         _G.AutoTreatment or _G.AutoHelpPatient or _G.AutoBuyShop or
         _G.AutoAskLeaveAnomaly or _G.AutoCleanSlime or _G.AutoPutOutFire or
-        _G.AutoCoffee or _G.AutoFixCam or _G.AutoGiveBarneyCoffee or _G.AutoTaser
+        _G.AutoCoffee or _G.AutoFixCam or _G.AutoGiveBarneyCoffee or _G.AutoTaser or
+        _G.AutoServerHopOnEnd
     )
 end
 
@@ -37,6 +38,17 @@ _G.AutoCleanSlime = _G.AutoCleanSlime ~= nil and _G.AutoCleanSlime or true
 _G.AutoFixCam = _G.AutoFixCam ~= nil and _G.AutoFixCam or true
 _G.AutoTaser = _G.AutoTaser ~= nil and _G.AutoTaser or false
 _G.AutoBuyShop = _G.AutoBuyShop ~= nil and _G.AutoBuyShop or false
+_G.AutoServerHopOnEnd = _G.AutoServerHopOnEnd ~= nil and _G.AutoServerHopOnEnd or true
+_G.AutoSkipDialogue = _G.AutoSkipDialogue ~= nil and _G.AutoSkipDialogue or true
+_G.AutoQuickstart = _G.AutoQuickstart ~= nil and _G.AutoQuickstart or true
+_G.AH_AutoBuyCategories = _G.AH_AutoBuyCategories or {
+    MEDICINE = true,
+    EQUIPMENT = true,
+    UPGRADE = true,
+    TOOL = true,
+    ITEM = true,
+    ROOM = true,
+}
 _G.AutoTaserTargets = _G.AutoTaserTargets or { ANOMALY = true }
 _G.DebugMode = _G.DebugMode ~= nil and _G.DebugMode or false
 _G.UnlockThirdPerson = _G.UnlockThirdPerson ~= nil and _G.UnlockThirdPerson or true
@@ -2465,9 +2477,87 @@ local function AutoHelpPatient()
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🛒 AUTO BUY SHOP
+-- 🛒 AUTO BUY SHOP (CANONICAL FOXNAME ENGINE)
 -- ══════════════════════════════════════════════════════════════════════════════════
 local _AH_LastShopCheck = 0
+
+local function ParseNumeric(val)
+    if not val then return nil end
+    local s = tostring(val):gsub(",", "")
+    local numStr = s:match("%-?%d+%.?%d*")
+    return numStr and tonumber(numStr) or nil
+end
+
+local function IsAutoBuyCategoryAllowed(category)
+    local upperCat = string.upper(tostring(category or ""))
+    for k, v in pairs(_G.AH_AutoBuyCategories or {}) do
+        if v == true and string.upper(tostring(k)) == upperCat then
+            return true
+        end
+        if string.upper(tostring(v)) == upperCat then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetShopItemPP(item)
+    local shopPP = item:FindFirstChild("ShopItemPP")
+    if shopPP and shopPP:IsA("ProximityPrompt") and shopPP.Enabled then
+        return shopPP
+    end
+    for _, child in ipairs(item:GetChildren()) do
+        if child:IsA("ProximityPrompt") and child.Enabled and string.find(string.lower(child.ActionText or ""), "buy") then
+            return child
+        end
+    end
+    local pp = item:FindFirstChild("PP") or item:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if pp and pp.Enabled then
+        return pp
+    end
+    return nil
+end
+
+local function GetCurrentCash()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then return nil end
+    local sanity = pg:FindFirstChild("Sanity")
+    local cash = sanity and sanity:FindFirstChild("Frame") and sanity.Frame:FindFirstChild("cash")
+    if cash and (cash:IsA("TextLabel") or cash:IsA("TextButton")) then
+        local val = ParseNumeric(cash.Text)
+        if val then return val end
+    end
+    local roundStats = pg:FindFirstChild("RoundStatsDetailed")
+    local localcash = roundStats and roundStats:FindFirstChild("Frame") and roundStats.Frame:FindFirstChild("Info") and roundStats.Frame.Info:FindFirstChild("localcash")
+    if localcash and (localcash:IsA("TextLabel") or localcash:IsA("TextButton")) then
+        local val = ParseNumeric(localcash.Text)
+        if val then return val end
+    end
+    for _, desc in ipairs(pg:GetDescendants()) do
+        local fullName = string.lower(desc:GetFullName())
+        if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and fullName:find("sanity") and string.find(string.lower(desc.Name), "cash") then
+            local val = ParseNumeric(desc.Text)
+            if val then return val end
+        end
+    end
+    return nil
+end
+
+local function GetShopItemCost(ui)
+    local costLabel = ui and ui:FindFirstChild("Cost")
+    if costLabel and (costLabel:IsA("TextLabel") or costLabel:IsA("TextButton")) then
+        return ParseNumeric(costLabel.Text)
+    end
+    if ui then
+        for _, desc in ipairs(ui:GetDescendants()) do
+            if (desc:IsA("TextLabel") or desc:IsA("TextButton")) and string.find(string.lower(desc.Name), "cost") then
+                local val = ParseNumeric(desc.Text)
+                if val then return val end
+            end
+        end
+    end
+    return nil
+end
 
 local function AutoBuyShop()
     if not _G.AutoBuyShop or StopCheck() then return false end
@@ -2475,26 +2565,135 @@ local function AutoBuyShop()
     if now < _AH_LastShopCheck then return false end
     _AH_LastShopCheck = now + 1.0
 
-    local shop = Workspace:FindFirstChild("Misc") and Workspace.Misc:FindFirstChild("ShopItems")
+    local shop = Workspace:FindFirstChild("Misc") and (Workspace.Misc:FindFirstChild("ShopItems") or Workspace.Misc:FindFirstChild("Shop"))
     if not shop then return false end
+
+    local currentCash = GetCurrentCash()
+    Log("AutoBuyShop", "Scanning shop items", { currentMoney = currentCash, categories = _G.AH_AutoBuyCategories })
 
     for _, item in ipairs(shop:GetChildren()) do
         if StopCheck() or not _G.AutoBuyShop then return true end
-        local pp = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-        if pp and pp.Enabled then
-            Log("AutoBuyShop", "Buying shop item", { item = item.Name, prompt = pp:GetFullName() })
-            PressPromptNearby(pp, 0.35, Vector3.new(0, 1.5, 0), 0.15)
-            return true
+        local prompt = GetShopItemPP(item)
+        local ui = item:FindFirstChild("ItemInfo") and item.ItemInfo:FindFirstChild("UI")
+        local typeLabel = ui and ui:FindFirstChild("Type")
+        local descLabel = ui and ui:FindFirstChild("Description")
+        local cost = GetShopItemCost(ui)
+        local descText = descLabel and descLabel.Text
+        local rawType = typeLabel and (typeLabel.Text:match("%[%s*(.-)%s*%]") or typeLabel.Text) or ""
+        local category = string.upper(rawType:gsub("%s+", ""))
+
+        local isAllowed = (category ~= "" and category ~= "TYPE" and IsAutoBuyCategoryAllowed(category))
+        if category == "" and prompt and prompt.Enabled then
+            isAllowed = true
+        end
+
+        if prompt and prompt.Enabled and isAllowed then
+            if cost and currentCash and currentCash < cost then
+                Log("AutoBuyShop", "Skipping item due to insufficient money", { item = item.Name, category = category, cost = cost, currentMoney = currentCash })
+            else
+                Log("AutoBuyShop", "Buying shop item", { item = item.Name, category = category, cost = cost, prompt = prompt:GetFullName() })
+                PressPromptNearbyUntil(prompt, 0.3, 4.0, function()
+                    return not prompt.Parent or not prompt.Enabled or (descLabel and descLabel.Text ~= descText)
+                end)
+                return true
+            end
         end
     end
     return false
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
--- 🧵 BACKGROUND WORKERS (CAMERAS, SLIME, TASER)
+-- 🧵 BACKGROUND WORKERS (CAMERAS, SLIME, TASER, DIALOGUE, QUICKSTART)
 -- ══════════════════════════════════════════════════════════════════════════════════
+do
 local _AH_LastSlimeTime = 0
 local _AH_LastCamTime = 0
+local _AH_LastDialogueSkipTime = 0
+local _AH_LastQuickstartTime = 0
+local _AH_TaserStationUnavailable = 0
+
+local function GetGameRemote(remoteName)
+    local utilNet = ReplicatedStorage:FindFirstChild("Util") and ReplicatedStorage.Util:FindFirstChild("Net")
+    if utilNet then
+        local rem = utilNet:FindFirstChild(remoteName)
+        if rem then return rem end
+    end
+    local rem = ReplicatedStorage:FindFirstChild(remoteName)
+    if rem then return rem end
+    return ReplicatedStorage:FindFirstChild(remoteName, true)
+end
+
+local function AutoSkipDoctorDialogueTask()
+    if _G.AutoSkipDialogue == false or StopCheck() then return end
+    local now = os.clock()
+    if now - _AH_LastDialogueSkipTime < 1.0 then return end
+    _AH_LastDialogueSkipTime = now
+
+    local rem = GetGameRemote("RE/SetDoctorDialogueSkipped")
+    if rem and rem:IsA("RemoteEvent") then
+        pcall(function() rem:FireServer(true) end)
+    end
+
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if pg then
+        local diagGui = pg:FindFirstChild("DoctorDialogue") or pg:FindFirstChild("Dialogue")
+        if diagGui and diagGui.Enabled then
+            for _, btn in ipairs(diagGui:GetDescendants()) do
+                if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
+                    local name = string.lower(btn.Name)
+                    local text = string.lower(btn:IsA("TextButton") and btn.Text or "")
+                    if name:find("skip") or name:find("continue") or name:find("next") or text:find("skip") or text:find("continue") or text:find("next") then
+                        pcall(function()
+                            if firesignal then
+                                firesignal(btn.MouseButton1Click)
+                            elseif getconnections then
+                                for _, conn in ipairs(getconnections(btn.MouseButton1Click)) do conn:Fire() end
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function AutoQuickstartTask()
+    if _G.AutoQuickstart == false or StopCheck() then return end
+    local now = os.clock()
+    if now - _AH_LastQuickstartTime < 2.0 then return end
+    _AH_LastQuickstartTime = now
+
+    local rem = GetGameRemote("RE/Quickstart")
+    if rem and rem:IsA("RemoteEvent") then
+        pcall(function() rem:FireServer() end)
+    end
+end
+
+local function IsTaserStationReady(station)
+    if not station then return false end
+    for _, desc in ipairs(station:GetDescendants()) do
+        if desc:IsA("TextLabel") and string.lower(desc.Name) == "status" then
+            local text = string.lower(desc.Text or "")
+            if not string.find(text, "ready") then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+local function IsPromptDonateOrPurchase(prompt)
+    if not prompt then return false end
+    local act = string.lower(tostring(prompt.ActionText or ""))
+    local obj = string.lower(tostring(prompt.ObjectText or ""))
+    if act:find("buy") or act:find("purchase") or act:find("robux") or act:find("donate") or act:find("r%$") or act:find("gamepass") then
+        return true
+    end
+    if obj:find("buy") or obj:find("purchase") or obj:find("robux") or obj:find("donate") or obj:find("r%$") or obj:find("gamepass") then
+        return true
+    end
+    return false
+end
 
 local function AutoCleanSlimeTask()
     if not _G.AutoCleanSlime or StopCheck() then return end
@@ -2529,30 +2728,31 @@ local function AutoFixCamTask()
     end
 end
 
--- Worker 1: Cameras and Slime
+-- Worker 1: Cameras, Slime, Dialogue Skip, Quickstart
 task.spawn(function()
     while IsSessionActive() do
         if StopCheck() then break end
         pcall(AutoCleanSlimeTask)
         pcall(AutoFixCamTask)
+        pcall(AutoSkipDoctorDialogueTask)
+        pcall(AutoQuickstartTask)
         task.wait(0.1)
     end
 end)
 
--- Worker 2: AutoTaser with Remote
+-- Worker 2: AutoTaser with Remote and Donate/Unlock Guard
 task.spawn(function()
     while IsSessionActive() do
         if StopCheck() then break end
         if _G.AutoTaser then
-            local utilNet = ReplicatedStorage:FindFirstChild("Util") and ReplicatedStorage.Util:FindFirstChild("Net")
-            local taserRemote = utilNet and utilNet:FindFirstChild("RE/TaserFired")
+            local taserRemote = GetGameRemote("RE/TaserFired")
             local npcs = Workspace:FindFirstChild("NPCs")
             local misc = Workspace:FindFirstChild("Misc")
             local tStation = misc and misc:FindFirstChild("TaserStation")
             local tMain = tStation and tStation:FindFirstChild("Main")
             local tPP = tMain and tMain:FindFirstChild("PP")
 
-            if taserRemote and npcs and tPP then
+            if taserRemote and npcs then
                 for _, npc in ipairs(npcs:GetChildren()) do
                     if not _G.AutoTaser or StopCheck() then break end
                     local isSkin = npc:GetAttribute("Skinwalker") == true
@@ -2563,26 +2763,43 @@ task.spawn(function()
                         local hasTaser = (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Taser")) or
                                          (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Taser"))
 
-                        if not hasTaser and root and tMain then
-                            root.CFrame = tMain.CFrame * CFrame.new(0, 0, 3)
-                            task.wait(0.4)
-                            pcall(function() fireproximityprompt(tPP) end)
-                            task.wait(0.2)
+                        if not hasTaser and root and tMain and tPP then
+                            local canAttempt = (os.clock() >= _AH_TaserStationUnavailable) and IsTaserStationReady(tStation) and not IsPromptDonateOrPurchase(tPP)
+                            if canAttempt then
+                                root.CFrame = tMain.CFrame * CFrame.new(0, 0, 3)
+                                task.wait(0.4)
+                                pcall(function() fireproximityprompt(tPP) end)
+                                task.wait(0.3)
+
+                                hasTaser = (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Taser")) or
+                                           (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Taser"))
+
+                                if not hasTaser then
+                                    _AH_TaserStationUnavailable = os.clock() + 30
+                                    Log("AutoTaser", "Taser tool not acquired after station interaction (donate/gamepass required or locked); cooling down station checks for 30s")
+                                    if root and origCF then
+                                        root.CFrame = origCF
+                                        task.wait(0.1)
+                                    end
+                                end
+                            end
                         end
 
-                        local bpTaser = LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Taser")
-                        if bpTaser and LocalPlayer.Character then bpTaser.Parent = LocalPlayer.Character end
+                        if hasTaser then
+                            local bpTaser = LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Taser")
+                            if bpTaser and LocalPlayer.Character then bpTaser.Parent = LocalPlayer.Character end
 
-                        for _ = 1, 50 do
-                            if not _G.AutoTaser or StopCheck() then break end
-                            task.wait(0.05)
-                            pcall(function() taserRemote:FireServer(npc) end)
-                        end
+                            for _ = 1, 50 do
+                                if not _G.AutoTaser or StopCheck() then break end
+                                task.wait(0.05)
+                                pcall(function() taserRemote:FireServer(npc) end)
+                            end
 
-                        if npc and npc.Parent then npc:SetAttribute("FoxnameTasered", os.clock()) end
-                        if root and origCF and not hasTaser then
-                            root.CFrame = origCF
-                            task.wait(0.1)
+                            if npc and npc.Parent then npc:SetAttribute("FoxnameTasered", os.clock()) end
+                            if root and origCF and not ((LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Taser")) or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Taser"))) then
+                                root.CFrame = origCF
+                                task.wait(0.1)
+                            end
                         end
                     end
                 end
@@ -2591,6 +2808,7 @@ task.spawn(function()
         task.wait(0.5)
     end
 end)
+end
 
 -- ══════════════════════════════════════════════════════════════════════════════════
 -- 🌐 THIRD PERSON & UTILITIES
@@ -2629,43 +2847,174 @@ local function RejoinServer()
     end
 end
 
-local function ServerHop()
-    Log("Teleport", "Searching for public servers to hop...")
-    local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
-    local req = game:HttpGet(sfUrl)
-    local data = HttpService:JSONDecode(req)
-    if data and data.data then
-        for _, server in ipairs(data.data) do
-            if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers and server.playing > 0 then
-                Log("Teleport", "Hopping to server: " .. server.id)
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
-                return
-            end
-        end
-    end
-    RejoinServer()
-end
+local ServerHop, ServerHopLowPlayer, CheckRoundEndAndServerHop
+do
+    local _AH_EmptyFarmStartTime = nil
+    local _AH_IsHopping = false
 
-local function ServerHopLowPlayer()
-    Log("Teleport", "Searching for low-player server...")
-    local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
-    local req = game:HttpGet(sfUrl)
-    local data = HttpService:JSONDecode(req)
-    if data and data.data then
+    local function SafeHttpGet(url)
+        local req = request or http_request or (syn and syn.request) or (http and http.request)
+        if req then
+            local s, res = pcall(function() return req({ Url = url, Method = "GET" }) end)
+            if s and res and res.Body then return res.Body end
+        end
+        if game.HttpGet then
+            local s, res = pcall(function() return game:HttpGet(url) end)
+            if s and res then return res end
+        end
+        return nil
+    end
+
+    ServerHop = function()
+        Log("Teleport", "Searching for public servers to hop...")
+        local cursor = ""
+        for page = 1, 4 do
+            local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
+            if cursor ~= "" then sfUrl = sfUrl .. "&cursor=" .. cursor end
+            local body = SafeHttpGet(sfUrl)
+            if body then
+                local sDecode, data = pcall(function() return HttpService:JSONDecode(body) end)
+                if sDecode and data and data.data then
+                    for _, server in ipairs(data.data) do
+                        if type(server) == "table" and server.id and server.id ~= game.JobId and (server.playing or 0) < (server.maxPlayers or 999) and (server.playing or 0) > 0 then
+                            Log("Teleport", "Hopping to server: " .. server.id)
+                            local sTeleport, _ = pcall(function()
+                                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
+                            end)
+                            if sTeleport then return true end
+                        end
+                    end
+                    cursor = tostring(data.nextPageCursor or "")
+                    if cursor == "" then break end
+                end
+            end
+            task.wait(0.2)
+        end
+        RejoinServer()
+    end
+
+    ServerHopLowPlayer = function()
+        Log("Teleport", "Searching for low-player server...")
+        local cursor = ""
         local candidates = {}
-        for _, server in ipairs(data.data) do
-            if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers and server.playing > 0 then
-                table.insert(candidates, server)
+        for page = 1, 3 do
+            local sfUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
+            if cursor ~= "" then sfUrl = sfUrl .. "&cursor=" .. cursor end
+            local body = SafeHttpGet(sfUrl)
+            if body then
+                local sDecode, data = pcall(function() return HttpService:JSONDecode(body) end)
+                if sDecode and data and data.data then
+                    for _, server in ipairs(data.data) do
+                        if type(server) == "table" and server.id and server.id ~= game.JobId and (server.playing or 0) < (server.maxPlayers or 999) and (server.playing or 0) > 0 then
+                            table.insert(candidates, server)
+                        end
+                    end
+                    cursor = tostring(data.nextPageCursor or "")
+                    if cursor == "" or #candidates >= 10 then break end
+                end
+            end
+            task.wait(0.2)
+        end
+
+        if #candidates > 0 then
+            table.sort(candidates, function(a, b) return (a.playing or 0) < (b.playing or 0) end)
+            Log("Teleport", "Hopping to low player server: " .. candidates[1].id .. " (" .. tostring(candidates[1].playing) .. " players)")
+            local sTeleport, _ = pcall(function()
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, candidates[1].id, LocalPlayer)
+            end)
+            if sTeleport then return true end
+        end
+        RejoinServer()
+    end
+
+    local function IsFarmFinishedOnServer()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then
+            local rs = pg:FindFirstChild("RoundStatsDetailed")
+            if rs and rs.Enabled then
+                local frame = rs:FindFirstChild("Frame")
+                if not frame or frame.Visible == true then
+                    return true, "RoundStatsDetailed visible (смена/день завершен)"
+                end
+            end
+
+            local pd = pg:FindFirstChild("PlayerDied")
+            if pd and pd.Enabled then
+                local frame = pd:FindFirstChild("Frame")
+                if frame and frame.Visible == true then
+                    return true, "PlayerDied modal visible (все игроки погибли)"
+                end
             end
         end
-        table.sort(candidates, function(a, b) return a.playing < b.playing end)
-        if #candidates > 0 then
-            Log("Teleport", "Hopping to low player server: " .. candidates[1].id .. " (" .. candidates[1].playing .. " players)")
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, candidates[1].id, LocalPlayer)
-            return
+
+        if CollectionService:HasTag(game.Players, "GameOver") or CollectionService:HasTag(game.Players, "GameOverWith3Deaths") then
+            return true, "GameOver CollectionService tag active"
+        end
+
+        if CollectionService:HasTag(LocalPlayer, "PlayAgain") then
+            return true, "PlayAgain tag active"
+        end
+
+        local hasAnyPatient = false
+        local npcs = Workspace:FindFirstChild("NPCs")
+        if npcs then
+            for _, npc in ipairs(npcs:GetChildren()) do
+                if not IsBarneyNpc(npc) and npc.Name ~= "StalkerMonster" then
+                    if npc:GetAttribute("IsPatient") == true or npc:GetAttribute("Skinwalker") == true or npc:GetAttribute("IsVisitor") == true then
+                        hasAnyPatient = true
+                        break
+                    end
+                end
+            end
+        end
+
+        local deskPatient = HasNormalPatientAtCheckIn() or HasAnyNpcAtCheckInCounter()
+        if not hasAnyPatient and not deskPatient then
+            if not _AH_EmptyFarmStartTime then
+                _AH_EmptyFarmStartTime = os.clock()
+            elseif os.clock() - _AH_EmptyFarmStartTime > 25.0 then
+                return true, "Нет пациентов более 25 секунд (смена окончена/пустая больница)"
+            end
+        else
+            _AH_EmptyFarmStartTime = nil
+        end
+
+        return false, nil
+    end
+
+    CheckRoundEndAndServerHop = function()
+        if _G.AutoServerHopOnEnd == false or _AH_IsHopping or StopCheck() then return end
+        local finished, reason = IsFarmFinishedOnServer()
+        if finished then
+            _AH_IsHopping = true
+            Log("ServerHop", "Фарм завершен на сервере (" .. tostring(reason) .. "). Автопереход на новый сервер...", { reason = reason })
+            pcall(function()
+                game.StarterGui:SetCore("SendNotification", {
+                    Title = "Averlik Hub • Server Hop",
+                    Text = "Фарм окончен: " .. tostring(reason) .. " ➔ Поиск нового сервера...",
+                    Duration = 6
+                })
+            end)
+            task.wait(1.5)
+            ServerHopLowPlayer()
+            task.delay(12, function()
+                if _AH_IsHopping and IsSessionActive() then
+                    Log("ServerHop", "Retrying server hop with public server...")
+                    ServerHop()
+                end
+            end)
         end
     end
-    RejoinServer()
+
+    task.spawn(function()
+        while IsSessionActive() do
+            if StopCheck() then break end
+            if _G.AutoServerHopOnEnd then
+                pcall(CheckRoundEndAndServerHop)
+            end
+            task.wait(1.5)
+        end
+    end)
 end
 
 -- Anti-AFK
@@ -3084,6 +3433,9 @@ AddToggle(TabSafe, "☠️ Устранять скинвокеров (Летал
 AddToggle(TabSafe, "⚡ Авто-Тазер аномалий", _G.AutoTaser, function(v) _G.AutoTaser = v end)
 
 -- Вкладка: Утилиты
+AddToggle(TabMisc, "🌐 Авто Server Hop при окончании фарма", _G.AutoServerHopOnEnd, function(v) _G.AutoServerHopOnEnd = v end)
+AddToggle(TabMisc, "⏩ Авто-скип диалогов доктора", _G.AutoSkipDialogue, function(v) _G.AutoSkipDialogue = v end)
+AddToggle(TabMisc, "⚡ Авто-быстрый старт смены", _G.AutoQuickstart, function(v) _G.AutoQuickstart = v end)
 AddButton(TabMisc, "🔄 Rejoin (Перезайти на сервер)", RejoinServer)
 AddButton(TabMisc, "🌐 Server Hop (Случайный сервер)", ServerHop)
 AddButton(TabMisc, "👥 Server Hop (Сервер с малым онлайном)", ServerHopLowPlayer)
@@ -3263,6 +3615,9 @@ task.spawn(function()
 
         if StopCheck() then break end
         if not taskExecuted then
+            if _G.AutoServerHopOnEnd and CheckRoundEndAndServerHop then
+                pcall(CheckRoundEndAndServerHop)
+            end
             task.wait(0.15)
         end
     end
